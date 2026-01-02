@@ -1,13 +1,15 @@
 # strategies/alpha.py
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Optional
 import pandas as pd
 import numpy as np
 
 
 def _minmax_scale(s: pd.Series) -> pd.Series:
     """Scale series to 0..1 using min/max (safe)."""
+    if s.empty:
+        return s
     mn = s.min()
     mx = s.max()
     if pd.isna(mn) or pd.isna(mx) or mx == mn:
@@ -34,6 +36,9 @@ class TrendAlpha(Alpha):
         self.long = long
 
     def compute(self, prices: pd.Series) -> pd.Series:
+        if len(prices) < self.long:
+            return pd.Series(0.0, index=prices.index)
+
         ema_s = prices.ewm(span=self.short, adjust=False).mean()
         ema_l = prices.ewm(span=self.long, adjust=False).mean()
 
@@ -59,6 +64,9 @@ class MeanReversionAlpha(Alpha):
         self.lookback_std = lookback_std
 
     def compute(self, prices: pd.Series) -> pd.Series:
+        if len(prices) < max(self.short, self.lookback_std):
+            return pd.Series(0.0, index=prices.index)
+
         sma_short = prices.rolling(self.short).mean()
         dev = prices - sma_short
         vol = prices.pct_change().rolling(self.lookback_std).std().replace(0, np.nan)
@@ -66,19 +74,110 @@ class MeanReversionAlpha(Alpha):
 
         # mean reversion expects negative signal when price is far above SMA (we want to short),
         # but we want a long-only conviction scale. We'll use symmetric reversion magnitude.
-        raw = -z  # negative z (price above sma) -> negative raw; we'll take absolute magnitude
-        raw = raw.abs()
+        # Ideally, high z (overbought) -> sell signal (low conviction for long only layout)
+        # But if we treat it as "reversion opportunity", maybe higher is better?
+        # Standard approach:
+        # If z < -2 (oversold) -> Buy (High Conviction)
+        # If z > 2 (overbought) -> Sell (Low Conviction)
+        
+        # Invert z so that low z (oversold) becomes high value
+        raw = -z 
+        
         raw = raw.replace([np.inf, -np.inf], np.nan).fillna(0)
         return _minmax_scale(raw)
 
 
+class RSIAlpha(Alpha):
+    """
+    RSI Alpha:
+    RSI < 30 -> High Conviction (Oversold, potential bounce)
+    RSI > 70 -> Low Conviction (Overbought)
+    """
+    def __init__(self, period: int = 14):
+        self.period = period
+
+    def compute(self, prices: pd.Series) -> pd.Series:
+        if len(prices) < self.period + 1:
+            return pd.Series(0.0, index=prices.index)
+        
+        delta = prices.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=self.period).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=self.period).mean()
+
+        rs = gain / loss.replace(0, np.nan)
+        rsi = 100 - (100 / (1 + rs))
+        rsi = rsi.fillna(50)
+
+        # We want Alpha 1.0 when RSI is low (oversold)
+        # Alpha 0.0 when RSI is high (overbought)
+        # Linear map: (100 - RSI) / 100
+        raw = (100 - rsi) / 100.0
+        return raw.clip(0, 1)
+
+
+class MACDAlpha(Alpha):
+    """
+    MACD Crossover Alpha:
+    Signal = MACD - SignalLine
+    Positive -> Bullish Trend -> High Conviction
+    """
+    def __init__(self, fast: int = 12, slow: int = 26, signal: int = 9):
+        self.fast = fast
+        self.slow = slow
+        self.signal = signal
+
+    def compute(self, prices: pd.Series) -> pd.Series:
+        if len(prices) < self.slow + self.signal:
+            return pd.Series(0.0, index=prices.index)
+
+        ema_fast = prices.ewm(span=self.fast, adjust=False).mean()
+        ema_slow = prices.ewm(span=self.slow, adjust=False).mean()
+        macd = ema_fast - ema_slow
+        sig = macd.ewm(span=self.signal, adjust=False).mean()
+
+        hist = macd - sig
+        # Higher histogram -> stronger bullish momentum
+        return _minmax_scale(hist)
+
+
+class BollingerBandAlpha(Alpha):
+    """
+    Bollinger Band Squeeze/Breakout Alpha.
+    Here we focus on Mean Reversion: Price touching lower band -> Buy.
+    """
+    def __init__(self, window: int = 20, num_std: float = 2.0):
+        self.window = window
+        self.num_std = num_std
+
+    def compute(self, prices: pd.Series) -> pd.Series:
+        if len(prices) < self.window:
+            return pd.Series(0.0, index=prices.index)
+
+        sma = prices.rolling(self.window).mean()
+        std = prices.rolling(self.window).std()
+        
+        upper = sma + (std * self.num_std)
+        lower = sma - (std * self.num_std)
+
+        # %B indicator = (Price - Lower) / (Upper - Lower)
+        # %B < 0 -> Price below lower band (Oversold) -> High Conviction
+        # %B > 1 -> Price above upper band (Overbought) -> Low Conviction
+        
+        pct_b = (prices - lower) / (upper - lower).replace(0, np.nan)
+        
+        # Invert: 1 - %B
+        # If pct_b is 0 (at lower band), score is 1.0
+        # If pct_b is 1 (at upper band), score is 0.0
+        score = 1.0 - pct_b
+        return score.fillna(0.5).clip(0, 1)
+
+
 class CompositeAlpha(Alpha):
     """
-    Combine multiple Alpha objects with weights (weights are optional).
-    If weights omitted, equal weighting is used.
+    Combine multiple Alpha objects with weights.
     """
 
-    def __init__(self, alphas: List[Alpha], weights: List[float] | None = None):
+    def __init__(self, alphas: List[Alpha], weights: Optional[List[float]] = None):
         self.alphas = alphas
         if weights is None:
             self.weights = [1.0] * len(alphas)
@@ -91,16 +190,26 @@ class CompositeAlpha(Alpha):
         # compute each alpha
         series_list = []
         for a in self.alphas:
-            s = a.compute(prices).fillna(0)
-            series_list.append(s)
+            try:
+                s = a.compute(prices).fillna(0)
+                series_list.append(s)
+            except Exception:
+                # robust fallback
+                series_list.append(pd.Series(0.0, index=prices.index))
+
+        if not series_list:
+             return pd.Series(0.0, index=prices.index)
 
         # align indices
         df = pd.concat(series_list, axis=1).fillna(0)
-        df.columns = [f"a{i}" for i in range(df.shape[1])]
+        
+        # efficient weighted sum
+        w = np.array(self.weights)
+        w_sum = w.sum()
+        if w_sum <= 0:
+            return pd.Series(0.0, index=prices.index)
+            
+        w_norm = w / w_sum
+        conv = (df * w_norm).sum(axis=1)
 
-        # weighted average
-        w = np.array(self.weights) / sum(self.weights)
-        conv = (df * w).sum(axis=1)
-
-        # final clamp
         return conv.clip(0, 1)

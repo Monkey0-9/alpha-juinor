@@ -1,0 +1,34 @@
+{
+  "run_id": "run_20260102T152051Z",
+  "timestamp_utc": "2026-01-02T15:20:51.822912Z",
+  "git_hash": "42337fe5d6c395617661e9ee2454d49ca7106f42",
+  "initial_capital": 1000000.0,
+  "tickers": [
+    "SPY",
+    "QQQ",
+    "TLT",
+    "GLD"
+  ],
+  "artifacts": {
+    "trades.csv": {
+      "sha256": "7145805be91c7c09c84fb6dbaa824198c2b618476d7ce06d7a2b837c708b8eaa",
+      "size": 310251
+    },
+    "equity.csv": {
+      "sha256": "f2f81721844e04a4ce083df98cda70c414aa0ce04f9cb1a46b41fb011dbef421",
+      "size": 61316
+    },
+    "config.json": {
+      "sha256": "8f5b90a37464ce9bdba25198a4a8dbca740eb33ea4864325a4e977d64292dd85",
+      "size": 240
+    },
+    "data_manifest.json": {
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "size": 2
+    },
+    "requirements.txt": {
+      "sha256": "b5725b55b2cd56b25d2e0bdd078a46c8d6d01e8b50862ca135905653b637bddb",
+      "size": 684
+    }
+  }
+}

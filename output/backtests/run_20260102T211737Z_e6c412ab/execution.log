@@ -1,0 +1,50 @@
+2026-01-02 21:17:37,048 [INFO] 
+================================================
+2026-01-02 21:17:37,048 [INFO]   MINI QUANT FUND — INSTITUTIONAL DRIVER (MAIN)
+2026-01-02 21:17:37,048 [INFO] ================================================
+
+2026-01-02 21:17:37,048 [INFO] Initializing Mini Quant Fund...
+2026-01-02 21:17:37,048 [INFO] Run ID: run_20260102T211737Z_e6c412ab
+2026-01-02 21:17:37,048 [INFO] YahooDataProvider instantiated.
+2026-01-02 21:17:37,048 [INFO] DataStore instantiated.
+2026-01-02 21:17:37,048 [INFO] BacktestRegistry instantiated.
+2026-01-02 21:17:37,048 [INFO] RealisticExecutionHandler instantiated.
+2026-01-02 21:17:37,048 [INFO] BacktestEngine instantiated.
+2026-01-02 21:17:37,048 [INFO] CompositeAlpha instantiated with multiple alpha components.
+2026-01-02 21:17:37,048 [INFO] RiskManager instantiated.
+2026-01-02 21:17:37,048 [INFO] [System] Initializing Machine Learning Pipeline...
+2026-01-02 21:17:37,048 [INFO] [System] Pre-fetching training data for ['SPY', 'QQQ', 'TLT', 'GLD']...
+2026-01-02 21:17:38,468 [ERROR] $SPY: possibly delisted; no price data found  (1d 2020-01-01 -> 2018-01-01) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1577854800, endDate = 1514782800")
+2026-01-02 21:17:38,469 [ERROR] 
+1 Failed download:
+2026-01-02 21:17:38,469 [ERROR] ['SPY']: possibly delisted; no price data found  (1d 2020-01-01 -> 2018-01-01) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1577854800, endDate = 1514782800")
+2026-01-02 21:17:39,371 [ERROR] $QQQ: possibly delisted; no price data found  (1d 2020-01-01 -> 2018-01-01) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1577854800, endDate = 1514782800")
+2026-01-02 21:17:39,373 [ERROR] 
+1 Failed download:
+2026-01-02 21:17:39,373 [ERROR] ['QQQ']: possibly delisted; no price data found  (1d 2020-01-01 -> 2018-01-01) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1577854800, endDate = 1514782800")
+2026-01-02 21:17:40,141 [ERROR] $TLT: possibly delisted; no price data found  (1d 2020-01-01 -> 2018-01-01) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1577854800, endDate = 1514782800")
+2026-01-02 21:17:40,141 [ERROR] 
+1 Failed download:
+2026-01-02 21:17:40,141 [ERROR] ['TLT']: possibly delisted; no price data found  (1d 2020-01-01 -> 2018-01-01) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1577854800, endDate = 1514782800")
+2026-01-02 21:17:40,895 [ERROR] $GLD: possibly delisted; no price data found  (1d 2020-01-01 -> 2018-01-01) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1577854800, endDate = 1514782800")
+2026-01-02 21:17:40,901 [ERROR] 
+1 Failed download:
+2026-01-02 21:17:40,903 [ERROR] ['GLD']: possibly delisted; no price data found  (1d 2020-01-01 -> 2018-01-01) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1577854800, endDate = 1514782800")
+2026-01-02 21:17:40,906 [WARNING] No training data available. ML disabled.
+2026-01-02 21:17:40,907 [INFO] MeanVarianceOptimizer instantiated.
+2026-01-02 21:17:40,907 [INFO] [System] Initializing Statistical Risk Model (PCA)...
+2026-01-02 21:17:40,907 [INFO] StatisticalRiskModel instantiated.
+2026-01-02 21:17:40,907 [INFO] Pre-fetching full history for backtest (with warmup)...
+2026-01-02 21:17:41,277 [INFO] Cached 2355 bars for SPY
+2026-01-02 21:17:41,647 [INFO] Cached 2355 bars for QQQ
+2026-01-02 21:17:42,085 [WARNING] Data validation warnings for TLT: ['Invalid OHLC relationships in 1 bars']
+2026-01-02 21:17:42,090 [INFO] Data cleaned for TLT
+2026-01-02 21:17:42,090 [INFO] Cached 2355 bars for TLT
+2026-01-02 21:17:42,454 [INFO] Cached 2355 bars for GLD
+2026-01-02 21:17:42,454 [INFO] Starting backtest from 2018-01-01 for universe: ['SPY', 'QQQ', 'TLT', 'GLD']
+2026-01-02 21:17:42,840 [WARNING] Vol estimation failed (insufficient price history). Using fallback vol=0.02
+2026-01-02 21:17:42,840 [WARNING] Vol estimation failed (insufficient price history). Using fallback vol=0.02
+2026-01-02 21:17:42,847 [WARNING] Vol estimation failed (insufficient price history). Using fallback vol=0.02
+2026-01-02 21:17:42,847 [WARNING] Vol estimation failed (insufficient price history). Using fallback vol=0.02
+2026-01-02 21:17:44,030 [INFO] Generating performance analytics...
+2026-01-02 21:17:44,030 [WARNING] Equity data is empty or not available, skipping PerformanceAnalyzer.

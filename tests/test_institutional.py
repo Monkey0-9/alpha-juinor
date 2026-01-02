@@ -1,84 +1,124 @@
-import pandas as pd
-from datetime import datetime
-import sys
-import os
+# tests/test_engine_integration.py
+"""
+Institutional integration test for:
+provider -> engine -> execution -> blotter -> equity -> artifacts
 
-# Add project root to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+Compatibility:
+- Uses engine.run(...) to exercise RealisticExecutionHandler (correct fill_order signature)
+- Uses blotter.orders_df() and blotter.trades_df() (stable APIs)
+- Asserts trade attribution, partial-fill lifecycle, CSV export, and equity reconciliation
+"""
+
+import os
+import sys
+from datetime import datetime
+import pandas as pd
+import numpy as np
+
+# Ensure project root on path
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, ROOT)
 
 from backtest.engine import BacktestEngine
-from backtest.execution import RealisticExecutionHandler, Order, OrderType
-from data.provider import DataProvider
+from backtest.execution import (
+    RealisticExecutionHandler,
+    Order,
+    OrderType,
+)
 
-# Mock Provider
-class MockProvider(DataProvider):
-    def fetch_ohlcv(self, ticker: str, start_date: str, end_date: str = None) -> pd.DataFrame:
-        # Create 10 days of fake data
-        dates = pd.date_range(start=start_date, periods=10, freq='B')
-        data = {
-            "Open": [100.0] * 10,
-            "High": [105.0] * 10,
-            "Low": [95.0] * 10,
-            "Close": [101.0] * 10, # Constant price
-            "Volume": [1000000] * 10
-        }
-        df = pd.DataFrame(data, index=dates)
-        return df
+# Deterministic mock provider matching engine._build_price_panel expectations
+class MockProvider:
+    def get_panel(self, tickers, start_date, end_date=None):
+        dates = pd.date_range(start=start_date, periods=10, freq="B")
+        data = {}
+        for tk in tickers:
+            data[(tk, "Open")] = np.full(len(dates), 100.0)
+            data[(tk, "High")] = np.full(len(dates), 105.0)
+            data[(tk, "Low")] = np.full(len(dates), 95.0)
+            data[(tk, "Close")] = np.full(len(dates), 101.0)
+            data[(tk, "Volume")] = np.full(len(dates), 1_000_000.0)
+        panel = pd.DataFrame(data, index=dates)
+        panel.columns = pd.MultiIndex.from_tuples(panel.columns)
+        return panel
 
-def test_trade_recording():
-    print("--- Testing Trade Recording & Execution ---")
+def test_engine_execution_blotter_and_equity_pipeline(tmp_path):
     provider = MockProvider()
-    handler = RealisticExecutionHandler() # Defaults
-    engine = BacktestEngine(provider, initial_capital=10000.0, execution_handler=handler)
-    engine.add_tickers(["FAKE"])
 
-    def strategy(timestamp, prices, portfolio):
-        # Buy on first day
-        if len(portfolio.blotter.orders) == 0:
+    handler = RealisticExecutionHandler(
+        commission_pct=0.001,
+        max_participation_rate=0.10,
+    )
+
+    engine = BacktestEngine(
+        provider=provider,
+        initial_capital=10_000.0,
+        execution_handler=handler,
+    )
+
+    # Strategy: submit a single buy on first bar
+    def strategy_fn(timestamp, prices, portfolio):
+        # use blotter DF to detect prior orders
+        blotter = portfolio.get_blotter()
+        orders_df = blotter.orders_df()
+        if orders_df.empty:
             return [Order("FAKE", 10, OrderType.MARKET, timestamp)]
         return []
 
-    engine.run("2020-01-01", strategy_fn=strategy)
+    # Run the engine (preferred signature)
+    engine.run(start_date="2020-01-01", tickers=["FAKE"], strategy_fn=strategy_fn)
 
-    # Verify Blotter
-    orders = engine.blotter.orders
-    trades = engine.blotter.trades
+    blotter = engine.get_blotter()
+    orders_df = blotter.orders_df()
+    trades_df = blotter.trades_df()
 
-    print(f"Orders: {len(orders)}")
-    print(f"Trades: {len(trades)}")
+    # Blotter integrity
+    assert len(orders_df) == 1, f"Expected 1 order, got {len(orders_df)}"
+    assert len(trades_df) == 1, f"Expected 1 trade, got {len(trades_df)}"
 
-    if len(orders) == 1 and len(trades) == 1:
-        print("✅ Order and Trade recorded properly.")
-        t = trades[0]
-        print(f"Trade details: Qty={t.quantity}, Price={t.fill_price}, Cost={t.cost}")
-        
-        # Verify execution logic basics
-        # Price was 101. Buy 10. 
-        # Slippage/Comm should apply.
-        expected_notional = 10 * 101
-        if t.cost > 0:
-             print("✅ Commission/Slippage calculated.")
-        else:
-             print("❌ No cost recorded.")
-    else:
-        print("❌ Failed to record order/trade.")
+    # Cross-check attribution between orders.csv and trades.csv
+    order_id = orders_df.iloc[0]["id"] if "id" in orders_df.columns else orders_df.iloc[0]["order_id"]
+    trade_order_id = trades_df.iloc[0]["order_id"]
+    assert str(trade_order_id) == str(order_id), "Trade.order_id must match Order.id"
 
-    # Verify CSV Export capability (Simulating what main.py does)
-    import os
-    os.makedirs("output/backtests", exist_ok=True)
-    engine.blotter.trades_df().to_csv("output/backtests/test_trades.csv", index=False)
-    if os.path.exists("output/backtests/test_trades.csv"):
-        print("✅ Trades exported to CSV successfully.")
-    else:
-        print("❌ Failed to export trades CSV.")
+    # Timestamp attribution: trade timestamp equals order timestamp (bar timestamp)
+    # normalize to pandas timestamps for robust comparison
+    order_ts = pd.to_datetime(orders_df.iloc[0]["timestamp"])
+    trade_ts = pd.to_datetime(trades_df.iloc[0]["timestamp"])
+    assert order_ts == trade_ts, f"Timestamps must match (order {order_ts} vs trade {trade_ts})"
 
-    # Verify Equity Curve
-    res = engine.get_results()
-    if not res.empty and "market_value" in res.columns:
-        print("✅ Results contain market_value.")
-        print(res.head(2))
-    else:
-        print("❌ Results missing or malformed.")
+    # Execution realism: check prices, costs present
+    fill_price = float(trades_df.iloc[0]["fill_price"])
+    commission = float(trades_df.iloc[0].get("commission", trades_df.iloc[0].get("commission", 0.0)))
+    cost = float(trades_df.iloc[0].get("cost", 0.0))
+    qty = float(trades_df.iloc[0]["quantity"])
 
-if __name__ == "__main__":
-    test_trade_recording()
+    assert fill_price > 0.0
+    assert cost >= 0.0
+    assert abs(qty) <= 10.0 + 1e-8
+
+    # Order lifecycle: either FILLED or PARTIALLY_FILLED stored in orders_df.status
+    if "status" in orders_df.columns:
+        status = orders_df.iloc[0]["status"]
+        assert status in ("FILLED", "PARTIALLY_FILLED", "CANCELLED")
+        if status == "PARTIALLY_FILLED":
+            remaining = float(orders_df.iloc[0]["remaining_qty"])
+            assert remaining != 0.0
+
+    # Equity reconciliation
+    results = engine.get_results()
+    assert results is not None and not results.empty
+    assert "equity" in results.columns
+    final_equity = float(results["equity"].iloc[-1])
+    # buying 10 lots at ~101 and paying costs should reduce equity below initial capital
+    assert final_equity < 10_000.0
+
+    # CSV export check (main.py behavior)
+    out_dir = tmp_path / "output" / "backtests"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = out_dir / "test_trades.csv"
+    trades_df.to_csv(csv_path, index=False)
+    assert csv_path.exists()
+    df = pd.read_csv(csv_path)
+    assert len(df) == 1
+    for col in ["trade_id", "order_id", "ticker", "quantity", "fill_price", "commission", "cost"]:
+        assert col in df.columns, f"Missing expected column {col}"

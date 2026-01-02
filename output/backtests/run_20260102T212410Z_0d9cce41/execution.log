@@ -1,0 +1,39 @@
+2026-01-02 21:24:10,869 [INFO] 
+================================================
+2026-01-02 21:24:10,869 [INFO]   MINI QUANT FUND — INSTITUTIONAL DRIVER (MAIN)
+2026-01-02 21:24:10,869 [INFO] ================================================
+
+2026-01-02 21:24:10,869 [INFO] Initializing Mini Quant Fund...
+2026-01-02 21:24:10,869 [INFO] Run ID: run_20260102T212410Z_0d9cce41
+2026-01-02 21:24:10,869 [INFO] YahooDataProvider instantiated.
+2026-01-02 21:24:10,871 [INFO] DataStore instantiated.
+2026-01-02 21:24:10,871 [INFO] BacktestRegistry instantiated.
+2026-01-02 21:24:10,871 [INFO] RealisticExecutionHandler instantiated.
+2026-01-02 21:24:10,873 [INFO] BacktestEngine instantiated.
+2026-01-02 21:24:10,873 [INFO] CompositeAlpha not available, falling back to _SimpleAlpha.
+2026-01-02 21:24:10,873 [INFO] RiskManager instantiated.
+2026-01-02 21:24:10,873 [INFO] FeatureEngineer or MLAlpha not available. ML pipeline skipped.
+2026-01-02 21:24:10,873 [INFO] MeanVarianceOptimizer not available.
+2026-01-02 21:24:10,873 [INFO] StatisticalRiskModel not available.
+2026-01-02 21:24:10,873 [INFO] Pre-fetching full history for backtest (with warmup)...
+2026-01-02 21:24:11,895 [WARNING] Data validation warnings for SPY: ['Invalid OHLC relationships in 1 bars']
+2026-01-02 21:24:11,899 [INFO] Data cleaned for SPY
+2026-01-02 21:24:11,899 [INFO] Cached 2355 bars for SPY
+2026-01-02 21:24:12,303 [WARNING] Data validation warnings for QQQ: ['Invalid OHLC relationships in 1 bars']
+2026-01-02 21:24:12,306 [INFO] Data cleaned for QQQ
+2026-01-02 21:24:12,307 [INFO] Cached 2355 bars for QQQ
+2026-01-02 21:24:12,702 [WARNING] Data validation warnings for TLT: ['Invalid OHLC relationships in 2 bars']
+2026-01-02 21:24:12,703 [INFO] Data cleaned for TLT
+2026-01-02 21:24:12,703 [INFO] Cached 2355 bars for TLT
+2026-01-02 21:24:13,036 [INFO] Cached 2355 bars for GLD
+2026-01-02 21:24:13,037 [INFO] Starting backtest from 2018-01-01 for universe: ['SPY', 'QQQ', 'TLT', 'GLD']
+2026-01-02 21:24:13,472 [WARNING] Vol estimation failed (insufficient price history). Using fallback vol=0.02
+2026-01-02 21:24:13,472 [WARNING] Vol estimation failed (insufficient price history). Using fallback vol=0.02
+2026-01-02 21:24:13,472 [WARNING] Vol estimation failed (insufficient price history). Using fallback vol=0.02
+2026-01-02 21:24:13,476 [WARNING] Vol estimation failed (insufficient price history). Using fallback vol=0.02
+2026-01-02 21:24:13,480 [WARNING] Vol estimation failed (insufficient price history). Using fallback vol=0.02
+2026-01-02 21:24:13,480 [WARNING] Vol estimation failed (insufficient price history). Using fallback vol=0.02
+2026-01-02 21:24:13,483 [WARNING] Vol estimation failed (insufficient price history). Using fallback vol=0.02
+2026-01-02 21:24:13,484 [WARNING] Vol estimation failed (insufficient price history). Using fallback vol=0.02
+2026-01-02 21:24:14,469 [INFO] Generating performance analytics...
+2026-01-02 21:24:14,469 [WARNING] Equity data is empty or not available, skipping PerformanceAnalyzer.

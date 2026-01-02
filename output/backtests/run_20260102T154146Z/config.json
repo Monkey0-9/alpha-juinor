@@ -1,0 +1,14 @@
+{
+  "tickers": [
+    "SPY",
+    "QQQ",
+    "TLT",
+    "GLD"
+  ],
+  "start_date": "2018-01-01",
+  "end_date": null,
+  "initial_capital": 1000000.0,
+  "commission_pct": 0.0005,
+  "impact_coeff": 0.15,
+  "max_participation": 0.1
+}
