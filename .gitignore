@@ -48,3 +48,8 @@ data/processed/*
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Backtest outputs (never commit runs)
+output/backtests/*
+!output/backtests/.gitkeep
+!output/backtests/manifest.json

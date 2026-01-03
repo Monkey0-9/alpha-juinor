@@ -290,22 +290,55 @@ def main():
     """
     Main entry point for institutional fund driver.
     """
-    # Create run directory
-    run_id = f"run_{datetime.now().strftime('%Y%m%dT%H%M%SZ')}_{uuid.uuid4().hex[:8]}"
-    run_dir = OUTPUT_DIR / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
+    # Setup logging first (to temp location, will be moved to run_dir)
+    global logger
+    logger = logging.getLogger(__name__)
     
-    # Setup logging
+    # Create run directory via registry (immutable)
+    run_record = None
+    run_id = None
+    run_dir = None
+    
+    # Instantiate registry early (needed before run creation)
+    registry = None
+    try:
+        if BacktestRegistry is not None:
+            registry = BacktestRegistry()
+    except Exception:
+        registry = None
+    
+    if registry is not None and hasattr(registry, 'create_run'):
+        try:
+            # Use new registry API
+            run_record = registry.create_run({
+                "tickers": TICKERS,
+                "start_date": START_DATE,
+                "end_date": END_DATE,
+                "strategy_name": "mini-quant-fund-institutional",
+            })
+            run_id = run_record["run_id"]
+            run_dir = Path(run_record["path"])
+            print(f"Registry created run directory: {run_id}")  # Use print before logger configured
+        except Exception as e:
+            print(f"Registry create_run failed: {e}, falling back to manual")
+            run_record = None
+    
+    # Fallback if registry not available
+    if run_dir is None:
+        run_id = f"run_{datetime.now().strftime('%Y%m%dT%H%M%SZ')}_{uuid.uuid4().hex[:8]}"
+        run_dir = OUTPUT_DIR / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Now configure logging to actual run_dir
     log_file = run_dir / "execution.log"
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s [%(levelname)s] %(message)s',
         handlers=[
             logging.FileHandler(log_file),
-            logging.StreamHandler(sys.stdout) # Use sys.stdout for console output
+            logging.StreamHandler(sys.stdout)
         ]
     )
-    global logger # Make logger global so it can be used in _SimpleRegistry and get_price_history
     logger = logging.getLogger(__name__)
 
     logger.info("\n" + "="*48)
@@ -314,10 +347,10 @@ def main():
     logger.info("Initializing Mini Quant Fund...")
     logger.info(f"Run ID: {run_id}")
 
-    # instantiate optional infra
+    # instantiate optional infra (provider, datastore)
+    # Note: registry already instantiated early in main()
     provider = None
     datastore = None
-    registry = None
 
     try:
         if YahooDataProvider is not None:
@@ -334,15 +367,6 @@ def main():
     except Exception as e:
         logger.warning(f"Failed to instantiate DataStore: {e}")
         datastore = None
-
-    try:
-        if BacktestRegistry is not None:
-            registry = BacktestRegistry()
-            logger.info("BacktestRegistry instantiated.")
-    except Exception as e:
-        logger.warning(f"Failed to instantiate BacktestRegistry, falling back to _SimpleRegistry: {e}")
-        # fallback local registry
-        registry = _SimpleRegistry(RUN_OUTPUT_ROOT)
 
     # Execution handler / Engine instantiation (defensive for different ctor names)
     handler = None
@@ -734,26 +758,7 @@ def main():
     # Persist run artifacts (institutional-grade)
     # ---------------------------
     try:
-        run_dir = None
-        # prefer registry to supply run_dir if it does
-        if BacktestRegistry is not None and isinstance(registry, BacktestRegistry):
-            # attempt to let registry create a run and give us a path
-            try:
-                # Many registry APIs accept a config dict and return run record
-                rec = registry.create_run({"start_date": START_DATE, "tickers": TICKERS})
-                if isinstance(rec, dict) and "path" in rec:
-                    run_dir = Path(rec["path"])
-                    run_dir.mkdir(parents=True, exist_ok=True)
-                elif isinstance(rec, str):
-                    run_dir = Path(rec)
-                    run_dir.mkdir(parents=True, exist_ok=True)
-            except Exception:
-                run_dir = None
-
-        if run_dir is None:
-            run_dir = _safe_run_dir(RUN_OUTPUT_ROOT, "run")
-
-        # trades
+        # Collect all data for registry
         blotter = engine.get_blotter()
         trades_df = pd.DataFrame()
         try:
@@ -761,35 +766,12 @@ def main():
         except Exception:
             trades_df = pd.DataFrame()
 
-        trades_path = run_dir / "trades.csv"
-        trades_saved = False
-        if trades_df is not None and not trades_df.empty:
-            _atomic_write_df(trades_path, trades_df)
-            trades_saved = True
-            try:
-                os.chmod(trades_path, stat.S_IRUSR | stat.S_IWUSR)
-            except Exception:
-                pass
+        # Prepare equity DataFrame
+        equity_df = results.reset_index() if hasattr(results, "reset_index") else pd.DataFrame(results)
+        if "timestamp" not in equity_df.columns and len(equity_df.columns) > 0:
+            equity_df = equity_df.rename(columns={equity_df.columns[0]: "timestamp"})
 
-        # equity
-        equity_path = run_dir / "equity.csv"
-        equity_saved = False
-        try:
-            df_equity = results.reset_index() if hasattr(results, "reset_index") else pd.DataFrame(results)
-            # rename first column to timestamp if unnamed
-            if "timestamp" not in df_equity.columns:
-                # Make sure index name
-                df_equity = df_equity.rename(columns={df_equity.columns[0]: "timestamp"})
-            _atomic_write_df(equity_path, df_equity)
-            equity_saved = True
-            try:
-                os.chmod(equity_path, stat.S_IRUSR | stat.S_IWUSR)
-            except Exception:
-                pass
-        except Exception:
-            equity_saved = False
-
-        # config.json
+        # Config dict
         config = {
             "tickers": TICKERS,
             "start_date": START_DATE,
@@ -798,80 +780,106 @@ def main():
             "commission_pct": COMMISSION_PCT,
             "impact_coeff": IMPACT_COEFF,
             "max_participation": MAX_PARTICIPATION,
+            "strategy_name": "mini-quant-fund-institutional",
         }
-        config_path = run_dir / "config.json"
-        _atomic_write_text(config_path, json.dumps(config, indent=2))
+
+        # Data manifest (best-effort)
+        data_manifest = {"tickers": TICKERS, "data_source": "yahoo_finance"}
         try:
-            os.chmod(config_path, stat.S_IRUSR | stat.S_IWUSR)
+            if datastore is not None and hasattr(datastore, "get_manifest"):
+                data_manifest.update(datastore.get_manifest())
+            elif provider is not None and hasattr(provider, "get_manifest"):
+                data_manifest.update(provider.get_manifest())
         except Exception:
             pass
 
-        # data_manifest (best-effort)
-        data_manifest = {}
-        try:
-            if datastore is not None and hasattr(datastore, "get_manifest"):
-                data_manifest = datastore.get_manifest()
-            elif provider is not None and hasattr(provider, "get_manifest"):
-                data_manifest = provider.get_manifest()
-        except Exception:
-            data_manifest = {}
-        data_manifest_path = run_dir / "data_manifest.json"
-        _atomic_write_text(data_manifest_path, json.dumps(data_manifest or {}, indent=2))
-
-        # requirements
-        req_path = run_dir / "requirements.txt"
-        try:
-            reqs = subprocess.check_output([sys.executable, "-m", "pip", "freeze"], stderr=subprocess.DEVNULL).decode()
-            _atomic_write_text(req_path, reqs)
-        except Exception:
-            _atomic_write_text(req_path, "")
-
-        # git hash
-        try:
-            git_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
-        except Exception:
-            git_hash = None
-
-        # compute artifacts checksums
-        artifacts = {}
-        for p in [trades_path if trades_saved else None,
-                  equity_path if equity_saved else None,
-                  config_path,
-                  data_manifest_path,
-                  req_path]:
-            if p is None:
-                continue
-            try:
-                artifacts[p.name] = {"sha256": _sha256_of_file(p), "size": p.stat().st_size}
-            except Exception:
-                artifacts[p.name] = {"sha256": None, "size": None}
-
-        meta = {
-            "run_id": run_dir.name,
-            "timestamp_utc": datetime.utcnow().isoformat() + "Z",
-            "git_hash": git_hash,
+        # Extra metadata
+        extra_meta = {
             "initial_capital": INITIAL_CAPITAL,
-            "tickers": TICKERS,
-            "artifacts": artifacts,
+            "annualized_return": ann_ret,
+            "annualized_volatility": ann_vol,
+            "sharpe_ratio": sr,
+            "max_drawdown": mdd,
         }
-        meta_path = run_dir / "meta.json"
-        _atomic_write_text(meta_path, json.dumps(meta, indent=2))
 
-        # registry.register_run best-effort
-        try:
-            if registry is not None and hasattr(registry, "register_run"):
-                registry.register_run({
-                    "run_id": run_dir.name,
-                    "path": str(run_dir),
-                    "meta": meta,
-                })
-        except Exception as e:
-            print("Warning: registry.register_run failed:", e)
+        # Use enhanced registry if available
+        if registry is not None and hasattr(registry, 'save_artifacts'):
+            try:
+                registry.save_artifacts(
+                    run_id=run_id,
+                    config=config,
+                    equity_df=equity_df,
+                    trades_df=trades_df,
+                    data_manifest=data_manifest,
+                    extra_meta=extra_meta,
+                )
+                logger.info(f"All artifacts saved via registry for run: {run_id}")
+                logger.info(f"Run directory: {run_dir}")
+                
+                # List saved files
+                saved_files = list(run_dir.glob("*"))
+                logger.info(f"Saved {len(saved_files)} artifacts: {[f.name for f in saved_files]}")
+            except Exception as e:
+                logger.error(f"Registry save_artifacts failed: {e}")
+                # Fall through to manual save below
+                raise
+        else:
+            # Fallback manual save (old method)
+            logger.warning("Registry save_artifacts not available, using fallback")
+            
+            trades_path = run_dir / "trades.csv"
+            if trades_df is not None and not trades_df.empty:
+                _atomic_write_df(trades_path, trades_df)
+            else:
+                pd.DataFrame().to_csv(trades_path, index=False)
 
-        print(f"\nRun artifacts written to: {run_dir}")
-        print(f"trades_saved={trades_saved}, equity_saved={equity_saved}")
+            equity_path = run_dir / "equity.csv"
+            _atomic_write_df(equity_path, equity_df)
+
+            config_path = run_dir / "config.json"
+            _atomic_write_text(config_path, json.dumps(config, indent=2))
+
+            data_manifest_path = run_dir / "data_manifest.json"
+            _atomic_write_text(data_manifest_path, json.dumps(data_manifest, indent=2))
+
+            req_path = run_dir / "requirements.txt"
+            try:
+                reqs = subprocess.check_output([sys.executable, "-m", "pip", "freeze"], stderr=subprocess.DEVNULL).decode()
+                _atomic_write_text(req_path, reqs)
+            except Exception:
+                _atomic_write_text(req_path, "")
+
+            # git hash
+            try:
+                git_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
+            except Exception:
+                git_hash = None
+
+            # compute checksums
+            artifacts = {}
+            for p in [trades_path, equity_path, config_path, data_manifest_path, req_path]:
+                if p.exists():
+                    try:
+                        artifacts[p.name] = {"sha256": _sha256_of_file(p), "size": p.stat().st_size}
+                    except Exception:
+                        artifacts[p.name] = {"sha256": None, "size": None}
+
+            meta = {
+                "run_id": run_id,
+                "timestamp_utc": datetime.utcnow().isoformat() + "Z",
+                "git_hash": git_hash,
+                "python_version": sys.version,
+                "artifacts": artifacts,
+            }
+            meta.update(extra_meta)
+            
+            meta_path = run_dir / "meta.json"
+            _atomic_write_text(meta_path, json.dumps(meta, indent=2))
+            
+            logger.info(f"Manual save completed to: {run_dir}")
+
     except Exception as e:
-        print("ERROR: Failed to persist run artifacts:", e)
+        logger.error(f"ERROR: Failed to persist run artifacts: {e}")
         raise
 
     print("\nDone.")

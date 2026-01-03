@@ -1,1 +1,19 @@
-[]
+[
+  {
+    "run_id": "run_20260103T031745Z_5ae74edf",
+    "timestamp": "2026-01-03T03:17:49.753591Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "58ddceb94efc47460028fb92d37a23b148373595",
+    "metrics": {
+      "final_equity": 1251316.9852478285,
+      "total_return": 0.2518264475954739
+    },
+    "path": "output\\backtests\\run_20260103T031745Z_5ae74edf"
+  }
+]
