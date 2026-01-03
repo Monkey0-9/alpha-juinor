@@ -1,2 +1,3 @@
 # alpha-juinor
-huge fund 
+hedge funds
+
