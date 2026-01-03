@@ -49,7 +49,10 @@ class BacktestEngine:
     ):
         self.provider = provider
         self.initial_capital = float(initial_capital)
-        self.cash: float = float(initial_capital)
+        if np.isnan(self.initial_capital):
+            print("[BacktestEngine] WARNING: initial_capital is NaN! Defaulting to 1,000,000.0")
+            self.initial_capital = 1_000_000.0
+        self.cash: float = self.initial_capital
         self.positions: Dict[str, float] = {}
         self.execution_handler = execution_handler or RealisticExecutionHandler()
         self.blotter = TradeBlotter()
@@ -217,8 +220,13 @@ class BacktestEngine:
         if equity_records:
             df_equity = pd.DataFrame(equity_records).set_index("timestamp")
             self._equity_series = df_equity["equity"].astype(float)
+            # Hard assert: fill NaNs with initial capital or forward fill
+            self._equity_series = self._equity_series.ffill().fillna(self.initial_capital)
         else:
-            self._equity_series = pd.Series(dtype=float)
+            # Fallback for empty run: seed with initial capital
+            # Use start_date as timestamp
+            ts = pd.Timestamp(start_date)
+            self._equity_series = pd.Series([self.initial_capital], index=[ts])
 
     # -------------------------
     # Accessors

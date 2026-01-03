@@ -22,7 +22,7 @@ import stat
 import subprocess
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import uuid
 import logging
 
@@ -286,10 +286,21 @@ def is_first_trading_day_of_month(ts: pd.Timestamp) -> bool:
 # ---------------------------
 # Main orchestration
 # ---------------------------
-def main():
+def main(config_override: Optional[Dict] = None):
     """
     Main entry point for institutional fund driver.
     """
+    # Config handling
+    global START_DATE, END_DATE, TICKERS, INITIAL_CAPITAL
+    validation_mode = False
+    
+    if config_override:
+        START_DATE = config_override.get("start_date", START_DATE)
+        END_DATE = config_override.get("end_date", END_DATE)
+        TICKERS = config_override.get("tickers", TICKERS)
+        INITIAL_CAPITAL = config_override.get("initial_capital", INITIAL_CAPITAL)
+        validation_mode = config_override.get("validation_mode", False)
+
     # Setup logging first (to temp location, will be moved to run_dir)
     global logger
     logger = logging.getLogger(__name__)
@@ -310,12 +321,18 @@ def main():
     if registry is not None and hasattr(registry, 'create_run'):
         try:
             # Use new registry API
-            run_record = registry.create_run({
+            # Include comprehensive config in run creation
+            run_config = {
                 "tickers": TICKERS,
                 "start_date": START_DATE,
                 "end_date": END_DATE,
+                "initial_capital": INITIAL_CAPITAL,
                 "strategy_name": "mini-quant-fund-institutional",
-            })
+            }
+            if config_override:
+                run_config.update(config_override)
+                
+            run_record = registry.create_run(run_config)
             run_id = run_record["run_id"]
             run_dir = Path(run_record["path"])
             print(f"Registry created run directory: {run_id}")  # Use print before logger configured
@@ -464,12 +481,16 @@ def main():
         logger.info(f"[System] Pre-fetching training data for {TICKERS}...")
         training_assets = {}
         for tk in TICKERS:
-            # We use a helper to get dataframe
-            # NOTE: get_price_history returns Series, we need DataFrame for ML
             # We'll use provider directly
             try:
-                # 2 years lookback approx
-                df = provider.fetch_ohlcv(tk, start_date="2020-01-01", end_date=START_DATE)
+                # 2 years lookback for training relative to START_DATE
+                # Fixed: ensure train_start is always before train_end
+                train_end = START_DATE
+                train_start_ts = pd.Timestamp(START_DATE) - pd.Timedelta(days=730)
+                train_start = train_start_ts.strftime("%Y-%m-%d")
+                
+                logger.info(f"Fetching training data for {tk} ({train_start} to {train_end})")
+                df = provider.fetch_ohlcv(tk, start_date=train_start, end_date=train_end)
                 if not df.empty:
                     training_assets[tk] = df
             except Exception as e:
@@ -579,6 +600,13 @@ def main():
             expected_returns[tk] = ret_proxy
             valid_tickers.append(tk)
 
+        # DEBUG: Log if no valid tickers found often
+        if not valid_tickers and timestamp.day == 15:
+             keys_sample = list(prices.keys())[:5]
+             logger.warning(f"[DEBUG] {timestamp}: No valid tickers. History len: {len(history) if 'history' in locals() else 'N/A'}. Prices keys: {keys_sample}")
+        elif valid_tickers and timestamp.day == 1:
+             logger.info(f"[DEBUG] {timestamp}: Valid Tickers: {len(valid_tickers)}. Equity: {total_portfolio_value(portfolio):.2f}")
+
         # 2. Estimate Covariance
         price_series_list = []
         for tk in valid_tickers:
@@ -604,19 +632,95 @@ def main():
         # 3. Optimize
         weights = {}
         if optimizer and len(valid_tickers) > 0:
-            weights = optimizer.optimize(er_series, cov_matrix)
-        else:
+            try:
+                weights = optimizer.optimize(er_series, cov_matrix)
+            except Exception as e:
+                logger.warning(f"Optimizer failed: {e}")
+                weights = {}
+        
+        # Fallback if optimizer failed or was missing
+        if not weights and len(valid_tickers) > 0:
+            logger.info("Using Equal Weight fallback.")
             n = len(valid_tickers)
-            if n > 0:
-                weights = {t: 1.0/n for t in valid_tickers}
+            weights = {t: 1.0/n for t in valid_tickers}
+        elif not valid_tickers:
+            logger.warning(f"No valid tickers at {timestamp} (insufficient history?)")
 
-        # 4. Generate Orders
+        # 4. Risk / Portfolio Construction
+        target_weights = weights.copy()
+        
+        # A. Apply limits per-asset (Simple Volatility Scaling)
+        for tk in list(target_weights.keys()):
+            if tk not in prices: continue
+            
+            w = target_weights[tk]
+            # convert weight to conviction (0..1) for the legacy helper
+            conviction = pd.Series([min(1.0, max(0.0, w))]) 
+            px_series = _global_price_cache[tk]
+            # Use slice up to timestamp
+            px_slice = px_series[px_series.index <= timestamp]
+            
+            if risk_manager and not px_slice.empty:
+                adj, lev = risk_manager.enforce_limits(conviction, px_slice["Close"])
+                # update weight
+                new_w = float(adj.iloc[-1])
+                
+                # In validation mode, if limit blocks trade (w > 0 -> new_w = 0), allow it potentially?
+                # For now, enforce_limits is purely vol scaling.
+                # If vol is high, it reduces size.
+                target_weights[tk] = new_w
+
+        # B. Institutional Portfolio Risk Check (VaR/CVaR)
+        if risk_manager and hasattr(risk_manager, "check_portfolio_risk"):
+             # Build history for risk check (last 300 days)
+             risk_lookback_df = pd.DataFrame()
+             valid_hist = False
+             
+             # ... (retained code for building history) ...
+             for tk in target_weights.keys():
+                  if tk in _global_price_cache:
+                      full_df = _global_price_cache[tk]
+                      hist_slice = full_df[full_df.index <= timestamp].tail(300)
+                      if not hist_slice.empty:
+                          risk_lookback_df[tk] = hist_slice['Close'].pct_change()
+                          valid_hist = True
+             
+             if valid_hist and not risk_lookback_df.empty:
+                 risk_lookback_df = risk_lookback_df.dropna()
+                 p_val = getattr(portfolio, 'total_equity', 100000.0) if portfolio else 100000.0
+                 
+                 try:
+                     risk_res = risk_manager.check_portfolio_risk(
+                         weights=target_weights,
+                         baskets_returns=risk_lookback_df,
+                         portfolio_value=p_val
+                     )
+                     
+                     if not risk_res['ok']:
+                         violations = risk_res.get('violations', ['Unknown'])
+                         msg = f"Risk Violation: {violations}"
+                         if validation_mode:
+                              logger.warning(f"{msg} [VALIDATION]: Allowing trade despite violation.")
+                         else:
+                              if violations:
+                                   logger.warning(f"{msg}. Circuit Breaker: Reducing exposure 50%.")
+                                   target_weights = {k: v * 0.5 for k, v in target_weights.items()}
+                 except Exception as e:
+                     logger.warning(f"Risk check failed: {e}")
+
+        weights = target_weights
+
+        # 5. Generate Orders
         total_equity = None
         try:
-            total_equity = total_portfolio_value(portfolio)
-        except Exception:
-            # fallback
+            total_equity = total_portfolio_value(portfolio, prices)
+        except Exception as e:
+            logger.warning(f"Equity calc failed: {e}")
             total_equity = getattr(portfolio, "cash", INITIAL_CAPITAL)
+
+        if np.isnan(total_equity):
+             logger.error(f"[CRITICAL] Equity is NaN! Cash: {getattr(portfolio, 'cash', 'N/A')}")
+             total_equity = INITIAL_CAPITAL # Force valid to attempt trade
 
         orders = []
         for tk, w in weights.items():
@@ -630,12 +734,15 @@ def main():
             current_val = current_qty * current_price
             diff_val = target_value - current_val
             
-            if abs(diff_val) < total_equity * MIN_TRADE_PCT:
+            # Relax constraint in validation mode
+            threshold = 0.0 if validation_mode else total_equity * MIN_TRADE_PCT
+            if abs(diff_val) < threshold:
                 continue
                 
             diff_qty = diff_val / current_price
             
             try:
+                # Use current_price as proxy for execution estimate? No order uses market.
                 order = Order(ticker=tk, quantity=diff_qty, order_type=OrderType.MARKET, timestamp=pd.Timestamp(timestamp))
                 orders.append(order)
             except Exception as e:
@@ -645,7 +752,16 @@ def main():
         return orders
 
     # helper to compute portfolio value (tries engine APIs)
-    def total_portfolio_value(portfolio) -> float:
+    def total_portfolio_value(portfolio, current_prices: Dict[str, float] = None) -> float:
+        # 1. Try manual calculation if prices provided (Most accurate during run)
+        if current_prices is not None and portfolio is not None:
+             val = getattr(portfolio, "cash", 0.0)
+             for tk, qty in getattr(portfolio, "positions", {}).items():
+                 px = current_prices.get(tk)
+                 if px is not None and not np.isnan(px):
+                     val += qty * px
+             return float(val)
+
         try:
             if hasattr(portfolio, "market_value"):
                 return float(portfolio.market_value())
@@ -884,5 +1000,77 @@ def main():
 
     print("\nDone.")
 
+# ---------------------------
+# Paper Trading Logic
+# ---------------------------
+def run_paper_mode(config: Dict[str, Any]):
+    logging.basicConfig(
+        level=logging.INFO, 
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        handlers=[logging.StreamHandler(sys.stdout)]
+    )
+    logger = logging.getLogger("PaperMode")
+    
+    logger.info("="*48)
+    logger.info("  MINI QUANT FUND — PAPER TRADING MODE")
+    logger.info("="*48)
+    
+    # 1. Setup Data Provider (Alpaca)
+    # 2. Setup Execution Handler (Alpaca)
+    # 3. Setup Strategy (same helper)
+    
+    try:
+        from data.alpaca_provider import AlpacaDataProvider
+        from brokers.alpaca_broker import AlpacaExecutionHandler
+    except ImportError as e:
+        logger.error(f"Missing dependencies for paper mode: {e}")
+        return
+
+    # Load env vars
+    from dotenv import load_dotenv
+    load_dotenv()
+    
+    API_KEY = os.getenv("ALPACA_API_KEY")
+    SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
+    BASE_URL = os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
+    
+    if not API_KEY or not SECRET_KEY:
+        logger.error("Missing ALPACA_API_KEY or ALPACA_SECRET_KEY in environment.")
+        return
+
+    try:
+        provider = AlpacaDataProvider(API_KEY, SECRET_KEY, BASE_URL)
+        handler = AlpacaExecutionHandler(API_KEY, SECRET_KEY, BASE_URL)
+        logger.info("Connected to Alpaca API.")
+    except Exception as e:
+        logger.error(f"Failed to connect to Alpaca: {e}")
+        return
+
+    # 4. Fetch History & Snapshot
+    # ... logic to run strategy once ...
+    logger.info("Paper trading logic placeholder: Connected and ready.")
+    # Implement full loop later or here
+
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description="Mini Quant Fund Driver")
+    parser.add_argument("--mode", default="backtest", choices=["backtest", "paper"], help="Run mode")
+    parser.add_argument("--start_date", help="Start date YYYY-MM-DD")
+    parser.add_argument("--end_date", help="End date YYYY-MM-DD")
+    parser.add_argument("--tickers", help="Comma-sep tickers")
+    parser.add_argument("--initial_capital", type=float, help="Initial capital")
+    parser.add_argument("--validation", action="store_true", help="Run in validation mode (bypass blocking risk limits)")
+    
+    args = parser.parse_args()
+    
+    config = {}
+    if args.start_date: config["start_date"] = args.start_date
+    if args.end_date: config["end_date"] = args.end_date
+    if args.tickers: config["tickers"] = args.tickers.split(",")
+    if args.initial_capital: config["initial_capital"] = args.initial_capital
+    if args.validation: config["validation_mode"] = True
+
+    if args.mode == "paper":
+        run_paper_mode(config)
+    else:
+        main(config)

@@ -63,7 +63,8 @@ class DataValidator:
         df = df.copy()
         
         # Forward fill NaNs
-        df = df.fillna(method='ffill')
+        # Forward fill NaNs
+        df = df.ffill()
         
         # Clip negative prices
         price_cols = ["Open", "High", "Low", "Close"]

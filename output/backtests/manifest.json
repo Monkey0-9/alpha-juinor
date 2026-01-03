@@ -1,5 +1,787 @@
 [
   {
+    "run_id": "run_20260103T043244Z_1d162b2d",
+    "timestamp": "2026-01-03T04:33:15.148925Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T043244Z_1d162b2d"
+  },
+  {
+    "run_id": "run_20260103T043216Z_32201e28",
+    "timestamp": "2026-01-03T04:32:26.866574Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T043216Z_32201e28"
+  },
+  {
+    "run_id": "run_20260103T043209Z_da78a8f7",
+    "timestamp": "2026-01-03T04:32:16.752685Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T043209Z_da78a8f7"
+  },
+  {
+    "run_id": "run_20260103T043202Z_90e03580",
+    "timestamp": "2026-01-03T04:32:09.898991Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T043202Z_90e03580"
+  },
+  {
+    "run_id": "run_20260103T043152Z_6f2b7ab5",
+    "timestamp": "2026-01-03T04:32:02.867935Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T043152Z_6f2b7ab5"
+  },
+  {
+    "run_id": "run_20260103T043123Z_be96799e",
+    "timestamp": "2026-01-03T04:31:52.567771Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T043123Z_be96799e"
+  },
+  {
+    "run_id": "run_20260103T042849Z_7733551e",
+    "timestamp": "2026-01-03T04:28:56.037770Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T042849Z_7733551e"
+  },
+  {
+    "run_id": "run_20260103T042500Z_682b819e",
+    "timestamp": "2026-01-03T04:25:05.918337Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T042500Z_682b819e"
+  },
+  {
+    "run_id": "run_20260103T042318Z_4070e953",
+    "timestamp": "2026-01-03T04:23:23.963344Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T042318Z_4070e953"
+  },
+  {
+    "run_id": "run_20260103T042110Z_10ea0d14",
+    "timestamp": "2026-01-03T04:21:15.884925Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T042110Z_10ea0d14"
+  },
+  {
+    "run_id": "run_20260103T041445Z_b355c0be",
+    "timestamp": "2026-01-03T04:14:51.128290Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T041445Z_b355c0be"
+  },
+  {
+    "run_id": "run_20260103T040853Z_1b721910",
+    "timestamp": "2026-01-03T04:09:21.643551Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T040853Z_1b721910"
+  },
+  {
+    "run_id": "run_20260103T040536Z_af341066",
+    "timestamp": "2026-01-03T04:05:45.967300Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T040536Z_af341066"
+  },
+  {
+    "run_id": "run_20260103T040530Z_2ec2f345",
+    "timestamp": "2026-01-03T04:05:36.362357Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T040530Z_2ec2f345"
+  },
+  {
+    "run_id": "run_20260103T040523Z_dcb661fa",
+    "timestamp": "2026-01-03T04:05:30.178856Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T040523Z_dcb661fa"
+  },
+  {
+    "run_id": "run_20260103T040514Z_de982729",
+    "timestamp": "2026-01-03T04:05:23.881494Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T040514Z_de982729"
+  },
+  {
+    "run_id": "run_20260103T040442Z_a605d6d1",
+    "timestamp": "2026-01-03T04:05:14.065253Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T040442Z_a605d6d1"
+  },
+  {
+    "run_id": "run_20260103T040012Z_38760b99",
+    "timestamp": "2026-01-03T04:00:22.521687Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T040012Z_38760b99"
+  },
+  {
+    "run_id": "run_20260103T040004Z_381288e3",
+    "timestamp": "2026-01-03T04:00:12.141638Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T040004Z_381288e3"
+  },
+  {
+    "run_id": "run_20260103T035956Z_6f73707a",
+    "timestamp": "2026-01-03T04:00:04.517875Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T035956Z_6f73707a"
+  },
+  {
+    "run_id": "run_20260103T035945Z_f148f687",
+    "timestamp": "2026-01-03T03:59:56.523638Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T035945Z_f148f687"
+  },
+  {
+    "run_id": "run_20260103T035914Z_d73690bc",
+    "timestamp": "2026-01-03T03:59:45.539914Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T035914Z_d73690bc"
+  },
+  {
+    "run_id": "run_20260103T035425Z_8f282773",
+    "timestamp": "2026-01-03T03:54:56.367418Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": NaN,
+      "total_return": NaN
+    },
+    "path": "output\\backtests\\run_20260103T035425Z_8f282773"
+  },
+  {
+    "run_id": "run_20260103T035331Z_5cc2c332",
+    "timestamp": "2026-01-03T03:53:42.393131Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": NaN,
+      "total_return": NaN
+    },
+    "path": "output\\backtests\\run_20260103T035331Z_5cc2c332"
+  },
+  {
+    "run_id": "run_20260103T035323Z_c0349fa4",
+    "timestamp": "2026-01-03T03:53:31.808597Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": NaN,
+      "total_return": NaN
+    },
+    "path": "output\\backtests\\run_20260103T035323Z_c0349fa4"
+  },
+  {
+    "run_id": "run_20260103T035247Z_ae76cffd",
+    "timestamp": "2026-01-03T03:53:23.292307Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": NaN,
+      "total_return": NaN
+    },
+    "path": "output\\backtests\\run_20260103T035247Z_ae76cffd"
+  },
+  {
+    "run_id": "run_20260103T035235Z_8732fd7f",
+    "timestamp": "2026-01-03T03:52:47.270459Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": NaN,
+      "total_return": NaN
+    },
+    "path": "output\\backtests\\run_20260103T035235Z_8732fd7f"
+  },
+  {
+    "run_id": "run_20260103T035204Z_0170b6b8",
+    "timestamp": "2026-01-03T03:52:35.049380Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": NaN,
+      "total_return": NaN
+    },
+    "path": "output\\backtests\\run_20260103T035204Z_0170b6b8"
+  },
+  {
+    "run_id": "run_20260103T034226Z_8b1714cd",
+    "timestamp": "2026-01-03T03:42:55.741569Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T034226Z_8b1714cd"
+  },
+  {
+    "run_id": "run_20260103T034100Z_77f3c5e0",
+    "timestamp": "2026-01-03T03:41:27.913611Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T034100Z_77f3c5e0"
+  },
+  {
+    "run_id": "run_20260103T034051Z_af07b0d6",
+    "timestamp": "2026-01-03T03:41:00.549277Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T034051Z_af07b0d6"
+  },
+  {
+    "run_id": "run_20260103T034045Z_74a84f88",
+    "timestamp": "2026-01-03T03:40:51.613701Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T034045Z_74a84f88"
+  },
+  {
+    "run_id": "run_20260103T034039Z_2a3206eb",
+    "timestamp": "2026-01-03T03:40:45.823306Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T034039Z_2a3206eb"
+  },
+  {
+    "run_id": "run_20260103T034029Z_bd9ce155",
+    "timestamp": "2026-01-03T03:40:39.201872Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T034029Z_bd9ce155"
+  },
+  {
+    "run_id": "run_20260103T033940Z_e834ae74",
+    "timestamp": "2026-01-03T03:39:49.688525Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T033940Z_e834ae74"
+  },
+  {
+    "run_id": "run_20260103T033934Z_4089d384",
+    "timestamp": "2026-01-03T03:39:40.317530Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T033934Z_4089d384"
+  },
+  {
+    "run_id": "run_20260103T033928Z_d62e0324",
+    "timestamp": "2026-01-03T03:39:34.169686Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T033928Z_d62e0324"
+  },
+  {
+    "run_id": "run_20260103T033919Z_016e6b96",
+    "timestamp": "2026-01-03T03:39:28.291710Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T033919Z_016e6b96"
+  },
+  {
+    "run_id": "run_20260103T033854Z_65fab6c6",
+    "timestamp": "2026-01-03T03:39:19.383492Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T033854Z_65fab6c6"
+  },
+  {
+    "run_id": "run_20260103T033104Z_79b427c1",
+    "timestamp": "2026-01-03T03:31:20.631840Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1232648.7019249606,
+      "total_return": 0.23304467136779716
+    },
+    "path": "output\\backtests\\run_20260103T033104Z_79b427c1"
+  },
+  {
+    "run_id": "run_20260103T032928Z_8fc76261",
+    "timestamp": "2026-01-03T03:30:05.797557Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T032928Z_8fc76261"
+  },
+  {
+    "run_id": "run_20260103T032919Z_538a2ce3",
+    "timestamp": "2026-01-03T03:29:28.826321Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T032919Z_538a2ce3"
+  },
+  {
+    "run_id": "run_20260103T032854Z_1e734ba1",
+    "timestamp": "2026-01-03T03:29:19.794723Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 944851.121398519,
+      "total_return": -0.05514887860148099
+    },
+    "path": "output\\backtests\\run_20260103T032854Z_1e734ba1"
+  },
+  {
+    "run_id": "run_20260103T032842Z_9ffbebc8",
+    "timestamp": "2026-01-03T03:28:54.017043Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1079483.9777398626,
+      "total_return": 0.07977286643745773
+    },
+    "path": "output\\backtests\\run_20260103T032842Z_9ffbebc8"
+  },
+  {
+    "run_id": "run_20260103T032827Z_4d82e02e",
+    "timestamp": "2026-01-03T03:28:42.040216Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1232650.1334100587,
+      "total_return": 0.23304610388605473
+    },
+    "path": "output\\backtests\\run_20260103T032827Z_4d82e02e"
+  },
+  {
+    "run_id": "run_20260103T032053Z_65d7a370",
+    "timestamp": "2026-01-03T03:20:58.606216Z",
+    "strategy": "mini-quant-fund-institutional",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "c22f7ddad59bf5c6221de8b77ac3d07714df53da",
+    "metrics": {
+      "final_equity": 1251316.9852478285,
+      "total_return": 0.2518264475954739
+    },
+    "path": "output\\backtests\\run_20260103T032053Z_65d7a370"
+  },
+  {
     "run_id": "run_20260103T031745Z_5ae74edf",
     "timestamp": "2026-01-03T03:17:49.753591Z",
     "strategy": "mini-quant-fund-institutional",
