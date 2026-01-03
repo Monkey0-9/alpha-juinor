@@ -2,6 +2,7 @@
 import os
 import pandas as pd
 import requests
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 import logging
@@ -41,6 +42,22 @@ class AlpacaDataProvider:
         if not self.api_key or not self.secret_key:
             logger.warning("Alpaca API keys not found. Set ALPACA_API_KEY and ALPACA_SECRET_KEY env vars.")
     
+    def _request_with_retry(self, url: str, params: Optional[Dict] = None, retries: int = 3) -> requests.Response:
+        """Retry wrapper for Alpaca Data API requests."""
+        for i in range(retries):
+            try:
+                response = requests.get(url, headers=self.headers, params=params, timeout=10)
+                if response.status_code == 429: # Rate limit
+                    time.sleep(2 ** i)
+                    continue
+                response.raise_for_status()
+                return response
+            except Exception as e:
+                if i == retries - 1:
+                    raise
+                time.sleep(1)
+        return None
+
     def fetch_ohlcv(self, ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
         """
         Fetch historical OHLCV bars from Alpaca.
@@ -50,20 +67,21 @@ class AlpacaDataProvider:
             logger.error("Cannot fetch data: Alpaca API keys not configured")
             return pd.DataFrame()
         
+        # Ensure dates are in Alpaca friendly format (YYYY-MM-DD or RFC3339)
+        # Alpaca expects dates like 2021-01-01
+        
         try:
-            # Alpaca Data API v2
             url = f"{self.data_url}/v2/stocks/{ticker}/bars"
             
             params = {
                 "start": start_date,
                 "end": end_date,
-                "timeframe": "1Day",  # Daily bars
+                "timeframe": "1Day",
                 "limit": 10000,
-                "adjustment": "all"  # Adjust for splits/dividends
+                "adjustment": "all"
             }
             
-            response = requests.get(url, headers=self.headers, params=params)
-            response.raise_for_status()
+            response = self._request_with_retry(url, params=params)
             
             data = response.json()
             

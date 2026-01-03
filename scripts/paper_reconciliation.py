@@ -53,36 +53,46 @@ def reconcile_latest_run():
 
     handler = AlpacaExecutionHandler(api_key, secret_key, base_url)
     
-    # Fetch trades from Alpaca (Limit 50 or by date)
-    # Using requests directly if handler doesn't expose get_activities
-    # The handler I wrote earlier doesn't have get_trades/activities.
-    # I'll add a helper here or extend handler. 
-    # Let's use requests directly here for reporting.
-    
-    headers = handler.headers
-    # Get activities (FILL)
     try:
-        r = requests.get(f"{base_url}/v2/account/activities/FILL", headers=headers)
-        if r.status_code == 200:
-            fills_data = r.json()
-            broker_fills = pd.DataFrame(fills_data)
-        else:
-            logger.error(f"Alpaca API error: {r.text}")
-            broker_fills = pd.DataFrame()
+        broker_fills_data = handler.get_activities("FILL")
+        broker_fills = pd.DataFrame(broker_fills_data)
+        if not broker_fills.empty:
+            broker_fills['qty'] = broker_fills['qty'].astype(float)
+            # side: buy/sell
+            broker_fills['net_qty'] = broker_fills.apply(lambda x: x['qty'] if x['side'] == 'buy' else -x['qty'], axis=1)
     except Exception as e:
-        # Fallback if requests not imported (handler imports it but we need it here)
-        import requests
-        r = requests.get(f"{base_url}/v2/account/activities/FILL", headers=headers)
-        broker_fills = pd.DataFrame(r.json() if r.status_code == 200 else [])
+        logger.error(f"Failed to fetch Alpaca fills: {e}")
+        broker_fills = pd.DataFrame()
 
     logger.info(f"Loaded {len(broker_fills)} broker fills from Alpaca")
 
-    # 3. Logic to Compare (e.g., match by Symbol and Date)
-    # This is a simplified reconciliation
+    # 3. Reconciliation Logic
+    print("\n" + "="*40)
+    print("RECONCILIATION REPORT".center(40))
+    print("="*40)
     
-    print("\n--- RECONCILIATION REPORT ---")
-    print(f"Model Trades: {len(model_trades)}")
-    print(f"Broker Fills: {len(broker_fills)}")
+    if not model_trades.empty:
+        model_net = model_trades.groupby('ticker')['quantity'].sum()
+        print("\n[MODEL] Net Quantities:")
+        print(model_net)
+    
+    if not broker_fills.empty:
+        broker_net = broker_fills.groupby('symbol')['net_qty'].sum()
+        print("\n[BROKER] Net Quantities:")
+        print(broker_net)
+        
+        # Intersection comparison
+        if not model_trades.empty:
+            common = set(model_net.index).intersection(set(broker_net.index))
+            print("\n[MATCH] Model vs Broker:")
+            for sym in common:
+                diff = model_net[sym] - broker_net[sym]
+                status = "OK" if abs(diff) < 0.01 else f"MISMATCH ({diff:+.2f})"
+                print(f" {sym:5}: Model={model_net[sym]:>8.2f} | Broker={broker_net[sym]:>8.2f} | {status}")
+    else:
+        print("\nNo broker fills found to compare.")
+    
+    print("\n" + "="*40)
     
     # Save report
     report_path = Path("output/analysis/reconciliation_latest.csv")

@@ -92,3 +92,9 @@ class AlertManager:
             server.send_message(msg)
         
         logger.info(f"Email alert sent to {recipient_email}")
+    def send_critical_error(self, error: Exception):
+        """Alert on system crash or critical failure."""
+        self._send_alert(
+            subject="🚨 CRITICAL SYSTEM FAILURE",
+            message=f"System crashed with error: {str(error)}"
+        )

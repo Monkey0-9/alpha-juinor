@@ -190,12 +190,9 @@ class CompositeAlpha(Alpha):
         # compute each alpha
         series_list = []
         for a in self.alphas:
-            try:
-                s = a.compute(prices).fillna(0)
-                series_list.append(s)
-            except Exception:
-                # robust fallback
-                series_list.append(pd.Series(0.0, index=prices.index))
+            # Fix #4 & #8: No silent fallbacks. Fail if component fails.
+            s = a.compute(prices).fillna(0)
+            series_list.append(s)
 
         if not series_list:
              return pd.Series(0.0, index=prices.index)

@@ -1,5 +1,549 @@
 [
   {
+    "run_id": "run_20260103T065514Z_bebefe61",
+    "timestamp": "2026-01-03T06:55:30.703374",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 2303522.0574215227,
+      "total_return": 1.303339252718926
+    },
+    "path": "output\\backtests\\run_20260103T065514Z_bebefe61"
+  },
+  {
+    "run_id": "run_20260103T065357Z_bf00ef86",
+    "timestamp": "2026-01-03T06:54:12.815999",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 2298432.525219693,
+      "total_return": 1.298250124416168
+    },
+    "path": "output\\backtests\\run_20260103T065357Z_bf00ef86"
+  },
+  {
+    "run_id": "run_20260103T065200Z_b332f277",
+    "timestamp": "2026-01-03T06:52:17.457526",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 2269158.3311683643,
+      "total_return": 1.2691583311683643
+    },
+    "path": "output\\backtests\\run_20260103T065200Z_b332f277"
+  },
+  {
+    "run_id": "run_20260103T064408Z_b525b56d",
+    "timestamp": "2026-01-03T06:44:23.612845",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 2040429.3762531718,
+      "total_return": 1.0404293762531718
+    },
+    "path": "output\\backtests\\run_20260103T064408Z_b525b56d"
+  },
+  {
+    "run_id": "run_20260103T064252Z_eaee754e",
+    "timestamp": "2026-01-03T06:43:07.469204",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 2046101.5488566933,
+      "total_return": 1.0461015488566932
+    },
+    "path": "output\\backtests\\run_20260103T064252Z_eaee754e"
+  },
+  {
+    "run_id": "run_20260103T064106Z_d599454a",
+    "timestamp": "2026-01-03T06:41:14.294589",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1058819.8461368042,
+      "total_return": 0.05881984613680413
+    },
+    "path": "output\\backtests\\run_20260103T064106Z_d599454a"
+  },
+  {
+    "run_id": "run_20260103T063805Z_f5c81892",
+    "timestamp": "2026-01-03T06:38:13.523222",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1051852.1080507035,
+      "total_return": 0.051852108050703505
+    },
+    "path": "output\\backtests\\run_20260103T063805Z_f5c81892"
+  },
+  {
+    "run_id": "run_20260103T063219Z_647afdc4",
+    "timestamp": "2026-01-03T06:32:27.736691",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1058819.6794731882,
+      "total_return": 0.058819679473188335
+    },
+    "path": "output\\backtests\\run_20260103T063219Z_647afdc4"
+  },
+  {
+    "run_id": "run_20260103T063125Z_f7664ceb",
+    "timestamp": "2026-01-03T06:31:33.118967",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1058819.8393800498,
+      "total_return": 0.058819839380049865
+    },
+    "path": "output\\backtests\\run_20260103T063125Z_f7664ceb"
+  },
+  {
+    "run_id": "run_20260103T063018Z_0a0728d5",
+    "timestamp": "2026-01-03T06:30:28.843560",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1245051.9527538773,
+      "total_return": 0.24505195275387726
+    },
+    "path": "output\\backtests\\run_20260103T063018Z_0a0728d5"
+  },
+  {
+    "run_id": "run_20260103T062921Z_e15e9573",
+    "timestamp": "2026-01-03T06:29:32.707451",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1134266.8999266305,
+      "total_return": 0.13426689992663055
+    },
+    "path": "output\\backtests\\run_20260103T062921Z_e15e9573"
+  },
+  {
+    "run_id": "run_20260103T062752Z_bcb6b9c5",
+    "timestamp": "2026-01-03T06:28:07.164833",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 2262309.691918545,
+      "total_return": 1.2623096919185448
+    },
+    "path": "output\\backtests\\run_20260103T062752Z_bcb6b9c5"
+  },
+  {
+    "run_id": "run_20260103T062644Z_f12cfc02",
+    "timestamp": "2026-01-03T06:27:00.677238",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 2257532.099003565,
+      "total_return": 1.2575320990035652
+    },
+    "path": "output\\backtests\\run_20260103T062644Z_f12cfc02"
+  },
+  {
+    "run_id": "run_20260103T062524Z_d1f5e297",
+    "timestamp": "2026-01-03T06:25:39.109745",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 2272227.915585626,
+      "total_return": 1.272227915585626
+    },
+    "path": "output\\backtests\\run_20260103T062524Z_d1f5e297"
+  },
+  {
+    "run_id": "run_20260103T062416Z_416a51b3",
+    "timestamp": "2026-01-03T06:24:32.145846",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 2183684.5639907746,
+      "total_return": 1.1836845639907745
+    },
+    "path": "output\\backtests\\run_20260103T062416Z_416a51b3"
+  },
+  {
+    "run_id": "run_20260103T061925Z_39574f97",
+    "timestamp": "2026-01-03T06:19:40.695876",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 2183685.46883119,
+      "total_return": 1.18368546883119
+    },
+    "path": "output\\backtests\\run_20260103T061925Z_39574f97"
+  },
+  {
+    "run_id": "run_20260103T061750Z_c5d496b9",
+    "timestamp": "2026-01-03T06:18:05.010322",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 2176260.964906374,
+      "total_return": 1.176260964906374
+    },
+    "path": "output\\backtests\\run_20260103T061750Z_c5d496b9"
+  },
+  {
+    "run_id": "run_20260103T061032Z_f911a243",
+    "timestamp": "2026-01-03T06:10:46.868615",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1935780.6659813395,
+      "total_return": 0.9357806659813395
+    },
+    "path": "output\\backtests\\run_20260103T061032Z_f911a243"
+  },
+  {
+    "run_id": "run_20260103T060931Z_cdcafaaa",
+    "timestamp": "2026-01-03T06:09:47.844651",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1889642.4923328832,
+      "total_return": 0.8896424923328832
+    },
+    "path": "output\\backtests\\run_20260103T060931Z_cdcafaaa"
+  },
+  {
+    "run_id": "run_20260103T060251Z_723e7c7c",
+    "timestamp": "2026-01-03T06:03:08.196074",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1315572.1236989049,
+      "total_return": 0.31557212369890486
+    },
+    "path": "output\\backtests\\run_20260103T060251Z_723e7c7c"
+  },
+  {
+    "run_id": "run_20260103T060143Z_b6cf1916",
+    "timestamp": "2026-01-03T06:01:58.915915",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1315572.1236989049,
+      "total_return": 0.31557212369890486
+    },
+    "path": "output\\backtests\\run_20260103T060143Z_b6cf1916"
+  },
+  {
+    "run_id": "run_20260103T055956Z_6db52ccd",
+    "timestamp": "2026-01-03T06:00:21.112595",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1103057.0212475583,
+      "total_return": 0.10305702124755833
+    },
+    "path": "output\\backtests\\run_20260103T055956Z_6db52ccd"
+  },
+  {
+    "run_id": "run_20260103T055050Z_32681226",
+    "timestamp": "2026-01-03T05:51:15.610038",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T055050Z_32681226"
+  },
+  {
+    "run_id": "run_20260103T054813Z_b92cb0d9",
+    "timestamp": "2026-01-03T05:48:39.035170",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T054813Z_b92cb0d9"
+  },
+  {
+    "run_id": "run_20260103T054311Z_880b53d3",
+    "timestamp": "2026-01-03T05:43:38.568111",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1065687.569593938,
+      "total_return": 0.06568756959393807
+    },
+    "path": "output\\backtests\\run_20260103T054311Z_880b53d3"
+  },
+  {
+    "run_id": "run_20260103T053810Z_eb168e09",
+    "timestamp": "2026-01-03T05:39:16.182233",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 978710.3616881581,
+      "total_return": -0.02128963831184183
+    },
+    "path": "output\\backtests\\run_20260103T053810Z_eb168e09"
+  },
+  {
+    "run_id": "run_20260103T053441Z_98977c01",
+    "timestamp": "2026-01-03T05:35:22.588448",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 978710.3616881581,
+      "total_return": -0.02128963831184183
+    },
+    "path": "output\\backtests\\run_20260103T053441Z_98977c01"
+  },
+  {
+    "run_id": "run_20260103T053142Z_68aa989c",
+    "timestamp": "2026-01-03T05:32:12.178348",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1921187.1135012135,
+      "total_return": 0.9211871135012135
+    },
+    "path": "output\\backtests\\run_20260103T053142Z_68aa989c"
+  },
+  {
+    "run_id": "run_20260103T052605Z_a33f1651",
+    "timestamp": "2026-01-03T05:26:33.027478",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1921188.183730347,
+      "total_return": 0.921188183730347
+    },
+    "path": "output\\backtests\\run_20260103T052605Z_a33f1651"
+  },
+  {
+    "run_id": "run_20260103T052311Z_a236cf10",
+    "timestamp": "2026-01-03T05:23:39.961168",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1921187.11382384,
+      "total_return": 0.9211871138238399
+    },
+    "path": "output\\backtests\\run_20260103T052311Z_a236cf10"
+  },
+  {
+    "run_id": "run_20260103T051556Z_e75aa125",
+    "timestamp": "2026-01-03T05:16:26.547696",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1921186.9379767138,
+      "total_return": 0.9211869379767137
+    },
+    "path": "output\\backtests\\run_20260103T051556Z_e75aa125"
+  },
+  {
+    "run_id": "run_20260103T051337Z_bc5b8c77",
+    "timestamp": "2026-01-03T05:14:05.462992",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "84383b94d4ac83c557d536a9b4aa0cbbc586abc4",
+    "metrics": {
+      "final_equity": 1000000.0,
+      "total_return": 0.0
+    },
+    "path": "output\\backtests\\run_20260103T051337Z_bc5b8c77"
+  },
+  {
     "run_id": "run_20260103T043244Z_1d162b2d",
     "timestamp": "2026-01-03T04:33:15.148925Z",
     "strategy": "mini-quant-fund-institutional",

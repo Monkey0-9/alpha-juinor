@@ -273,8 +273,8 @@ class RealisticExecutionHandler:
                 raise RuntimeError("bad vol estimate")
             vol = float(vol_raw) * np.sqrt(252)
         except Exception as e:
-            logger.warning("Vol estimation failed (%s). Using fallback vol=%s", e, self.min_vol_fallback)
-            vol = float(self.min_vol_fallback)
+            # Fix #4: No silent fallbacks
+            raise ExecutionError(f"Volatility estimation failed: {e}")
 
         # Estimate ADV
         try:
@@ -285,9 +285,8 @@ class RealisticExecutionHandler:
             if np.isnan(adv) or adv <= 0:
                 raise RuntimeError("bad adv")
         except Exception as e:
-            logger.warning("ADV estimation failed (%s). Using bar-level volume as fallback", e)
-            # adv fallback will be set by caller if necessary; return adv=None to indicate fallback
-            adv = None
+            # Fix #4: No silent fallbacks
+            raise ExecutionError(f"ADV estimation failed: {e}")
 
         return vol, adv
 

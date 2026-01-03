@@ -63,17 +63,18 @@ class AlpacaExecutionHandler:
             # Alpaca requires string side
             payload = {
                 "symbol": order.ticker,
-                "qty": str(qty),  # fractional shares supported
+                "qty": str(round(qty, 4)),  # fractional shares supported to 4 decimals
                 "side": side,
-                "type": "market", # simplification for now
+                "type": "market", 
                 "time_in_force": "day"
             }
             
             try:
                 r = self.session.post(f"{self.base_url}/v2/orders", json=payload)
                 if r.status_code in [200, 201]:
-                    logger.info(f"Submitted {side} {qty} {order.ticker}")
-                    results.append({"status": "submitted", "order": r.json()})
+                    order_data = r.json()
+                    logger.info(f"Submitted {side} {qty} {order.ticker} | ID: {order_data.get('id')}")
+                    results.append({"status": "submitted", "order": order_data})
                 else:
                     logger.error(f"Order failed {side} {order.ticker}: {r.text}")
                     results.append({"status": "failed", "error": r.text})
@@ -82,6 +83,19 @@ class AlpacaExecutionHandler:
                 results.append({"status": "error", "error": str(e)})
                 
         return results
+
+    def get_orders(self, status: str = "open", limit: int = 50) -> List[Dict]:
+        """Fetch historical or open orders."""
+        params = {"status": status, "limit": limit}
+        r = self.session.get(f"{self.base_url}/v2/orders", params=params)
+        r.raise_for_status()
+        return r.json()
+
+    def get_activities(self, type: str = "FILL") -> List[Dict]:
+        """Fetch account activities (e.g. FILLS, CANCELS)."""
+        r = self.session.get(f"{self.base_url}/v2/account/activities/{type}")
+        r.raise_for_status()
+        return r.json()
 
     def close_all(self):
         """Liquidate all positions (Panic button)."""
