@@ -13,7 +13,33 @@ class YahooDataProvider(DataProvider):
             end_date = datetime.today().strftime('%Y-%m-%d')
             
         # yfinance download
-        df = yf.download(ticker, start=start_date, end=end_date, progress=False, auto_adjust=True)
+        # yfinance download
+        # Suppress yfinance error output for cleaner logs
+        import sys
+        import os
+        import logging
+        from contextlib import contextmanager
+        
+        # Disable yfinance logging to avoid 404 errors cluttering stdout
+        logging.getLogger('yfinance').setLevel(logging.CRITICAL)
+        logging.getLogger('yfinance').propagate = False
+
+        @contextmanager
+        def suppress_stderr():
+            with open(os.devnull, "w") as devnull:
+                old_stderr = sys.stderr
+                sys.stderr = devnull
+                try:
+                    yield
+                finally:
+                    sys.stderr = old_stderr
+
+        try:
+            with suppress_stderr():
+                df = yf.download(ticker, start=start_date, end=end_date, progress=False, auto_adjust=True)
+        except Exception:
+            # Catch yfinance internal errors (e.g. delisted)
+            return pd.DataFrame()
         
         if df.empty:
             print(f"   [Warning] No data found for {ticker}")
