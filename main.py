@@ -21,13 +21,19 @@ import hashlib
 import stat
 import subprocess
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import uuid
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------
 # Project imports (best-effort)
@@ -37,6 +43,28 @@ try:
     from data.provider import YahooDataProvider  # optional
 except Exception:
     YahooDataProvider = None
+
+# AlpacaDataProvider removed to enforce Yahoo-only data policy (Institutional Requirement)
+AlpacaDataProvider = None
+
+try:
+    from brokers.alpaca_broker import AlpacaExecutionHandler
+except Exception:
+    AlpacaExecutionHandler = None
+
+try:
+    from portfolio.ledger import PortfolioLedger, PortfolioEvent, EventType
+except Exception:
+    PortfolioLedger = None
+    PortfolioEvent = None
+    EventType = None
+
+try:
+    from portfolio.allocator import InstitutionalAllocator
+except Exception as e:
+    InstitutionalAllocator = None
+    # log error?
+    pass
 
 try:
     from data.storage import DataStore
@@ -95,9 +123,11 @@ except Exception:
     FeatureEngineer = MLAlpha = None
 
 try:
-    from risk.engine import RiskManager
+    from risk.engine import RiskManager, RiskRegime, RiskDecision
 except Exception:
     RiskManager = None
+    RiskRegime = None
+    RiskDecision = None
     
 try:
     from portfolio.optimizer import MeanVarianceOptimizer
@@ -110,7 +140,12 @@ except Exception:
     StatisticalRiskModel = None
 
 try:
-    from analytics.metrics import PerformanceAnalyzer
+    from strategies.stat_arb import KalmanPairsTrader
+except Exception:
+    KalmanPairsTrader = None
+
+try:
+    from reports.performance_attribution import PerformanceAnalyzer
 except Exception:
     PerformanceAnalyzer = None
 
@@ -129,6 +164,11 @@ TICKERS = ["SPY", "QQQ", "TLT", "GLD"]
 START_DATE = "2018-01-01"
 END_DATE = None  # set if needed "2024-12-31"
 INITIAL_CAPITAL = 1_000_000.0
+
+# "High Accuracy" Settings
+ML_CONFIDENCE_THRESHOLD = 0.65  # Confidence required to act on a signal
+EQUITY_DRIFT_TOLERANCE = 0.05   # 5% max mismatch before Kill Switch triggers
+REBALANCE_PERIOD = "monthly"    # Rebalance frequency
 
 COMMISSION_PCT = 0.0005  # 0.05%
 IMPACT_COEFF = 0.15
@@ -222,7 +262,7 @@ class _SimpleRiskManager:
         self.max_leverage = max_leverage
         self.target_vol_limit = target_vol_limit
 
-    def enforce_limits(self, conviction_series: pd.Series, price_series: pd.Series):
+    def enforce_limits(self, conviction_series: pd.Series, price_series: pd.Series, volume_series: pd.Series):
         # Returns (adjusted_conv_series, leverage_series) same index
         # Simple: if recent vol > target, scale conviction down linearly
         ret = price_series.pct_change().dropna()
@@ -231,8 +271,13 @@ class _SimpleRiskManager:
         if vol > self.target_vol_limit:
             factor = max(0.0, 1.0 - (vol - self.target_vol_limit) / (self.target_vol_limit * 2))
         adjusted = conviction_series * factor
-        leverage = pd.Series([self.max_leverage], index=conviction_series.index)
-        return adjusted, leverage
+        # Adjusted result wrapper for simple compat
+        class SimpleRes:
+             def __init__(self, adj): 
+                 self.adjusted_conviction = adj
+                 self.estimated_leverage = float(adj.iloc[-1])
+                 self.violations = []
+        return SimpleRes(adjusted)
 
 class _SimpleAlpha:
     """Simple composite alpha placeholder: momentum vs mean reversion mix."""
@@ -356,7 +401,6 @@ def main(config_override: Optional[Dict] = None):
             logging.StreamHandler(sys.stdout)
         ]
     )
-    logger = logging.getLogger(__name__)
 
     logger.info("\n" + "="*48)
     logger.info("  MINI QUANT FUND — INSTITUTIONAL DRIVER (MAIN)")
@@ -372,10 +416,13 @@ def main(config_override: Optional[Dict] = None):
     try:
         if YahooDataProvider is not None:
             provider = YahooDataProvider()
-            logger.info("YahooDataProvider instantiated.")
+            logger.info("YahooDataProvider instantiated (Primary: FREE Only).")
+        else:
+             logger.error("YahooDataProvider not found! Critical failure.")
+             return
     except Exception as e:
-        logger.warning(f"Failed to instantiate YahooDataProvider: {e}")
-        provider = None
+        logger.error(f"Failed to instantiate YahooDataProvider: {e}")
+        return
 
     try:
         if DataStore is not None:
@@ -443,7 +490,7 @@ def main(config_override: Optional[Dict] = None):
             # e.g., Trend 30%, MeanRev 20%, RSI 20%, MACD 15%, BB 15%
             composite_alpha = CompositeAlpha(
                 alphas=[trend_alpha, meanrev_alpha, rsi_alpha, macd_alpha, bb_alpha],
-                weights=[0.30, 0.20, 0.20, 0.15, 0.15]
+                window=60
             )
             logger.info("CompositeAlpha instantiated with multiple alpha components.")
         except Exception as e:
@@ -531,6 +578,14 @@ def main(config_override: Optional[Dict] = None):
     else:
         logger.info("StatisticalRiskModel not available.")
 
+    kalman_strat = None
+    if KalmanPairsTrader is not None:
+        try:
+            kalman_strat = KalmanPairsTrader()
+            logger.info("KalmanPairsTrader (Stat Arb) instantiated.")
+        except Exception as e:
+            logger.warning(f"Failed to instantiate KalmanPairsTrader: {e}")
+
     # ---------------------------
     # Global Data Cache (Optimization)
     # ---------------------------
@@ -561,14 +616,102 @@ def main(config_override: Optional[Dict] = None):
             logger.error(f"Failed to cache {tk}: {e}")
 
     # strategy function (monthly rebalance using convictions)
+    # strategy_fn (Daily execution capabilty with Monthly Rebalance logic + Stat Arb)
+    
+    # Instantiate Allocator (Critical for signaling)
+    allocator = None
+    if InstitutionalAllocator and risk_manager:
+        allocator = InstitutionalAllocator(risk_manager)
+        logger.info("Institutional Allocator instantiated (Active).")
+    else:
+        logger.warning(f"Allocator NOT instantiated. Class: {InstitutionalAllocator}")
+        
     def strategy_fn(timestamp: pd.Timestamp, prices: Dict[str, float], portfolio) -> List:
-        # Rebalance only on first trading day approx
-        if not is_first_trading_day_of_month(pd.Timestamp(timestamp)):
-            return []
+        
+        # 0. Global Updates (Regime & Kalman State)
+        spy_price = prices.get("SPY")
+        qqq_price = prices.get("QQQ")
+        
+        # Update Risk Regime
+        if "SPY" in _global_price_cache and risk_manager and hasattr(risk_manager, "update_regime"):
+             full_df = _global_price_cache["SPY"]
+             # Robust slice locally
+             spy_hist = full_df[full_df.index <= timestamp]["Close"]
+             risk_manager.update_regime(spy_hist)
 
-        # 1. Feature Generation & Signal
-        expected_returns = {}
-        valid_tickers = []
+        # 0b. Emergency Circuit Breaker Check (Daily)
+        # If Risk Manager is Frozen or Market in Crisis -> LIQUIDATE IMMEDIATELY
+        is_emergency = False
+        emergency_reason = ""
+        
+        # Check State/Regime
+        if risk_manager:
+             if hasattr(risk_manager, "state") and risk_manager.state == RiskDecision.FREEZE:
+                 is_emergency = True
+                 emergency_reason = "Risk Manager FREEZE"
+             elif hasattr(risk_manager, "regime") and risk_manager.regime == RiskRegime.BEAR_CRISIS:
+                 is_emergency = True
+                 emergency_reason = "Market Regime CRISIS"
+
+        if is_emergency:
+             # LIQUIDATE ALL POSITIONS
+             orders = []
+             # Access positions safely
+             positions = getattr(portfolio, "positions", {})
+             # If portfolio is a Portfolio object, positions might be a property returning a dict copy
+             if isinstance(positions, dict):
+                 for tk, qty in positions.items():
+                     if abs(qty) > 0:
+                         # Close it. 
+                         orders.append(Order(tk, -qty, OrderType.MARKET, pd.Timestamp(timestamp)))
+             
+             if orders:
+                 logger.warning(f"EMERGENCY LIQUIDATION TRIGGERED: {emergency_reason} - Closing {len(orders)} positions.")
+                 return orders
+             return [] # Already flat, stay flat
+
+        # Update Kalman State (Daily)
+        kalman_signal = False
+        kalman_spread_val = 0.0
+        kalman_z = 0.0
+        
+        if kalman_strat and spy_price and qqq_price:
+             # SPY (X), QQQ (Y)
+             # Update filter
+             beta, error, z = kalman_strat.update(spy_price, qqq_price)
+             kalman_z = z
+             
+             # Signal Logic: z > 2.0 or z < -2.0
+             if abs(z) > 2.0:
+                 kalman_signal = True
+
+        # Check Rebalance Triggers
+        is_rebalance_day = is_first_trading_day_of_month(pd.Timestamp(timestamp))
+        
+        # If neither monthly rebalance nor stat-arb signal, do nothing
+        if not is_rebalance_day and not kalman_signal:
+            return []
+            
+        # Kalman Overlay Logic (Tactical) - Generate direct orders if mid-month
+        if not is_rebalance_day and kalman_signal:
+             orders = []
+             equity = getattr(portfolio, "total_equity", INITIAL_CAPITAL)
+             alloc_amt = equity * 0.02 # 2% allocation to arb
+             
+             if kalman_z > 2.0: # Short Spread (Short QQQ, Long SPY)
+                 if spy_price > 0 and qqq_price > 0:
+                     orders.append(Order("SPY", alloc_amt / spy_price, OrderType.MARKET, pd.Timestamp(timestamp)))
+                     orders.append(Order("QQQ", -alloc_amt / qqq_price, OrderType.MARKET, pd.Timestamp(timestamp)))
+             elif kalman_z < -2.0: # Long Spread (Long QQQ, Short SPY)
+                 if spy_price > 0 and qqq_price > 0:
+                     orders.append(Order("QQQ", alloc_amt / qqq_price, OrderType.MARKET, pd.Timestamp(timestamp)))
+                     orders.append(Order("SPY", -alloc_amt / spy_price, OrderType.MARKET, pd.Timestamp(timestamp)))
+             return orders
+
+        # 1. Feature Generation & Signal (Only run full alpha pipeline on rebalance days)
+        signals = {}
+        price_history = {}
+        vol_history = {}
         
         # Use cached dataframe
         for tk, px in prices.items():
@@ -576,180 +719,59 @@ def main(config_override: Optional[Dict] = None):
                 continue
                 
             full_df = _global_price_cache[tk]
-            
             # Slice history up to timestamp (simulating point-in-time)
-            # Use searchsorted/slicing for speed or simple boolean indexing
-            # boolean indexing is safe
-            
-            # To avoid "lookahead" in the features, we must strictly use data <= timestamp
-            # slice logic:
             history = full_df[full_df.index <= timestamp]
-            
             if len(history) < 50:
                 continue
-
-            # Use ML if available
-            if ml_model and ml_model.is_trained:
-                # Predict returns
-                score = ml_model.predict_conviction(history)
-                ret_proxy = (score - 0.5) * 0.10 
-            else:
-                # Fallback to Simple Momentum
-                ret_proxy = (history["Close"].iloc[-1] / history["Close"].iloc[-20] - 1.0)
             
-            expected_returns[tk] = ret_proxy
-            valid_tickers.append(tk)
+            price_history[tk] = history["Close"]
+            vol_history[tk] = history["Volume"]
 
-        # DEBUG: Log if no valid tickers found often
-        if not valid_tickers and timestamp.day == 15:
-             keys_sample = list(prices.keys())[:5]
-             logger.warning(f"[DEBUG] {timestamp}: No valid tickers. History len: {len(history) if 'history' in locals() else 'N/A'}. Prices keys: {keys_sample}")
-        elif valid_tickers and timestamp.day == 1:
-             logger.info(f"[DEBUG] {timestamp}: Valid Tickers: {len(valid_tickers)}. Equity: {total_portfolio_value(portfolio):.2f}")
-
-        # 2. Estimate Covariance
-        price_series_list = []
-        for tk in valid_tickers:
-            full_df = _global_price_cache[tk]
-            history = full_df[full_df.index <= timestamp]
-            if not history.empty:
-                s = history["Close"].pct_change()
-                s.name = tk
-                price_series_list.append(s)
-        
-        if price_series_list:
-            returns_df = pd.concat(price_series_list, axis=1).iloc[-252:].fillna(0) # Use 1y for risk model
-            
-            if risk_model:
-                cov_matrix = risk_model.compute_covariance(returns_df)
-            else:
-                cov_matrix = returns_df.cov() * 252 # Fallback simple annualized
-                
-            er_series = pd.Series(expected_returns)
-        else:
-            return []
-
-        # 3. Optimize
-        weights = {}
-        if optimizer and len(valid_tickers) > 0:
-            try:
-                weights = optimizer.optimize(er_series, cov_matrix)
-            except Exception as e:
-                logger.warning(f"Optimizer failed: {e}")
-                weights = {}
-        
-        # Fallback if optimizer failed or was missing
-        if not weights and len(valid_tickers) > 0:
-            logger.info("Using Equal Weight fallback.")
-            n = len(valid_tickers)
-            weights = {t: 1.0/n for t in valid_tickers}
-        elif not valid_tickers:
-            logger.warning(f"No valid tickers at {timestamp} (insufficient history?)")
-
-        # 4. Risk / Portfolio Construction
-        target_weights = weights.copy()
-        
-        # A. Apply limits per-asset (Simple Volatility Scaling)
-        for tk in list(target_weights.keys()):
-            if tk not in prices: continue
-            
-            w = target_weights[tk]
-            # convert weight to conviction (0..1) for the legacy helper
-            conviction = pd.Series([min(1.0, max(0.0, w))]) 
-            px_series = _global_price_cache[tk]
-            # Use slice up to timestamp
-            px_slice = px_series[px_series.index <= timestamp]
-            
-            if risk_manager and not px_slice.empty:
-                adj, lev = risk_manager.enforce_limits(conviction, px_slice["Close"])
-                # update weight
-                new_w = float(adj.iloc[-1])
-                
-                # In validation mode, if limit blocks trade (w > 0 -> new_w = 0), allow it potentially?
-                # For now, enforce_limits is purely vol scaling.
-                # If vol is high, it reduces size.
-                target_weights[tk] = new_w
-
-        # B. Institutional Portfolio Risk Check (VaR/CVaR)
-        if risk_manager and hasattr(risk_manager, "check_portfolio_risk"):
-             # Build history for risk check (last 300 days)
-             risk_lookback_df = pd.DataFrame()
-             valid_hist = False
-             
-             # ... (retained code for building history) ...
-             for tk in target_weights.keys():
-                  if tk in _global_price_cache:
-                      full_df = _global_price_cache[tk]
-                      hist_slice = full_df[full_df.index <= timestamp].tail(300)
-                      if not hist_slice.empty:
-                          risk_lookback_df[tk] = hist_slice['Close'].pct_change()
-                          valid_hist = True
-             
-             if valid_hist and not risk_lookback_df.empty:
-                 risk_lookback_df = risk_lookback_df.dropna()
-                 p_val = getattr(portfolio, 'total_equity', 100000.0) if portfolio else 100000.0
-                 
+            # 1.1 Compute Alpha Score
+            raw_score = 0.5
+            if composite_alpha:
                  try:
-                     risk_res = risk_manager.check_portfolio_risk(
-                         weights=target_weights,
-                         baskets_returns=risk_lookback_df,
-                         portfolio_value=p_val
-                     )
-                     
-                     if not risk_res['ok']:
-                         violations = risk_res.get('violations', ['Unknown'])
-                         msg = f"Risk Violation: {violations}"
-                         if validation_mode:
-                              logger.warning(f"{msg} [VALIDATION]: Allowing trade despite violation.")
-                         else:
-                              if violations:
-                                   logger.warning(f"{msg}. Circuit Breaker: Reducing exposure 50%.")
-                                   target_weights = {k: v * 0.5 for k, v in target_weights.items()}
+                     # compute() returns Series of 0..1 scores
+                     alpha_s = composite_alpha.compute(history)
+                     if not alpha_s.empty:
+                         raw_score = float(alpha_s.iloc[-1])
                  except Exception as e:
-                     logger.warning(f"Risk check failed: {e}")
+                     pass
+            else:
+                 # Fallback: Simple Momentum
+                 mom = (history["Close"].iloc[-1] / history["Close"].iloc[-20] - 1.0)
+                 raw_score = 1.0 if mom > 0 else 0.0
 
-        weights = target_weights
-
-        # 5. Generate Orders
-        total_equity = None
-        try:
-            total_equity = total_portfolio_value(portfolio, prices)
-        except Exception as e:
-            logger.warning(f"Equity calc failed: {e}")
-            total_equity = getattr(portfolio, "cash", INITIAL_CAPITAL)
-
-        if np.isnan(total_equity):
-             logger.error(f"[CRITICAL] Equity is NaN! Cash: {getattr(portfolio, 'cash', 'N/A')}")
-             total_equity = INITIAL_CAPITAL # Force valid to attempt trade
-
-        orders = []
-        for tk, w in weights.items():
-            target_value = total_equity * w
-            current_qty = getattr(portfolio, "positions", {}).get(tk, 0.0) if portfolio is not None else 0.0
-            current_price = prices.get(tk, None)
-            
-            if current_price is None or current_price <= 0:
-                continue
+            # 1.2 Apply ML Confidence (Gatekeeper)
+            if ml_model and ml_model.is_trained:
+                conf_score = ml_model.predict_conviction(history)
                 
-            current_val = current_qty * current_price
-            diff_val = target_value - current_val
+                # High Accuracy Gate: If confidence is too low, neutralize signal to avoid losses
+                if conf_score < ML_CONFIDENCE_THRESHOLD:
+                     logger.debug(f"Confidence {conf_score:.2f} < {ML_CONFIDENCE_THRESHOLD} for {tk}. Neutralizing.")
+                     raw_score = 0.5
+                else:
+                     # Simpler: Just use ML as a scalar on deviation from neutral
+                     deviation = raw_score - 0.5
+                     dampened = deviation * conf_score 
+                     raw_score = 0.5 + dampened
+
+            signals[tk] = raw_score
             
-            # Relax constraint in validation mode
-            threshold = 0.0 if validation_mode else total_equity * MIN_TRADE_PCT
-            if abs(diff_val) < threshold:
-                continue
-                
-            diff_qty = diff_val / current_price
-            
-            try:
-                # Use current_price as proxy for execution estimate? No order uses market.
-                order = Order(ticker=tk, quantity=diff_qty, order_type=OrderType.MARKET, timestamp=pd.Timestamp(timestamp))
-                orders.append(order)
-            except Exception as e:
-                logger.warning(f"Failed to create order for {tk}: {e}")
-                continue
-                
-        return orders
+        # 2. Allocation & Order Generation
+        if allocator:
+             allocation = allocator.allocate(signals, price_history, vol_history, portfolio, timestamp)
+             # Log allocation for audit
+             if allocation.orders:
+                 logger.info(f"Rebalance Orders: {len(allocation.orders)} | Target Weights: {allocation.target_weights.keys()}")
+             elif signals:
+                 # Logic for why no orders?
+                 logger.info(f"Allocator produced 0 orders from {len(signals)} signals.")
+             return allocation.orders
+        else:
+             logger.warning("Allocator is None in strategy_fn")
+        
+        return []
 
     # helper to compute portfolio value (tries engine APIs)
     def total_portfolio_value(portfolio, current_prices: Dict[str, float] = None) -> float:
@@ -793,35 +815,44 @@ def main(config_override: Optional[Dict] = None):
         raise
 
     # ---------------------------
+    # Allocator
+    # ---------------------------
+    allocator = None
+    if InstitutionalAllocator and risk_manager:
+        allocator = InstitutionalAllocator(risk_manager)
+        logger.info("Institutional Allocator instantiated.")
+    else:
+        logger.warning(f"Allocator skipped (Available: {InstitutionalAllocator is not None}, RM: {risk_manager is not None})")
+
+    # ---------------------------
     # Performance Analytics
     # ---------------------------
     logger.info("Generating performance analytics...")
     
     try:
-        # Get equity curve
-        equity_df = engine.equity_df() if hasattr(engine, 'equity_df') else None
-        trades_df = engine.trades_df() if hasattr(engine, 'trades_df') else None
-        
-        if equity_df is not None and not equity_df.empty and PerformanceAnalyzer:
-            # Assume equity_df has a 'total_value' or 'equity' column
-            if 'total_value' in equity_df.columns:
-                equity_series = equity_df['total_value']
-            elif 'equity' in equity_df.columns:
-                equity_series = equity_df['equity']
-            else:
-                equity_series = equity_df.iloc[:, 0]
+        # Get results via standardized API
+        try:
+            results = engine.get_results()
+            blotter = engine.get_blotter()
+            trades_df = blotter.trades_df()
+        except Exception:
+            results = None
+            trades_df = pd.DataFrame()
             
-            analyzer = PerformanceAnalyzer(equity_series, trades_df)
-            analyzer.print_summary()
+        if results is not None and not results.empty and PerformanceAnalyzer:
+            equity_curve = results["equity"] if "equity" in results.columns else results.iloc[:, 0]
+            
+            analyzer = PerformanceAnalyzer(equity_curve, trades_df, risk_free_rate=0.02)
+            report_str = analyzer.generate_report()
+            logger.info("\n" + report_str)
             
             # Save report
-            report_path = run_dir / "performance_summary.json"
-            analyzer.save_report(str(report_path))
+            report_path = run_dir / "performance_report.txt"
+            with open(report_path, "w") as f:
+                f.write(report_str)
             logger.info(f"Performance report saved to {report_path}")
-        elif equity_df is None or equity_df.empty:
-            logger.warning("Equity data is empty or not available, skipping PerformanceAnalyzer.")
         else:
-            logger.warning("PerformanceAnalyzer not available, skipping performance report generation.")
+            logger.warning("PerformanceAnalyzer or results missing, skipping report.")
     except Exception as e:
         logger.warning(f"Performance analytics failed: {e}")
 
@@ -879,8 +910,20 @@ def main(config_override: Optional[Dict] = None):
         trades_df = pd.DataFrame()
         try:
             trades_df = blotter.trades_df()
+            
+            # REPORT TRADES (Explicit check)
+            if not trades_df.empty:
+                 print(f"TOTAL TRADES EXECUTED: {len(trades_df)}")
+                 if 'pnl' in trades_df.columns:
+                     print(f"Gross PnL: ${trades_df['pnl'].sum():,.2f}")
+                 if 'commission' in trades_df.columns:
+                     print(f"Total Commission: ${trades_df['commission'].sum():,.2f}")
+            else:
+                 print("TOTAL TRADES EXECUTED: 0")
+                 
         except Exception:
             trades_df = pd.DataFrame()
+            print("TOTAL TRADES EXECUTED: 0 (Error accessing blotter)")
 
         # Prepare equity DataFrame
         equity_df = results.reset_index() if hasattr(results, "reset_index") else pd.DataFrame(results)
@@ -1001,55 +1044,206 @@ def main(config_override: Optional[Dict] = None):
     print("\nDone.")
 
 # ---------------------------
-# Paper Trading Logic
+# Institutional Safety Helpers
 # ---------------------------
+def _validate_market_data_freshness(data_map: Dict[str, pd.DataFrame], tickers: List[str]):
+    """FAIL FAST: Abort if data is stale or missing."""
+    now = datetime.now()
+    for tk in tickers:
+        if tk not in data_map or data_map[tk].empty:
+            raise RuntimeError(f"INSTITUTIONAL ABORT: Missing data for {tk}")
+        
+        last_dt = data_map[tk].index[-1]
+        # In free mode, Yahoo daily bars might be 1-2 days old depending on timezone/market close
+        # We allow up to 3 days for weekend/holiday fallback
+        if (now - last_dt).days > 3:
+            raise RuntimeError(f"INSTITUTIONAL ABORT: Data for {tk} is stale ({last_dt})")
+    return True
+
+def _health_check_circuit_breaker(local_equity: float, broker_equity: float):
+    """KILL SWITCH: Abort if local book differs significantly from broker."""
+    drift = abs(local_equity - broker_equity) / (broker_equity + 1e-9)
+    if drift > EQUITY_DRIFT_TOLERANCE:
+        raise RuntimeError(f"KILL SWITCH: Equity mismatch detected! Local: ${local_equity:,.2f} | Broker: ${broker_equity:,.2f} | Drift: {drift:.1%}")
+    logger.info(f"[Health] Equity alignment OK (Drift: {drift:.2%})")
 def run_paper_mode(config: Dict[str, Any]):
+    """
+    INSTITUTIONAL PAPER TRADING (Free-Only Mode)
+    Yahoo -> Signals -> Risk -> Orders -> Alpaca Paper.
+    """
     logging.basicConfig(
         level=logging.INFO, 
         format='%(asctime)s [%(levelname)s] %(message)s',
         handlers=[logging.StreamHandler(sys.stdout)]
     )
-    logger = logging.getLogger("PaperMode")
     
     logger.info("="*48)
-    logger.info("  MINI QUANT FUND — PAPER TRADING MODE")
+    logger.info("  MINI QUANT FUND — INSTITUTIONAL PAPER MODE")
+    logger.info("  (Yahoo Data + Alpaca Execution)")
     logger.info("="*48)
     
-    # 1. Setup Data Provider (Alpaca)
-    # 2. Setup Execution Handler (Alpaca)
-    # 3. Setup Strategy (same helper)
-    
-    try:
-        from data.alpaca_provider import AlpacaDataProvider
-        from brokers.alpaca_broker import AlpacaExecutionHandler
-    except ImportError as e:
-        logger.error(f"Missing dependencies for paper mode: {e}")
-        return
-
-    # Load env vars
-    from dotenv import load_dotenv
-    load_dotenv()
-    
+    # 1. Initialization & Free-Only Connectivity
     API_KEY = os.getenv("ALPACA_API_KEY")
     SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
     BASE_URL = os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
     
     if not API_KEY or not SECRET_KEY:
-        logger.error("Missing ALPACA_API_KEY or ALPACA_SECRET_KEY in environment.")
+        logger.error("Missing Alpaca keys. Aborting.")
         return
 
+    # Alpaca is strictly for EXECUTION
+    execution_broker = AlpacaExecutionHandler(API_KEY, SECRET_KEY, BASE_URL)
+    # Yahoo is strictly for DATA
+    data_provider = YahooDataProvider() 
+    
     try:
-        provider = AlpacaDataProvider(API_KEY, SECRET_KEY, BASE_URL)
-        handler = AlpacaExecutionHandler(API_KEY, SECRET_KEY, BASE_URL)
-        logger.info("Connected to Alpaca API.")
+        account = execution_broker.get_account()
+        broker_equity = float(account.get("equity", 0.0))
+        broker_cash = float(account.get("cash", 0.0))
+        logger.info(f"Connected to Broker. Equity: ${broker_equity:,.2f}")
     except Exception as e:
-        logger.error(f"Failed to connect to Alpaca: {e}")
+        logger.error(f"Broker connection failed: {e}")
         return
 
-    # 4. Fetch History & Snapshot
-    # ... logic to run strategy once ...
-    logger.info("Paper trading logic placeholder: Connected and ready.")
-    # Implement full loop later or here
+    # 2. Institutional Signal Pipeline (Offline)
+    logger.info("[System] Loading Institutional Pipeline...")
+    risk_manager = RiskManager(max_leverage=1.0, target_vol_limit=0.12)
+    allocator = InstitutionalAllocator(risk_manager)
+    
+    # ML Governance: Offline Training only
+    ml_model = None
+    if FeatureEngineer and MLAlpha:
+        logger.info("[System] Initializing ML Alpha (Frozen Mode)...")
+        fe = FeatureEngineer()
+        ml_model = MLAlpha(fe)
+        # In a real institutional setup, weights would be loaded from disk. 
+        # Here we train once on Yahoo data to "freeze" the model before the session.
+        logger.info("[Download] Fetching Yahoo training data (2Y)...")
+        train_start = (datetime.now() - timedelta(days=730)).strftime("%Y-%m-%d")
+        train_data = {}
+        for tk in TICKERS:
+             df = data_provider.fetch_ohlcv(tk, start_date=train_start)
+             if not df.empty: train_data[tk] = df
+        
+        if train_data:
+             ml_model.train(pd.concat(train_data.values()))
+             logger.info("ML Model Trained & Frozen.")
+
+    # 3. Market Awareness (Yahoo only)
+    logger.info("[System] Syncing Market Data from Yahoo...")
+    lookback_start = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+    current_market_data = {}
+    for tk in TICKERS:
+        df = data_provider.fetch_ohlcv(tk, start_date=lookback_start)
+        if not df.empty:
+            current_market_data[tk] = df
+            
+    # FAIL FAST: Abort if data gaps detected
+    _validate_market_data_freshness(current_market_data, TICKERS)
+    
+    # 4. Kill Switch: Reconciliation
+    # Local portfolio proxy (Book)
+    from collections import namedtuple
+    Book = namedtuple("Book", ["cash", "positions", "total_equity"])
+    
+    broker_pos_raw = execution_broker.get_positions()
+    broker_positions = {p['symbol']: float(p['qty']) for p in broker_pos_raw}
+    
+    # Value local book using Yahoo prices
+    local_val = broker_cash
+    for tk, qty in broker_positions.items():
+        if tk in current_market_data:
+            local_val += qty * current_market_data[tk]["Close"].iloc[-1]
+    
+    _health_check_circuit_breaker(local_val, broker_equity)
+
+    # 5. Signal Generation & Risk Filter
+    logger.info("[System] Generating Institutional Signals...")
+    signals = {}
+    price_histories = {}
+    vol_histories = {}
+    
+    # Setup Alpha Components (Institutional standard)
+    c_alpha = CompositeAlpha(alphas=[TrendAlpha(), MeanReversionAlpha()], window=60)
+    
+    for tk in TICKERS:
+        hist = current_market_data[tk]
+        price_histories[tk] = hist["Close"]
+        vol_histories[tk] = hist["Volume"]
+        
+        # Raw Signal
+        score = float(c_alpha.compute(hist).iloc[-1])
+        
+        # ML Accuracy Filter (High Accuracy Gate)
+        if ml_model and ml_model.is_trained:
+            conf = ml_model.predict_conviction(hist)
+            if conf < ML_CONFIDENCE_THRESHOLD:
+                score = 0.5 # Neutralize
+            else:
+                score = 0.5 + (score - 0.5) * conf
+        
+        signals[tk] = score
+
+    # 6. Allocation & Realistic Execution Simulation
+    # Before sending to Alpaca, we simulate against Yahoo bars to ensure 
+    # the orders are realistic (volume/participation).
+    logger.info("[System] Calculating Optimal Allocation...")
+    p_book = Book(cash=broker_cash, positions=broker_positions, total_equity=broker_equity)
+    allocation = allocator.allocate(signals, price_histories, vol_histories, p_book, pd.Timestamp(datetime.now()))
+    
+    if not allocation.orders:
+        logger.info("Rebalance Cycle: NO TRADE REQUIRED (Confidence/Risk conditions not met).")
+        return
+
+    # Enforce Execution Realism: Volume/Participation Check
+    verified_orders = []
+    simulation_handler = RealisticExecutionHandler() # For realism check
+    
+    for order in allocation.orders:
+        tk = order.ticker
+        bar_df = current_market_data[tk]
+        # Build institutional bar for simulation
+        from backtest.execution import BarData
+        bar = BarData(
+            open=bar_df["Open"].iloc[-1],
+            high=bar_df["High"].iloc[-1],
+            low=bar_df["Low"].iloc[-1],
+            close=bar_df["Close"].iloc[-1],
+            volume=bar_df["Volume"].iloc[-1],
+            timestamp=bar_df.index[-1],
+            ticker=tk
+        )
+        
+        # Check volume constraints
+        if bar.volume <= 0:
+            logger.warning(f"SKIPPING {tk}: Zero volume bar detected on Yahoo.")
+            continue
+            
+        # Is the order size > max participation? 
+        max_q = bar.volume * simulation_handler.max_participation_rate
+        if abs(order.quantity) > max_q:
+            old_q = order.quantity
+            order.quantity = np.sign(order.quantity) * max_q
+            logger.info(f"[Realism] Capping {tk} order: {old_q:.1f} -> {order.quantity:.1f} (Participation Limit)")
+        
+        if abs(order.quantity) >= 1.0: # Ignore tiny dust orders
+            verified_orders.append(order)
+
+    # 7. Final Execution (Alpaca)
+    if verified_orders:
+        logger.info(f"[EXEC] Submitting {len(verified_orders)} verified orders to Alpaca Paper...")
+        # Sell first to free cash
+        execution_queue = sorted(verified_orders, key=lambda x: x.quantity)
+        results = execution_broker.submit_orders(execution_queue)
+        for res in results:
+            if res.get("status") == "failed":
+                logger.error(f"ORDER FAILED: {res.get('error')}")
+            else:
+                logger.info(f"ORDER OK: {res.get('order', {}).get('symbol')}")
+    else:
+        logger.info("Rebalance Cycle: Orders filtered by Realism/Liquidity constraints.")
+
+    logger.info("[Complete] Institutional Paper session finished.")
 
 if __name__ == "__main__":
     import argparse

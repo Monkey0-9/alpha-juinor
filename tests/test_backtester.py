@@ -45,15 +45,16 @@ class MockProvider:
     """
 
     def get_panel(self, tickers, start_date, end_date=None):
-        dates = pd.date_range(start=start_date, periods=10, freq="B")
+        dates = pd.date_range(start=start_date, periods=500, freq="B") # Increased for warmup compatibility
         data = {}
 
         for tk in tickers:
-            data[(tk, "Open")] = np.full(len(dates), 100.0)
-            data[(tk, "High")] = np.full(len(dates), 105.0)
-            data[(tk, "Low")] = np.full(len(dates), 95.0)
             # Add volatility (sine wave) to ensure std() > 0 for execution handler
-            data[(tk, "Close")] = 100.0 + np.arange(len(dates)) * 0.5 + np.sin(np.arange(len(dates)))
+            close = 100.0 + np.arange(len(dates)) * 0.5 + np.sin(np.arange(len(dates)))
+            data[(tk, "Open")] = close # Simplified
+            data[(tk, "High")] = close + 2.0
+            data[(tk, "Low")] = close - 2.0
+            data[(tk, "Close")] = close
             data[(tk, "Volume")] = np.full(len(dates), 50_000.0)
 
         panel = pd.DataFrame(data, index=dates)
@@ -220,16 +221,20 @@ def test_integrity_invariants(tmp_path):
     # 1. Test NaN in Price Data (Fix #8 Deterministic Failure)
     class CorruptProvider:
         def get_panel(self, tickers, start_date, end_date=None):
-            dates = pd.date_range(start=start_date, periods=5, freq="B")
+            dates = pd.date_range(start=start_date, periods=500, freq="B")
             data = {}
             for tk in tickers:
-                # Day 3 has NaN price
-                prices = np.array([100.0, 101.0, np.nan, 103.0, 104.0])
+                # Provide full length arrays
+                prices = np.full(len(dates), 100.0)
+                # Manually inject NaN at a relevant point for the test
+                # The test previously had NaN at index 2 (Day 3)
+                prices[2] = np.nan
+                
                 data[(tk, "Open")] = prices
-                data[(tk, "High")] = prices + 1
-                data[(tk, "Low")] = prices - 1
+                data[(tk, "High")] = prices + 1.0
+                data[(tk, "Low")] = prices - 1.0
                 data[(tk, "Close")] = prices
-                data[(tk, "Volume")] = np.full(5, 1000.0)
+                data[(tk, "Volume")] = np.full(len(dates), 1000.0)
             
             df = pd.DataFrame(data, index=dates)
             df.columns = pd.MultiIndex.from_tuples(df.columns)

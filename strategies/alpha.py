@@ -17,6 +17,18 @@ def _minmax_scale(s: pd.Series) -> pd.Series:
     return (s - mn) / (mx - mn)
 
 
+def _ensure_series(data: pd.DataFrame | pd.Series) -> pd.Series:
+    """
+    FAIL FAST: Extracts 'Close' column if DataFrame provided.
+    Ensures alpha models operate on deterministic scalar prices.
+    """
+    if isinstance(data, pd.DataFrame):
+        if "Close" not in data.columns:
+            raise ValueError("Institutional Abort: Market data missing required 'Close' column.")
+        return data["Close"]
+    return data
+
+
 class Alpha(ABC):
     """Abstract Alpha. Implement compute(prices) -> conviction series (0..1)."""
 
@@ -35,7 +47,8 @@ class TrendAlpha(Alpha):
         self.short = short
         self.long = long
 
-    def compute(self, prices: pd.Series) -> pd.Series:
+    def compute(self, prices: pd.DataFrame | pd.Series) -> pd.Series:
+        prices = _ensure_series(prices)
         if len(prices) < self.long:
             return pd.Series(0.0, index=prices.index)
 
@@ -63,7 +76,8 @@ class MeanReversionAlpha(Alpha):
         self.short = short
         self.lookback_std = lookback_std
 
-    def compute(self, prices: pd.Series) -> pd.Series:
+    def compute(self, prices: pd.DataFrame | pd.Series) -> pd.Series:
+        prices = _ensure_series(prices)
         if len(prices) < max(self.short, self.lookback_std):
             return pd.Series(0.0, index=prices.index)
 
@@ -96,7 +110,8 @@ class RSIAlpha(Alpha):
     def __init__(self, period: int = 14):
         self.period = period
 
-    def compute(self, prices: pd.Series) -> pd.Series:
+    def compute(self, prices: pd.DataFrame | pd.Series) -> pd.Series:
+        prices = _ensure_series(prices)
         if len(prices) < self.period + 1:
             return pd.Series(0.0, index=prices.index)
         
@@ -126,7 +141,8 @@ class MACDAlpha(Alpha):
         self.slow = slow
         self.signal = signal
 
-    def compute(self, prices: pd.Series) -> pd.Series:
+    def compute(self, prices: pd.DataFrame | pd.Series) -> pd.Series:
+        prices = _ensure_series(prices)
         if len(prices) < self.slow + self.signal:
             return pd.Series(0.0, index=prices.index)
 
@@ -149,7 +165,8 @@ class BollingerBandAlpha(Alpha):
         self.window = window
         self.num_std = num_std
 
-    def compute(self, prices: pd.Series) -> pd.Series:
+    def compute(self, prices: pd.DataFrame | pd.Series) -> pd.Series:
+        prices = _ensure_series(prices)
         if len(prices) < self.window:
             return pd.Series(0.0, index=prices.index)
 
@@ -174,39 +191,141 @@ class BollingerBandAlpha(Alpha):
 
 class CompositeAlpha(Alpha):
     """
-    Combine multiple Alpha objects with weights.
+    Composite Alpha with Dynamic Probabilistic Weighting (Rolling IC/Sharpe).
     """
 
-    def __init__(self, alphas: List[Alpha], weights: Optional[List[float]] = None):
+    def __init__(self, alphas: List[Alpha], window: int = 60):
         self.alphas = alphas
-        if weights is None:
-            self.weights = [1.0] * len(alphas)
-        else:
-            if len(weights) != len(alphas):
-                raise ValueError("weights length must match alphas")
-            self.weights = list(weights)
+        self.window = window
+        self.weights = np.array([1.0 / len(alphas)] * len(alphas))
+        
+        # History tracking
+        self.history_signals: List[np.array] = [] # List of [alpha_1_sig, alpha_2_sig, ...]
+        self.history_prices: List[float] = []
+        
+    def _update_weights(self):
+        """
+        Recalculate weights based on Rolling IC (Information Coefficient).
+        IC = Correlation(Signal_t-1, Return_t)
+        """
+        if len(self.history_prices) < 30:
+            return # Keep equal weights until enough history
+            
+        # 1. Calculate Returns
+        prices = pd.Series(self.history_prices)
+        returns = prices.pct_change().shift(-1).dropna() # aligned so ret[t] is return form t to t+1
+        
+        if len(returns) < 20:
+            return
 
-    def compute(self, prices: pd.Series) -> pd.Series:
-        # compute each alpha
+        # 2. Align Signals
+        # self.history_signals[i] corresponds to price[i]. 
+        # We want corr(signal[i], returns[i]) where returns[i] is (p[i+1]/p[i] - 1)
+        # So we need signals up to len(returns)
+        
+        n_points = len(returns)
+        sigs_mat = np.array(self.history_signals[:n_points]) # shape (n_points, n_alphas)
+        
+        # 3. Compute Performance Metrics (IC and Sharpe)
+        # Pearson correlation
+        ics = []
+        sharpes = []
+        target = returns.values
+        
+        if np.std(target) < 1e-8:
+            return
+
+        for i in range(len(self.alphas)):
+            alpha_sigs = sigs_mat[:, i]
+            
+            # IC
+            if np.std(alpha_sigs) < 1e-8:
+                ics.append(0.0)
+            else:
+                ic = np.corrcoef(alpha_sigs, target)[0, 1]
+                ics.append(0.0 if np.isnan(ic) else ic)
+            
+            # Sharpe (Implied PnL)
+            # Implied PnL = Signal * Return
+            pnl = alpha_sigs * target
+            mean_pnl = np.mean(pnl)
+            std_pnl = np.std(pnl)
+            
+            if std_pnl < 1e-9:
+                sharpes.append(0.0)
+            else:
+                # Annualized? No, just raw ratio is fine for relative weighting
+                sharpes.append(mean_pnl / std_pnl)
+
+        # 4. Weighting Logic
+        # Requirement: weight ∝ max(sharpe, 0)
+        # We can mix IC and Sharpe, or just use Sharpe.
+        # Let's use Sharpe as the primary requirement for "Meta-Alpha Allocation".
+        
+        raw_scores = np.maximum(sharpes, 0.0) # Clip negative Sharpe
+        
+        # If all scores zero (e.g. neg sharpe), fallback to IC
+        if np.sum(raw_scores) < 1e-6:
+             raw_scores = np.maximum(ics, 0.0)
+        
+        # If still zero, equal weight
+        if np.sum(raw_scores) < 1e-6:
+            self.weights = np.array([1.0 / len(self.alphas)] * len(self.alphas))
+            return
+            
+        # Normalize
+        self.weights = raw_scores / np.sum(raw_scores)
+
+    def compute(self, prices: pd.DataFrame | pd.Series) -> pd.Series:
+        # Institutional Fix: Select only Close column before scalar extraction
+        ser = _ensure_series(prices)
+        current_price = float(ser.iloc[-1]) if not ser.empty else 0.0
+        
+        # 1. Capture history for *next* weight update
+        self.history_prices.append(current_price)
+        
+        # Limit history size
+        if len(self.history_prices) > self.window + 5:
+             self.history_prices.pop(0)
+             if self.history_signals:
+                 self.history_signals.pop(0)
+
+        # 2. Compute current component signals
+        current_sigs = []
         series_list = []
+        
         for a in self.alphas:
-            # Fix #4 & #8: No silent fallbacks. Fail if component fails.
             s = a.compute(prices).fillna(0)
             series_list.append(s)
-
+            
+            # Store scalar signal for history (for IC calc)
+            # We assume the last value is the 'actionable' signal for this bar
+            val = float(s.iloc[-1]) if not s.empty else 0.0
+            current_sigs.append(val)
+            
+        self.history_signals.append(np.array(current_sigs))
+        
+        # 3. Update Weights (based on history accumulated so far)
+        # Note: We update weights *before* applying them to current signal?
+        # Actually, we can only correlate past signal with *known* return.
+        # So we update weights using closed history, then apply to current.
+        self._update_weights()
+            
         if not series_list:
              return pd.Series(0.0, index=prices.index)
 
         # align indices
         df = pd.concat(series_list, axis=1).fillna(0)
         
-        # efficient weighted sum
-        w = np.array(self.weights)
+        # 4. Apply Dynamic Weights
+        w = self.weights
         w_sum = w.sum()
         if w_sum <= 0:
             return pd.Series(0.0, index=prices.index)
             
-        w_norm = w / w_sum
-        conv = (df * w_norm).sum(axis=1)
+        # Apply weights
+        # df columns are alphas. w is vector.
+        # df is (T, N), w is (N,)
+        conv = (df * w).sum(axis=1)
 
         return conv.clip(0, 1)

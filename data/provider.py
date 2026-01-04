@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
+from typing import List, Optional, Dict
+import numpy as np
 
 class DataProvider(ABC):
     """
@@ -54,3 +56,19 @@ class YahooDataProvider(DataProvider):
         df.index = pd.to_datetime(df.index)
         
         return df
+
+    def get_panel(self, tickers: List[str], start_date: str, end_date: Optional[str] = None) -> pd.DataFrame:
+        """Fetch and combine multiple tickers into a MultiIndex panel."""
+        data = {}
+        for ticker in tickers:
+            df = self.fetch_ohlcv(ticker, start_date, end_date)
+            if not df.empty:
+                for col in df.columns:
+                    data[(ticker, col)] = df[col]
+        
+        if not data:
+            return pd.DataFrame()
+            
+        panel = pd.DataFrame(data)
+        panel.columns = pd.MultiIndex.from_tuples(panel.columns)
+        return panel

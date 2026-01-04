@@ -48,6 +48,17 @@ class ExecutionError(Exception):
 # -------------------------
 # Enums & Models
 # -------------------------
+
+@dataclass
+class BarData:
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+    timestamp: datetime
+    ticker: Optional[str] = None
+
 class OrderType(Enum):
     MARKET = "MARKET"
     LIMIT = "LIMIT"
@@ -221,6 +232,9 @@ class RealisticExecutionHandler:
         min_vol_fallback: float = 0.02,
         max_notional_per_order: float = 0.0,
         min_fill_size: float = 1.0,
+        bid_ask_spread_pct: float = 0.0001,
+        buy_impact_mult: float = 1.0,
+        sell_impact_mult: float = 1.2,
     ):
         # Param validation
         if commission_pct < 0 or commission_pct > 0.1:
@@ -238,6 +252,9 @@ class RealisticExecutionHandler:
         self.min_vol_fallback = float(min_vol_fallback)
         self.max_notional_per_order = float(max_notional_per_order)
         self.min_fill_size = float(min_fill_size)
+        self.bid_ask_spread_pct = float(bid_ask_spread_pct)
+        self.buy_impact_mult = float(buy_impact_mult)
+        self.sell_impact_mult = float(sell_impact_mult)
 
     # ---- Helpers ----
     def _validate_bar(self, bar: Dict[str, float]) -> None:
@@ -294,8 +311,7 @@ class RealisticExecutionHandler:
     def fill_order(
         self,
         order: Order,
-        bar: Dict[str, float],
-        bar_timestamp: datetime,
+        bar: BarData,
         price_history: pd.Series,
         volume_history: pd.Series,
     ) -> Optional[Trade]:
@@ -307,7 +323,6 @@ class RealisticExecutionHandler:
         Notes:
         - Order.remaining_qty is updated in-place.
         - Order.status is updated to PARTIALLY_FILLED or FILLED.
-        - The engine that calls fill_order should record the returned trade via blotter.record_trade(trade).
         """
 
         # Basic state checks
@@ -317,17 +332,20 @@ class RealisticExecutionHandler:
             logger.debug("Order %s already %s; skipping", order.id, order.status.value)
             return None
 
-        # Validate bar
-        try:
-            self._validate_bar(bar)
-        except ExecutionError as e:
-            logger.error("Invalid bar provided: %s", e)
-            raise
+        # Validate bar (BarData attributes are inherently typed, but we check for finite values)
+        if not np.isfinite([bar.open, bar.high, bar.low, bar.close, bar.volume]).all():
+             raise ExecutionError(f"Bar contains non-finite values for ticker {bar.ticker}")
+             
+        # INSTITUTIONAL FIX: No fills on zero volume
+        if bar.volume <= 0:
+            logger.debug("Skipping fill for %s: Zero volume bar", order.id)
+            return None
 
-        close_price = float(bar["Close"])
-        high = float(bar["High"])
-        low = float(bar["Low"])
-        bar_volume = float(bar["Volume"])
+        close_price = float(bar.close)
+        high = float(bar.high)
+        low = float(bar.low)
+        bar_volume = float(bar.volume)
+        bar_timestamp = bar.timestamp
 
         # LIMIT logic: require price crossing for execution
         if order.order_type == OrderType.LIMIT:
@@ -382,14 +400,22 @@ class RealisticExecutionHandler:
         participation = min(1.0, abs(fill_qty) / max(adv, 1.0))
 
         # Market impact model (signed)
-        market_impact = float(self.impact_coeff) * float(vol) * np.sqrt(participation)
+        # UPDATED: impact = k * (size / ADV) ** 1.5 (User Spec)
+        impact_mult = self.buy_impact_mult if fill_qty > 0 else self.sell_impact_mult
+        market_impact = float(self.impact_coeff) * float(vol) * (participation ** 1.5) * impact_mult
 
         # Determine expected_price and fill_price robustly:
         # - expected_price = close_price (engine's midpoint expectation for bar)
-        # - fill_price adjusts by sign*impact, then clipped to bar high/low to avoid unrealistic prices
+        # - fill_price adjusts by sign*impact, then adds half-spread, then clipped to bar high/low
         expected_price = float(close_price)
         side = np.sign(fill_qty)
+        
+        # 1. Start with midpoint + impact
         raw_fill_price = expected_price * (1.0 + side * market_impact)
+        
+        # 2. Add half-spread cost (crossing the spread)
+        half_spread = expected_price * (self.bid_ask_spread_pct / 2.0)
+        raw_fill_price += side * half_spread
 
         # Clip fill price into [low, high] to be conservative
         fill_price = float(np.clip(raw_fill_price, low, high))

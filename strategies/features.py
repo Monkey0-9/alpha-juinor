@@ -57,6 +57,16 @@ class FeatureEngineer:
         # 4. Volume
         # Relative Volume (Vol / Avg Vol)
         features["vol_rel_20"] = df["Volume"] / df["Volume"].rolling(20).mean()
+        # Volume Z-Score (Institutional Liquidity Signal)
+        features["vol_z"] = (df["Volume"] - df["Volume"].rolling(20).mean()) / df["Volume"].rolling(20).std().replace(0, np.nan)
+
+        # 5. Volatility-Adjusted Momentum (Institutional "Price Momentum / Vol")
+        # Captures how 'clean' the trend is
+        features["mom_vol_adj"] = features["ret_21d"] / (features["vol_21d"] + 1e-6) if "ret_21d" in features else (df["Close"].pct_change(21) / features["vol_21d"])
+
+        # 6. Intraday Dynamics
+        features["high_low_range"] = (df["High"] - df["Low"]) / df["Close"]
+        features["hl_vol"] = features["high_low_range"].rolling(20).mean()
 
         # 5. Lagged Features (Critical for ML)
         if self.use_lags:

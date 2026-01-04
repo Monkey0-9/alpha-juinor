@@ -4,7 +4,7 @@ import pandas as pd
 import requests
 import time
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import List, Dict, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,11 +23,14 @@ class AlpacaDataProvider:
        - ALPACA_BASE_URL (default: https://paper-api.alpaca.markets)
     """
     
-    def __init__(self, paper=True):
-        self.api_key = os.getenv("ALPACA_API_KEY")
-        self.secret_key = os.getenv("ALPACA_SECRET_KEY")
+    def __init__(self, api_key: Optional[str] = None, secret_key: Optional[str] = None, base_url: Optional[str] = None, paper=True):
+        self.api_key = api_key or os.getenv("ALPACA_API_KEY")
+        self.secret_key = secret_key or os.getenv("ALPACA_SECRET_KEY")
         
-        if paper:
+        if base_url:
+            self.base_url = base_url
+            self.data_url = "https://data.alpaca.markets"
+        elif paper:
             self.base_url = os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
             self.data_url = "https://data.alpaca.markets"
         else:
@@ -131,3 +134,21 @@ class AlpacaDataProvider:
         except Exception as e:
             logger.error(f"Failed to get latest quote for {ticker}: {e}")
             return None
+
+    def get_panel(self, tickers: List[str], start_date: str, end_date: Optional[str] = None) -> pd.DataFrame:
+        """
+        Build a MultiIndex price panel for backtesting.
+        """
+        data = {}
+        for ticker in tickers:
+            df = self.fetch_ohlcv(ticker, start_date, end_date)
+            if not df.empty:
+                for col in df.columns:
+                    data[(ticker, col)] = df[col]
+        
+        if not data:
+            return pd.DataFrame()
+            
+        panel = pd.DataFrame(data)
+        panel.columns = pd.MultiIndex.from_tuples(panel.columns)
+        return panel

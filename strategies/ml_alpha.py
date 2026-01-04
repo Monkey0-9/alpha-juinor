@@ -25,6 +25,8 @@ class MLAlpha(Alpha):
         )
         self.is_trained = False
         self.train_window = train_window
+        self.retrain_interval = 63 # Retrain every quarter (~63 business days)
+        self.last_train_date: Optional[pd.Timestamp] = None
         self.last_features: Optional[pd.DataFrame] = None
 
     def train(self, prices_history: pd.DataFrame):
@@ -84,7 +86,8 @@ class MLAlpha(Alpha):
         Returns float 0..1
         """
         if not self.is_trained:
-            return 0.0
+            # Default to Neutral (0.5) if not trained, allowing other alphas to drive.
+            return 0.5
 
         # Compute features for the LATEST bar only
         # We need a window of history to calculate features (e.g. Rolling 63d)
@@ -94,13 +97,13 @@ class MLAlpha(Alpha):
         features_full = self.fe.compute_features(full_ohlcv)
         
         if features_full.empty:
-            return 0.0
+            return 0.5
 
         current_features = features_full.iloc[[-1]]
         
         # Check for NaNs (if not enough history for lags)
         if current_features.isnull().values.any():
-            return 0.0
+            return 0.5
 
         pred_ret = self.model.predict(current_features)[0]
         
@@ -114,3 +117,27 @@ class MLAlpha(Alpha):
         
         score = (pred_ret + 0.05) / 0.10
         return float(np.clip(score, 0.0, 1.0))
+
+    def should_retrain(self, current_date: pd.Timestamp) -> bool:
+        """
+        Check if the model is due for institutional walk-forward re-training.
+        """
+        if not self.is_trained:
+            return True
+        if self.last_train_date is None:
+            return True
+        
+        days_since = (current_date - self.last_train_date).days
+        return days_since >= self.retrain_interval
+
+    def walk_forward_update(self, current_date: pd.Timestamp, prices_history: pd.DataFrame):
+        """
+        Triggered re-training as part of a walk-forward process.
+        Ensures model stays fresh and regime-aware.
+        """
+        if self.should_retrain(current_date):
+            print(f"[MLAlpha] Walk-forward trigger at {current_date.date()}. Retraining...")
+            # Use a rolling window of history for training to focus on recent regimes
+            training_data = prices_history.tail(self.train_window)
+            self.train(training_data)
+            self.last_train_date = current_date

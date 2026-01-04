@@ -1,0 +1,34 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  backtester:
+    build:
+      context: .
+      target: runtime
+    image: mini-quant-fund:latest
+    volumes:
+      - .:/app
+      - backtest_results:/app/output/backtests
+    environment:
+      - PYTHONPATH=/app
+      - START_DATE=2023-01-01
+      - TICKERS=SPY,QQQ,TLT,GLD
+    command: [ "--mode", "backtest" ]
+
+  dashboard:
+    build:
+      context: .
+      target: runtime
+    image: mini-quant-fund:latest
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+      - backtest_results:/app/output/backtests
+    environment:
+      - PYTHONPATH=/app
+    command: [ "streamlit", "run", "dashboard.py", "--server.port=8501", "--server.address=0.0.0.0" ]
+
+volumes:
+  backtest_results:
