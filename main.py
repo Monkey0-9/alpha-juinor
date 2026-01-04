@@ -171,11 +171,16 @@ def run_production_pipeline():
             initial_capital=float(exec_cfg.get('initial_capital', 100000))
         )
         
-        logger.info(f"--- 24/7 LIVE TRADING MODE ACTIVE ---")
-        logger.info(f"Interval: {exec_cfg['rebalance_frequency']}")
-        
+        # Initialize Monitoring
+        from monitoring.alerts import AlertManager
+        alert_mgr = AlertManager()
+        alert_mgr.alert(f"Autonomous Trading Loop Started. Frequency: {exec_cfg['rebalance_frequency']}")
+
         while True:
             try:
+                # Heartbeat
+                alert_mgr.heartbeat()
+
                 # Execute today's rebalance
                 live_engine.run_once(universe['tickers'], strategy_fn)
                 

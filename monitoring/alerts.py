@@ -46,6 +46,17 @@ class AlertManager:
         except Exception as e:
             logger.error(f"Slack alert failed: {e}")
 
+    def send_discord(self, message: str):
+        """Send message via Discord Webhook."""
+        if not self.discord_webhook_url:
+            return
+            
+        payload = {"content": f"**[QUANT-FUND]**: {message}"}
+        try:
+            requests.post(self.discord_webhook_url, json=payload, timeout=5)
+        except Exception as e:
+            logger.error(f"Discord alert failed: {e}")
+
     def alert(self, message: str, level: str = "INFO"):
         """Broadcast alert to all enabled channels."""
         msg = f"[{level}] {message}"
@@ -54,6 +65,15 @@ class AlertManager:
         # Simple sync dispatch (good for main loop if not high freq)
         self.send_telegram(msg)
         self.send_slack(msg)
+        self.send_discord(msg)
+
+    def heartbeat(self):
+        """Send a specialized heartbeat ping."""
+        import psutil
+        process = psutil.Process(os.getpid())
+        mem_mb = process.memory_info().rss / 1024 / 1024
+        msg = f"🟢 HEARTBEAT | Mem: {mem_mb:.1f}MB | Status: ACTIVE"
+        self.alert(msg, level="HEARTBEAT")
 
     async def alert_async(self, message: str, level: str = "INFO"):
         """Async dispatch to prevent blocking trading loop."""
