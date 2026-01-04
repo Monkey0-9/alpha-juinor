@@ -28,6 +28,7 @@ from monitoring.alerts import AlertManager
 from engine.analytics import annualized_return, annualized_volatility, sharpe_ratio, max_drawdown
 from reports.attribution import AttributionEngine
 from ops.checklists import generate_daily_checklist
+from ops.generate_daily_report import generate_report
 from brokers.alpaca_broker import AlpacaExecutionHandler
 from data.collectors.alpaca_collector import AlpacaDataProvider
 from engine.live_engine import LiveEngine
@@ -222,6 +223,37 @@ def run_production_pipeline():
     if exec_cfg['mode'] == "backtest":
         logger.info(f"Phase 2: Executing Protected Backtest: {run_id}")
         engine.run(start_date=start_date, strategy_fn=strategy_fn, tickers=active_tickers)
+        
+        # Finalize Backtest Meta
+        end_time = time.time()
+        meta["duration_seconds"] = end_time - start_time
+        with open("output/meta.json", "w") as f:
+            json.dump(meta, f, indent=4)
+        logger.info(f"Final Backtest Meta saved. Duration: {meta['duration_seconds']:.2f}s")
+
+        res = engine.get_results()
+        if not res.empty:
+            equity = res["equity"]
+            ret = equity.pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).fillna(0)
+            metrics = {
+                "annualized_return": annualized_return(ret),
+                "sharpe_ratio": sharpe_ratio(ret),
+                "max_drawdown": max_drawdown(equity),
+                "config_hash": cfg_hash
+            }
+            registry.save_artifacts(
+                run_id=run_id, 
+                config=cfg, 
+                equity_df=res, 
+                trades_df=engine.get_blotter().trades_df(),
+                extra_meta=metrics
+            )
+            
+            # Phase 3: Post-Run Attribution
+            attr_engine = AttributionEngine()
+            attribution = attr_engine.calculate_attribution(res, engine.get_blotter().trades_df())
+            logger.info(f"Performance Attribution: {attribution}")
+            logger.info(f"GOLDEN RUN COMPLETE! ID: {run_id}")
     elif exec_cfg['mode'] in ["paper", "live"]:
         if exec_cfg['mode'] == "live":
             # MANDATORY ENFORCEMENT: --live requires manual confirmation
@@ -256,31 +288,59 @@ def run_production_pipeline():
         alert_mgr = AlertManager()
         alert_mgr.alert(f"Autonomous Trading Loop Started. Frequency: {exec_cfg['rebalance_frequency']}")
 
+        # SCHEDULE STATE
+        last_report_date = None
+        last_trade_time = 0.0
+
         while True:
             try:
-                # Heartbeat (Only send diagnosis if HIGH or EXTREME risk)
-                if 'live_engine' in locals() and risk_mgr:
-                    tier = risk_mgr.get_risk_tier(live_engine.portfolio_value)
-                    if tier in ["HIGH", "EXTREME"]:
-                        diag = risk_mgr.explain_diagnostics(live_engine.portfolio_value)
-                        alert_mgr.heartbeat(diagnosis=diag)
-                    else:
-                        alert_mgr.heartbeat()  # Normal heartbeat without diagnosis
-                else:
-                    alert_mgr.heartbeat()
+                now = datetime.now()
+                
+                # ---------------------------------------------------------
+                # 1. DAILY REPORT SCHEDULER (Evening 5:30 PM - 6:00 PM)
+                # ---------------------------------------------------------
+                # Target: 17:30
+                if now.hour == 17 and now.minute >= 30:
+                    today_str = now.strftime("%Y-%m-%d")
+                    if last_report_date != today_str:
+                        logger.info("🕒 Scheduled Event: Sending Daily Telegram Report...")
+                        try:
+                            generate_report()
+                            last_report_date = today_str
+                            alert_mgr.alert("Daily Report Sent Successfully.", level="SCHEDULER")
+                        except Exception as e:
+                            logger.error(f"Report generation failed: {e}")
+                            alert_mgr.alert(f"Report Failed: {e}", level="ERROR")
 
-                # Execute today's rebalance
-                live_engine.run_once(active_tickers, strategy_fn)
+                # ---------------------------------------------------------
+                # 2. TRADING CYCLE (Keep existing Hourly cadence)
+                # ---------------------------------------------------------
+                if time.time() - last_trade_time > 3600:
+                    # Heartbeat (Only send diagnosis if HIGH or EXTREME risk)
+                    if 'live_engine' in locals() and risk_mgr:
+                        tier = risk_mgr.get_risk_tier(live_engine.portfolio_value)
+                        if tier in ["HIGH", "EXTREME"]:
+                            diag = risk_mgr.explain_diagnostics(live_engine.portfolio_value)
+                            alert_mgr.heartbeat(diagnosis=diag)
+                        else:
+                            alert_mgr.heartbeat()  # Normal heartbeat without diagnosis
+                    else:
+                        alert_mgr.heartbeat()
+    
+                    # Execute today's rebalance
+                    live_engine.run_once(active_tickers, strategy_fn)
+                    last_trade_time = time.time()
+                    
+                    # Update meta
+                    meta["duration_seconds"] = time.time() - start_time
+                    with open("output/meta.json", "w") as f:
+                        json.dump(meta, f, indent=4)
+                    
+                    logger.info("Trading Cycle Complete. Next cycle in ~1 hour.")
                 
-                # Update meta
-                meta["duration_seconds"] = time.time() - start_time
-                with open("output/meta.json", "w") as f:
-                    json.dump(meta, f, indent=4)
+                # High-res polling for scheduler accuracy
+                time.sleep(60) 
                 
-                # Sleep based on frequency (Daily -> check every hour, etc)
-                # For daily, we'll sleep 1 hour and re-check if it's a new day/market hours
-                logger.info("Sleeping for 1 hour...")
-                time.sleep(3600) 
             except Exception as e:
                 logger.error(f"Error in 24/7 loop: {e}")
                 time.sleep(60) # Short sleep on error before retry
@@ -293,43 +353,6 @@ def run_production_pipeline():
         logger.info(f"Initial Performance Meta saved to output/meta.json")
     except Exception as e:
         logger.warning(f"Failed to save initial meta.json: {e}")
-
-    if exec_cfg['mode'] == "backtest":
-        logger.info(f"Phase 2: Executing Protected Backtest: {run_id}")
-        engine.run(start_date=start_date, strategy_fn=strategy_fn, tickers=active_tickers)
-        
-        # Finalize Backtest Meta
-        end_time = time.time()
-        meta["duration_seconds"] = end_time - start_time
-        with open("output/meta.json", "w") as f:
-            json.dump(meta, f, indent=4)
-        logger.info(f"Final Backtest Meta saved. Duration: {meta['duration_seconds']:.2f}s")
-
-        res = engine.get_results()
-        if not res.empty:
-            equity = res["equity"]
-            ret = equity.pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).fillna(0)
-            metrics = {
-                "annualized_return": annualized_return(ret),
-                "sharpe_ratio": sharpe_ratio(ret),
-                "max_drawdown": max_drawdown(equity),
-                "config_hash": cfg_hash
-            }
-            registry.save_artifacts(
-                run_id=run_id, 
-                config=cfg, 
-                equity_df=res, 
-                trades_df=engine.get_blotter().trades_df(),
-                extra_meta=metrics
-            )
-            
-            # Phase 3: Post-Run Attribution
-            attr_engine = AttributionEngine()
-            attribution = attr_engine.calculate_attribution(res, engine.get_blotter().trades_df())
-            logger.info(f"Performance Attribution: {attribution}")
-            logger.info(f"GOLDEN RUN COMPLETE! ID: {run_id}")
-    else:
-        logger.info(f"LIVE {exec_cfg['mode'].upper()} CYCLE COMPLETE.")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')

@@ -1,3 +1,4 @@
+
 # configs/golden_config.yaml
 # INSTITUTIONAL GOLDEN CONFIGURATION (IMMUTABLE)
 # This file defines the validated baseline for production operations.
@@ -43,3 +44,15 @@ ops:
   reconciliation_threshold_bps: 10.0 # 0.1% drift allowed
   min_data_fill_rate: 0.95
   alert_level: "INFO" 
+
+# 6. Feature Flags (Institutional Upgrades)
+features:
+  use_regime_detection: true
+  use_wyckoff_filter: true
+  use_auction_market_confidence: true
+  use_market_profile_value_area: true
+  use_gann_time_filter: true
+  use_cvar_risk_gate: true
+  use_fat_tail_protection: true
+  use_vpin_filter: true
+  use_cointegration_filter: false # Research only for now
