@@ -84,6 +84,8 @@ class Order:
     timestamp: datetime
     limit_price: Optional[float] = None
     strategy_id: str = "default"
+    reason: str = "REBALANCE" # Institutional reason code (SIGNAL_DECAY, RISK_BREACH etc)
+    risk_metric_triggered: Optional[str] = None
     meta: Dict[str, Any] = field(default_factory=dict)
 
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
@@ -281,7 +283,7 @@ class RealisticExecutionHandler:
         try:
             if price_history is None or len(price_history) < 5:
                 raise RuntimeError("insufficient price history")
-            ret = price_history.astype(float).pct_change().dropna()
+            ret = price_history.astype(float).pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
             if len(ret) == 0:
                 raise RuntimeError("no returns")
             roll_win = min(self.vol_lookback, max(2, len(ret)))

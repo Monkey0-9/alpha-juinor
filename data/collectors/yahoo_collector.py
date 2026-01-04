@@ -39,6 +39,10 @@ class YahooDataProvider(DataProvider):
             pass
             
         df.index = pd.to_datetime(df.index)
+        if df.index.tz is None:
+            df.index = df.index.tz_localize("UTC")
+        else:
+            df.index = df.index.tz_convert("UTC")
         
         # INSTITUTIONAL: Proactive Validation
         from data.validator import DataValidator

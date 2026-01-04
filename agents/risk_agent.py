@@ -20,7 +20,7 @@ class RiskAgent(BaseAgent):
         prices = data.get("prices")
         
         if prices is not None and not prices.empty:
-            vol = prices['Close'].pct_change().std() * (252**0.5)
+            vol = prices['Close'].pct_change(fill_method=None).std() * (252**0.5)
         else:
             vol = 0.3 # Default estimate
             

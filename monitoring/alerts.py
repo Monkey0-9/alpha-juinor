@@ -19,6 +19,17 @@ class AlertManager:
         self.slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL")
         self.discord_webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
         
+    def validate_config(self) -> bool:
+        """Check if at least one alert channel is configured."""
+        configured = any([
+            self.telegram_bot_token and self.telegram_chat_id,
+            self.slack_webhook_url,
+            self.discord_webhook_url
+        ])
+        if not configured:
+            logger.warning("No external alerting channels (Telegram/Slack/Discord) configured.")
+        return configured
+        
     def send_telegram(self, message: str):
         """Send message via Telegram."""
         if not self.telegram_bot_token or not self.telegram_chat_id:
@@ -67,15 +78,30 @@ class AlertManager:
         self.send_slack(msg)
         self.send_discord(msg)
 
-    def heartbeat(self):
-        """Send a specialized heartbeat ping."""
-        import psutil
-        process = psutil.Process(os.getpid())
-        mem_mb = process.memory_info().rss / 1024 / 1024
-        msg = f"🟢 HEARTBEAT | Mem: {mem_mb:.1f}MB | Status: ACTIVE"
+    def heartbeat(self, diagnosis: Optional[str] = None):
+        """Send a specialized heartbeat ping with resource usage."""
+        try:
+            import psutil
+            process = psutil.Process(os.getpid())
+            mem_mb = process.memory_info().rss / 1024 / 1024
+            msg = f"🟢 HEARTBEAT | Mem: {mem_mb:.1f}MB | Status: ACTIVE"
+            if diagnosis:
+                msg += f"\n\n{diagnosis}"
+        except ImportError:
+            msg = "🟢 HEARTBEAT | Mem: [psutil missing] | Status: ACTIVE"
+        except Exception as e:
+            msg = f"🟢 HEARTBEAT | Error: {e} | Status: ACTIVE"
+            
         self.alert(msg, level="HEARTBEAT")
 
     async def alert_async(self, message: str, level: str = "INFO"):
         """Async dispatch to prevent blocking trading loop."""
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, self.alert, message, level)
+
+# Global singleton for system-wide access
+alert_manager = AlertManager()
+
+def alert(message: str, level: str = "INFO"):
+    """Convenience function for system-wide alerting."""
+    alert_manager.alert(message, level)

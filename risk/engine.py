@@ -33,6 +33,7 @@ class RiskCheckResult:
     decision: RiskDecision
     scale_factor: float = 1.0
     violations: List[str] = field(default_factory=list)
+    reason_code: str = "REBALANCE"
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
@@ -40,6 +41,7 @@ class RiskSignalResult:
     adjusted_conviction: pd.Series
     estimated_leverage: float
     violations: List[str] = field(default_factory=list)
+    primary_reason: str = "REBALANCE"
 
 class RiskManager:
     """
@@ -58,8 +60,11 @@ class RiskManager:
         var_limit: float = 0.04, 
         cvar_limit: float = 0.06,
         max_drawdown_limit: float = 0.18,
-        bootstrap_days: int = 60, 
+        bootstrap_days: int = 60,
+        initial_capital: float = 100000.0
     ):
+        self.initial_capital = float(initial_capital)
+        self.kill_switch_trigger = 0.25 # Hard stop if 25% of initial capital is lost
         self.max_leverage = float(max_leverage)
         self.target_vol_limit = float(target_vol_limit)
         self.var_limit = float(var_limit)
@@ -102,6 +107,26 @@ class RiskManager:
             "Inflation Shock": -0.05
         }
         self.stress_limit = 0.25 # Max allowable loss under extreme scenario
+        
+        # AUTO-SELL Configuration (Institutional)
+        self.emergency_liquidation_enabled = True
+        self.manual_emergency_flag = False
+        self.never_sell_assets = []
+        self.manual_approval_on_sell = False
+        
+        # Sector & Correlation Risk (Requirement F)
+        self.sector_map: Dict[str, str] = {}
+        self.sector_limit = 0.15 # 15% NAV per sector
+        self.correlation_shock_threshold = 0.70 # Max average pairwise correlation
+        
+        # Attribution & Diagnosis
+        self.last_dd = 0.0
+        self.last_var = 0.0
+        self.last_cvar = 0.0
+        
+        # Tiered Alerting (User Request)
+        self.manual_approval_threshold = 0.15  # Require approval if DD > 15%
+        self.high_risk_threshold = 0.08        # Alert but auto-handle if DD > 8%
 
     def compute_var(self, returns: pd.Series, confidence: float = 0.95) -> float:
         if returns.empty or len(returns) < 20: 
@@ -315,6 +340,27 @@ class RiskManager:
             violations.append(f"CVaR {current_cvar:.2%} > {self.cvar_limit:.2%}")
             raw_scale = min(raw_scale, self.cvar_limit / (current_cvar + 1e-9))
 
+        # 5. Correlation Shock Detection (Requirement F)
+        if not baskets_returns.empty and len(baskets_returns.columns) > 5:
+             corr_matrix = baskets_returns[list(valid_weights.keys())].corr()
+             avg_corr = corr_matrix.values[np.triu_indices(len(corr_matrix), k=1)].mean()
+             if avg_corr > self.correlation_shock_threshold:
+                  violations.append(f"Correlation Shock: {avg_corr:.2f} > {self.correlation_shock_threshold}")
+                  regime_scalar = min(regime_scalar, 0.60) # Massive de-risk
+
+        # 6. Sector Concentration (Requirement C)
+        sector_usage = {}
+        for tk, weight in target_weights.items():
+             sector = self.sector_map.get(tk, "Unknown")
+             sector_usage[sector] = sector_usage.get(sector, 0.0) + abs(weight)
+        
+        for sector, expo in sector_usage.items():
+             if expo > self.sector_limit:
+                  violations.append(f"Sector Cap: {sector} {expo:.1%} > {self.sector_limit:.1%}")
+                  # Scaling sector weights exceeds the scope of pre_trade (which aggregates)
+                  # In practice, this would force a Scale Decision
+                  raw_scale = min(raw_scale, self.sector_limit / (expo + 1e-9))
+
         # Apply Proactive Scaler combining structural risk + drawdown + regime + recovery
         final_scale = raw_scale * dd_scalar * regime_scalar * recovery_scalar
 
@@ -345,7 +391,20 @@ class RiskManager:
         # Track realized vol for stability check
         self._current_realized_vol = realized_returns.std() * np.sqrt(252) if len(realized_returns) > 10 else 0.0
 
-        # Hard stop limits
+        # 0. Manual / Emergency Kill-Switch
+        if self.manual_emergency_flag:
+             logger.critical("EMERGENCY KILL-SWITCH: Manual flag set. PERMANENT HALT.")
+             self.state = RiskDecision.FREEZE
+             return RiskDecision.FREEZE
+
+        # 1. Absolute Capital Kill-Switch (Terminal Ruin Protection)
+        absolute_loss = (self.initial_capital - current_equity) / self.initial_capital if self.initial_capital > 0 else 0.0
+        if absolute_loss > self.kill_switch_trigger:
+             logger.critical(f"ABSOLUTE KILL-SWITCH: Capital loss {absolute_loss:.2%} > {self.kill_switch_trigger:.2%}. PERMANENT HALT.")
+             self.state = RiskDecision.FREEZE
+             return RiskDecision.FREEZE
+
+        # 2. Cumulative Drawdown Limit (Elite Control)
         if drawdown > self.max_drawdown_limit:
             if self.state != RiskDecision.FREEZE:
                 logger.error(f"CIRCUIT BREAKER: Drawdown {drawdown:.2%} > {self.max_drawdown_limit:.2%}. FREEZING.")
@@ -377,7 +436,8 @@ class RiskManager:
             return RiskSignalResult(
                 adjusted_conviction=pd.Series([0.0], index=conviction.index), 
                 estimated_leverage=0.0,
-                violations=["Risk State: FREEZE"]
+                violations=["Risk State: FREEZE"],
+                primary_reason="EMERGENCY_KILL"
             )
 
         # 1. Realized Volatility Calculation
@@ -441,6 +501,16 @@ class RiskManager:
 
         adjusted_conviction = conviction * applied_scaler
         
+        # Determine Primary Reason (Highest Priority First)
+        reason = "REBALANCE"
+        if self.state == RiskDecision.FREEZE: reason = "EMERGENCY_KILL"
+        elif self.regime == RiskRegime.BEAR_CRISIS: reason = "REGIME_SHIFT"
+        elif dd_scalar < 0.99: reason = "RISK_BREACH" # Drawdown
+        elif liq_scalar < 0.99: reason = "LIQUIDITY_SAFETY"
+        elif vol_scaler < 0.99: reason = "RISK_BREACH" # Vol target
+        elif self.state == RiskDecision.RECOVERY: reason = "RISK_BREACH" # Recovery constraints
+        elif regime_scalar < 0.99: reason = "REGIME_SHIFT"
+
         # 7. Return adjusted signal and estimated leverage
         # Lev is estimate of notional for this asset
         est_lev = float(adjusted_conviction.iloc[-1]) if not adjusted_conviction.empty else 0.0
@@ -451,8 +521,68 @@ class RiskManager:
         return RiskSignalResult(
             adjusted_conviction=adjusted_conviction,
             estimated_leverage=est_lev,
-            violations=violations
+            violations=violations,
+            primary_reason=reason
         )
+
+    def explain_diagnostics(self, current_equity: float) -> str:
+        """
+        Generate human-readable root cause analysis of current risk/losses.
+        Answers: 'What is wrong?', 'Why less return?', 'Why losses?'
+        """
+        dd = (self._max_equity - current_equity) / (self._max_equity + 1e-9) if self._max_equity > 0 else 0.0
+        
+        lines = []
+        lines.append(f"🔍 **DIAGNOSIS: PORTFOLIO STRESS**")
+        
+        # 1. Broad Root Cause
+        if self.regime in [RiskRegime.BEAR_CRISIS, RiskRegime.BEAR_QUIET]:
+            lines.append("📉 **Root Cause**: Adverse Market Regime (Bearish). Market trend is below 200-day average. System is prioritising capital protection over gains.")
+        elif dd > 0.05:
+            lines.append("💸 **Root Cause**: Drawdown Recovery. System is in 'Defensive Mode' (Scaling 0.x) to prevent further losses after the recent peak.")
+        
+        # 2. Specific Constraints (The 'Why')
+        if not self.is_risk_on:
+            lines.append("- **Condition**: Risk-Off detected. Volatility is in high percentiles. Exposure slashed to prevent crash impact.")
+        
+        if self.state == RiskDecision.FREEZE:
+            lines.append("- **Condition**: EMERGENCY FREEZE active. Circuit breaker tripped due to excessive volatility or drawdown. No new trades allowed.")
+            
+        if self._current_realized_vol > self.target_vol_limit:
+            lines.append(f"- **Volatility Spike**: Current Vol {self._current_realized_vol:.1%} > Target {self.target_vol_limit:.1%}. System must shrink sizes to maintain risk budget.")
+
+        # 3. Liquidity/Solvency
+        lines.append(f"\n📈 **Performance Metrics**:")
+        lines.append(f"- Max Drawdown Observed: {dd:.1%}")
+        lines.append(f"- Regime Protection Haircut: {0.5 if not self.is_risk_on else 1.0}x")
+        lines.append(f"- Recovery Level: {self.recovery_level}/5")
+
+        if dd > 0.10:
+            lines.append("\n⚠️ **Why Less Return?** The system has entered 'Stall' mode to protect remaining capital. It will re-increase exposure only after market stability returns.")
+        
+        return "\n".join(lines)
+
+    def get_risk_tier(self, current_equity: float) -> str:
+        """
+        Determine risk tier for alert routing.
+        Returns: 'NORMAL', 'HIGH', or 'EXTREME'
+        """
+        dd = (self._max_equity - current_equity) / (self._max_equity + 1e-9) if self._max_equity > 0 else 0.0
+        
+        # EXTREME: Manual approval required
+        if dd > self.manual_approval_threshold or self.state == RiskDecision.FREEZE:
+            return "EXTREME"
+        
+        # HIGH: Alert but auto-handle
+        if dd > self.high_risk_threshold or not self.is_risk_on or self._current_realized_vol > self.target_vol_limit * 2:
+            return "HIGH"
+        
+        # NORMAL: Silent operation
+        return "NORMAL"
+    
+    def should_require_approval(self, current_equity: float) -> bool:
+        """Check if manual approval is needed before trading."""
+        return self.get_risk_tier(current_equity) == "EXTREME"
 
     def process_state_daily(self, is_risk_on: bool):
         """

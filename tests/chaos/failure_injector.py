@@ -61,11 +61,24 @@ class FailureInjector:
             data.iloc[idx, data.columns.get_loc('Volume')] = 0.0
             
         # 4. Simulate Price Gaps (Flash Crash Scenario)
-        if random.random() < self.scenarios.get("price_gaps", 0):
+        if self.enabled and random.random() < self.scenarios.get("price_gaps", 0):
             idx = random.randint(0, len(data) - 1)
             gap_pct = random.choice([-0.10, -0.05, 0.05, 0.10])
             logger.warning(f"CHAOS: Injecting {gap_pct:+.1%} price gap at {data.index[idx]}")
-            for col in ['Open', 'High', 'Low', 'Close']:
+            
+            # Identify columns to adjust
+            cols_to_gap = []
+            if isinstance(data.columns, pd.MultiIndex):
+                for tk in data.columns.levels[0]:
+                    for col in ['Open', 'High', 'Low', 'Close']:
+                        if (tk, col) in data.columns:
+                            cols_to_gap.append((tk, col))
+            else:
+                for col in ['Open', 'High', 'Low', 'Close']:
+                    if col in data.columns:
+                        cols_to_gap.append(col)
+                        
+            for col in cols_to_gap:
                 data.iloc[idx, data.columns.get_loc(col)] *= (1 + gap_pct)
                 
         return data

@@ -8,8 +8,8 @@ import os
 # Add root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from strategies.features import FeatureEngineer
-from strategies.ml_alpha import MLAlpha
+from strategies.ml_models.ml_alpha import MLAlpha
+from data.processors.features import FeatureEngineer
 from portfolio.optimizer import MeanVarianceOptimizer
 
 @pytest.fixture
@@ -53,7 +53,7 @@ def test_ml_alpha_training_and_prediction(mock_price_data):
     # Mock data is random walk, prediction might be close to 0.5 or not, but should run
 
 def test_optimizer():
-    optimizer = MeanVarianceOptimizer()
+    optimizer = MeanVarianceOptimizer(max_weight=0.5)
     
     # Mock efficient frontier components
     tickers = ["A", "B", "C"]

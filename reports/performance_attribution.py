@@ -21,7 +21,7 @@ class PerformanceAnalyzer:
         self.equity = equity_series
         self.trades = trades_df
         self.rfr = risk_free_rate
-        self.returns = equity_series.pct_change().dropna()
+        self.returns = equity_series.pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
         
     def calculate_metrics(self) -> Dict[str, float]:
         """Core risk-adjusted performance metrics."""

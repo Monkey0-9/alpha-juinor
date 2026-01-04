@@ -3,6 +3,7 @@ import requests
 import logging
 import json
 import time
+import uuid
 from typing import List, Dict, Optional
 from backtest.execution import Order, OrderType
 
@@ -24,7 +25,6 @@ class AlpacaExecutionHandler:
         self.session = requests.Session()
         self.session.headers.update(self.headers)
         
-        # Verify connection
         try:
             self.account = self.get_account()
             logger.info(f"Connected to Alpaca: {self.account.get('status')} | Equity: ${self.account.get('equity')}")
@@ -32,16 +32,34 @@ class AlpacaExecutionHandler:
             logger.error(f"Failed to connect to Alpaca: {e}")
             raise
 
+    def _request_with_retry(self, method: str, url: str, **kwargs) -> requests.Response:
+        """Internal retry wrapper for Alpaca API."""
+        retries = kwargs.pop('retries', 3)
+        for i in range(retries):
+            try:
+                response = self.session.request(method, url, timeout=15, **kwargs)
+                if response.status_code == 429: # Rate limit
+                    wait = 2 ** i
+                    logger.warning(f"Alpaca Rate Limit. Waiting {wait}s...")
+                    time.sleep(wait)
+                    continue
+                response.raise_for_status()
+                return response
+            except Exception as e:
+                if i == retries - 1:
+                    logger.error(f"Alpaca API Error after {retries} retries: {e}")
+                    raise
+                time.sleep(1)
+        return None
+
     def get_account(self) -> Dict:
         """Get account details."""
-        r = self.session.get(f"{self.base_url}/v2/account")
-        r.raise_for_status()
+        r = self._request_with_retry("GET", f"{self.base_url}/v2/account")
         return r.json()
 
     def get_positions(self) -> Dict[str, float]:
         """Get current positions as {ticker: quantity}."""
-        r = self.session.get(f"{self.base_url}/v2/positions")
-        r.raise_for_status()
+        r = self._request_with_retry("GET", f"{self.base_url}/v2/positions")
         data = r.json()
         positions = {}
         for pos in data:
@@ -51,39 +69,44 @@ class AlpacaExecutionHandler:
     def submit_orders(self, orders: List[Order]) -> List[Dict]:
         """
         Execute a list of orders.
-        Does not support atomic batching natively, uses loop.
+        Includes idempotency keys and fractional rounding (4 decimals).
         """
         results = []
         for order in orders:
-            # Alpaca Ticker Mapping (e.g. ETH-USD -> ETHUSD for crypto)
+            # Alpaca Ticker Mapping
             ticker = order.ticker.replace("-", "") if "-" in order.ticker else order.ticker
             
             side = "buy" if order.quantity > 0 else "sell"
             qty = abs(order.quantity)
             if qty < 0.0001: 
-                continue # ignore tiny noise
+                continue
             
-            # Alpaca requires string side
+            # IDEMPOTENCY: Use UUID for client_order_id to prevent double-fills on retry
+            client_order_id = str(uuid.uuid4())
+            
             payload = {
                 "symbol": ticker,
-                "qty": str(round(qty, 4)),  # fractional shares supported to 4 decimals
+                "qty": str(round(qty, 4)), 
                 "side": side,
                 "type": "market", 
-                "time_in_force": "day"
+                "time_in_force": "day",
+                "client_order_id": client_order_id
             }
             
             try:
-                r = self.session.post(f"{self.base_url}/v2/orders", json=payload)
-                if r.status_code in [200, 201]:
-                    order_data = r.json()
-                    logger.info(f"Submitted {side} {qty} {order.ticker} | ID: {order_data.get('id')}")
-                    results.append({"status": "submitted", "order": order_data})
-                else:
-                    logger.error(f"Order failed {side} {order.ticker}: {r.text}")
-                    results.append({"status": "failed", "error": r.text})
+                # Use retry wrapper for POST
+                r = self._request_with_retry("POST", f"{self.base_url}/v2/orders", json=payload)
+                order_data = r.json()
+                
+                reason_log = f"REASON: {order.reason}"
+                if order.risk_metric_triggered:
+                    reason_log += f" | RISK: {order.risk_metric_triggered}"
+                    
+                logger.info(f"Submitted {side} {qty:.4f} {order.ticker} | {reason_log} | ID: {order_data.get('id')} | CID: {client_order_id}")
+                results.append({"status": "submitted", "order": order_data})
             except Exception as e:
-                logger.error(f"Exception submitting {order.ticker}: {e}")
-                results.append({"status": "error", "error": str(e)})
+                logger.error(f"Failed to submit {order.ticker} ({order.reason}): {e}")
+                results.append({"status": "failed", "error": str(e)})
                 
         return results
 

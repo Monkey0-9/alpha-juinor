@@ -16,7 +16,7 @@ class PerformanceAnalyzer:
         
     def calculate_returns(self) -> pd.Series:
         """Daily returns from equity curve."""
-        return self.equity.pct_change().fillna(0)
+        return self.equity.pct_change(fill_method=None).fillna(0)
     
     def sharpe_ratio(self) -> float:
         """Annualized Sharpe Ratio."""

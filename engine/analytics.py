@@ -4,7 +4,7 @@ import pandas as pd
 TRADING_DAYS = 252
 
 def daily_returns(prices: pd.Series) -> pd.Series:
-    returns = prices.pct_change()
+    returns = prices.pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan)
     return returns.fillna(0)
 
 def annualized_return(returns: pd.Series) -> float:

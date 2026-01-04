@@ -16,6 +16,8 @@ dependencies = [
     "plotly>=5.14.0",
     "scipy>=1.10.0",
     "pyarrow>=12.0.0",  # Required for Parquet
+    "PyYAML>=6.0",
+    "psutil>=5.9.0",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +37,7 @@ filterwarnings = [
 testpaths = [
     "tests",
 ]
+python_files = "test_*.py *test.py"
 
 [tool.black]
 line-length = 88

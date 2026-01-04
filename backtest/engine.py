@@ -215,7 +215,7 @@ class BacktestEngine:
             # Create a localized return series from recent records (last 30 bars)
             if len(records) > 2:
                 recent_equity = [r['equity'] for r in records[-60:]] # Increased lookback for Beta
-                rets = pd.Series(recent_equity).pct_change().dropna()
+                rets = pd.Series(recent_equity).pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
                 self.risk_manager.check_circuit_breaker(nav, rets)
 
     def run(self, start_date: str, strategy_fn: Callable, tickers: List[str], end_date: Optional[str] = None) -> None:

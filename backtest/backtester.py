@@ -42,7 +42,7 @@ def run_backtest(
     )
 
     # Market returns
-    df["market_return"] = df["price"].pct_change().fillna(0)
+    df["market_return"] = df["price"].pct_change(fill_method=None).fillna(0)
 
     # Strategy returns
     df["strategy_return"] = df["prev_exposure"] * df["market_return"]

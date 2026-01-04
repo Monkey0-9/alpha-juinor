@@ -19,7 +19,7 @@ class AttributionEngine:
         if equity_df.empty:
             return {}
             
-        returns = equity_df['equity'].pct_change().dropna()
+        returns = equity_df['equity'].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
         
         # 1. Turnover Attribution
         turnover = self._calculate_turnover(trades_df, equity_df)

@@ -3,6 +3,8 @@ import pandas as pd
 import shutil
 from pathlib import Path
 
+collect_ignore = ["test_output.txt", "test_output_2.txt", "test_output_utf8.txt", "test_output_2_utf8.txt"]
+
 @pytest.fixture
 def mock_ohlcv_data():
     dates = pd.date_range(start="2023-01-01", periods=10, freq="B")

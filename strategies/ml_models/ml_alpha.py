@@ -24,6 +24,7 @@ class MLAlpha(Alpha):
             n_jobs=-1
         )
         self.is_trained = False
+        self.ml_ready = False
         self.train_window = train_window
         self.retrain_interval = 63 # Retrain every quarter (~63 business days)
         self.last_train_date: Optional[pd.Timestamp] = None
@@ -34,11 +35,13 @@ class MLAlpha(Alpha):
         Train the model on historical data.
         prices_history: DataFrame with Open, High, Low, Close, Volume
         """
-        if len(prices_history) < 100:
-            print("[MLAlpha] Insufficient history to train.")
+        if len(prices_history) < self.train_window:
+            print(f"[MLAlpha] Insufficient history to train. Need {self.train_window}, got {len(prices_history)}.")
             return
 
-        print(f"[MLAlpha] Generating features for {len(prices_history)} bars...")
+        # Institutional Alignment: We want to ensure features and target use the SAME raw data subset
+        # before they start dropping rows internally.
+        print(f"[MLAlpha] Generating features and 5d forward targets for {len(prices_history)} bars...")
         X = self.fe.compute_features(prices_history)
         y = self.fe.compute_target(prices_history, forward_window=5) # Predict 5-day return
 
@@ -57,6 +60,7 @@ class MLAlpha(Alpha):
         print(f"[MLAlpha] Training Random Forest on {len(X_train)} samples...")
         self.model.fit(X_train, y_train)
         self.is_trained = True
+        self.ml_ready = True
         self.last_features = X.iloc[[-1]] # Cache last features for live check if needed
         
         # Feature importance debug

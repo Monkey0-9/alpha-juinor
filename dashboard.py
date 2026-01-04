@@ -110,7 +110,7 @@ col1.subheader("Drawdown")
 fig_dd = px.line(x=drawdown.index, y=drawdown.values, labels={"x":"Date","y":"Drawdown"})
 col1.plotly_chart(fig_dd, use_container_width=True)
 col2.subheader("Daily Returns Distribution")
-daily_ret = series0.pct_change().dropna()
+    daily_ret = series0.pct_change(fill_method=None).dropna()
 fig_hist = px.histogram(daily_ret, nbins=100, title="Daily returns distribution")
 col2.plotly_chart(fig_hist, use_container_width=True)
 

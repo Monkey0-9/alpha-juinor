@@ -5,8 +5,8 @@ import numpy as np
 from datetime import datetime
 from risk.engine import RiskManager, RiskRegime
 from strategies.alpha import CompositeAlpha, TrendAlpha
-from strategies.ml_alpha import MLAlpha
-from strategies.features import FeatureEngineer
+from strategies.ml_models.ml_alpha import MLAlpha
+from data.processors.features import FeatureEngineer
 
 class TestPhase2(unittest.TestCase):
     

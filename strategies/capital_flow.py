@@ -21,7 +21,7 @@ def volatility_compression(prices: pd.Series, window=20, percentile=0.2) -> pd.S
     """
     Low volatility regimes often precede expansion
     """
-    returns = prices.pct_change()
+    returns = prices.pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).fillna(0)
     rolling_vol = returns.rolling(window).std()
     vol_rank = rolling_vol.rank(pct=True)
     signal = (vol_rank < percentile).astype(int)

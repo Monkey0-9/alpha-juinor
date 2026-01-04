@@ -11,6 +11,7 @@ from backtest.execution import (
     RealisticExecutionHandler,
     OrderStatus,
     ExecutionError,
+    BarData,
 )
 
 
@@ -30,8 +31,10 @@ def make_volume_series(n=120, base=1_000_000):
     return pd.Series(vols, index=rng)
 
 
-def make_bar(price, volume):
-    return {"Open": price, "High": price, "Low": price, "Close": price, "Volume": float(volume)}
+def make_bar(price, volume, timestamp=None):
+    if timestamp is None:
+        timestamp = datetime.now()
+    return BarData(open=price, high=price, low=price, close=price, volume=float(volume), timestamp=timestamp)
 
 
 # -------------------------
@@ -55,7 +58,6 @@ def test_slippage_increases_with_order_size():
     t_small = handler.fill_order(
         order=small,
         bar=bar,
-        bar_timestamp=bar_ts,
         price_history=prices,
         volume_history=volumes,
     )
@@ -63,7 +65,6 @@ def test_slippage_increases_with_order_size():
     t_big = handler.fill_order(
         order=big,
         bar=bar,
-        bar_timestamp=bar_ts,
         price_history=prices,
         volume_history=volumes,
     )
@@ -92,7 +93,6 @@ def test_participation_cap_enforced():
     trade = handler.fill_order(
         order=order,
         bar=bar,
-        bar_timestamp=bar_ts,
         price_history=prices,
         volume_history=volumes,
     )
@@ -119,7 +119,6 @@ def test_partial_fill_and_order_state():
     trade = handler.fill_order(
         order=order,
         bar=bar,
-        bar_timestamp=bar_ts,
         price_history=prices,
         volume_history=volumes,
     )
@@ -154,7 +153,6 @@ def test_zero_volume_bar_behaviour():
         trade = handler.fill_order(
             order=order,
             bar=bar,
-            bar_timestamp=bar_ts,
             price_history=prices,
             volume_history=volumes,
         )

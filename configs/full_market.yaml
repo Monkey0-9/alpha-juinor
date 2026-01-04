@@ -1,0 +1,31 @@
+# configs/full_market.yaml
+universe:
+  refresh_daily: true
+  source: "alpaca_direct"
+  exchanges: ["NYSE", "NASDAQ", "AMEX"]
+  filters:
+    min_market_cap: 50000000 # $50M
+    min_dollar_volume_30d: 100000 # $100k
+    min_price: 1.00
+    allow_penny_stocks: false
+  thresholds:
+    large_cap: 10000000000 # $10B
+    mid_cap: 2000000000    # $2B
+
+bucketing:
+  weights:
+    Large: 0.50
+    Mid: 0.30
+    Small: 0.20
+
+risk:
+  max_gross_leverage: 1.0
+  single_name_cap: 0.01 # 1%
+  sector_cap: 0.15 # 15%
+  target_volatility_annualized: 0.15
+  participation_cap: 0.01
+
+execution:
+  algo: "POV"
+  pov_rate: 0.01
+  epsilon: 0.0005

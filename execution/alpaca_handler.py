@@ -63,7 +63,7 @@ class AlpacaExecutionHandler:
             }
             
             url = f"{self.base_url}/v2/orders"
-            response = requests.post(url, headers=self.headers, json=payload)
+            response = requests.post(url, headers=self.headers, json=payload, timeout=10)
             response.raise_for_status()
             
             order_data = response.json()
@@ -78,7 +78,7 @@ class AlpacaExecutionHandler:
         """Get account details (cash, equity, buying power)."""
         try:
             url = f"{self.base_url}/v2/account"
-            response = requests.get(url, headers=self.headers)
+            response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -89,7 +89,7 @@ class AlpacaExecutionHandler:
         """Get current positions."""
         try:
             url = f"{self.base_url}/v2/positions"
-            response = requests.get(url, headers=self.headers)
+            response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -101,7 +101,7 @@ class AlpacaExecutionHandler:
         try:
             url = f"{self.base_url}/v2/orders"
             params = {"status": status, "limit": 500}
-            response = requests.get(url, headers=self.headers, params=params)
+            response = requests.get(url, headers=self.headers, params=params, timeout=10)
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -112,7 +112,7 @@ class AlpacaExecutionHandler:
         """Cancel all open orders."""
         try:
             url = f"{self.base_url}/v2/orders"
-            response = requests.delete(url, headers=self.headers)
+            response = requests.delete(url, headers=self.headers, timeout=10)
             response.raise_for_status()
             logger.info("All orders cancelled")
             return True

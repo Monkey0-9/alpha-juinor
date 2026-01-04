@@ -19,8 +19,8 @@ try:
     from backtest.engine import BacktestEngine
     from backtest.execution import RealisticExecutionHandler, Order, OrderType
     from risk.engine import RiskManager
-    from strategies.ml_alpha import MLAlpha
-    from strategies.features import FeatureEngineer
+    from strategies.ml_models.ml_alpha import MLAlpha
+    from data.processors.features import FeatureEngineer
     from reports.performance_attribution import PerformanceAnalyzer
 except ImportError as e:
     logger.error(f"Failed to import core modules: {e}")
@@ -153,7 +153,7 @@ def run_simulation():
     
     # Benchmark Returns for Attribution (SPY)
     spy_df = provider.fetch_ohlcv("SPY", start_date, end_date)
-    bench_rets = spy_df["Close"].pct_change().dropna()
+    bench_rets = spy_df["Close"].pct_change(fill_method=None).dropna()
     
     analyzer = PerformanceAnalyzer(results["equity"], trades)
     report = analyzer.generate_report(benchmark_returns=bench_rets)

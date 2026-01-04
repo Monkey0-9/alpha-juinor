@@ -44,6 +44,11 @@ class AlpacaDataProvider:
         
         if not self.api_key or not self.secret_key:
             logger.warning("Alpaca API keys not found. Set ALPACA_API_KEY and ALPACA_SECRET_KEY env vars.")
+
+    def _is_crypto(self, ticker: str) -> bool:
+        """Helper to identify if ticker is crypto (BTC-USD, ETH/USD etc)."""
+        crypto_keywords = ["-USD", "/USD", "BTC", "ETH", "LTC", "DOGE"]
+        return any(k in ticker.upper() for k in crypto_keywords)
     
     def _request_with_retry(self, url: str, params: Optional[Dict] = None, retries: int = 3) -> requests.Response:
         """Retry wrapper for Alpaca Data API requests."""
@@ -74,26 +79,43 @@ class AlpacaDataProvider:
         # Alpaca expects dates like 2021-01-01
         
         try:
-            url = f"{self.data_url}/v2/stocks/{ticker}/bars"
-            
-            params = {
-                "start": start_date,
-                "end": end_date,
-                "timeframe": "1Day",
-                "limit": 10000,
-                "adjustment": "all"
-            }
+            # ROUTING: Stocks use /v2/stocks, Crypto uses /v1beta3/crypto/us
+            if self._is_crypto(ticker):
+                # Standardize crypto format (Alpaca Crypto v1beta3 uses BTC/USD)
+                clean_ticker = ticker.upper().replace("-", "/")
+                url = f"{self.data_url}/v1beta3/crypto/us/bars"
+                params = {
+                    "symbols": clean_ticker,
+                    "start": start_date,
+                    "end": end_date,
+                    "timeframe": "1Day"
+                }
+            else:
+                url = f"{self.data_url}/v2/stocks/{ticker}/bars"
+                params = {
+                    "start": start_date,
+                    "end": end_date,
+                    "timeframe": "1Day",
+                    "limit": 10000,
+                    "adjustment": "all"
+                }
             
             response = self._request_with_retry(url, params=params)
             
             data = response.json()
             
-            if "bars" not in data or not data["bars"]:
-                logger.warning(f"No data returned for {ticker}")
-                return pd.DataFrame()
-            
-            # Convert to DataFrame
-            bars = data["bars"]
+            # Map response data based on asset type
+            if self._is_crypto(ticker):
+                clean_ticker = ticker.upper().replace("-", "/")
+                if "bars" not in data or not data["bars"] or clean_ticker not in data["bars"]:
+                    logger.warning(f"No crypto data returned for {ticker}")
+                    return pd.DataFrame()
+                bars = data["bars"][clean_ticker]
+            else:
+                if "bars" not in data or not data["bars"]:
+                    logger.warning(f"No stock data returned for {ticker}")
+                    return pd.DataFrame()
+                bars = data["bars"]
             df = pd.DataFrame(bars)
             
             # Rename columns to match our standard
@@ -106,9 +128,14 @@ class AlpacaDataProvider:
                 "v": "Volume"
             })
             
-            # Parse dates
+            # Parse dates and enforce UTC
             df["Date"] = pd.to_datetime(df["Date"])
             df = df.set_index("Date")
+            
+            if df.index.tz is None:
+                df.index = df.index.tz_localize("UTC")
+            else:
+                df.index = df.index.tz_convert("UTC")
             
             # Select only OHLCV
             df = df[["Open", "High", "Low", "Close", "Volume"]]
@@ -120,16 +147,71 @@ class AlpacaDataProvider:
             logger.error(f"Alpaca fetch failed for {ticker}: {e}")
             return pd.DataFrame()
     
+    def get_all_assets(self, asset_class: str = "us_equity") -> List[Dict]:
+        """Fetch all tradable assets from Alpaca."""
+        url = f"{self.base_url}/v2/assets"
+        params = {"asset_class": asset_class, "status": "active"}
+        response = self._request_with_retry(url, params=params)
+        data = response.json()
+        return [
+            {
+                "symbol": a["symbol"],
+                "exchange": a["exchange"],
+                "tradable": a["tradable"],
+                "status": a["status"]
+            } for a in data if a["tradable"]
+        ]
+
+    def enrich_universe_data(self, tickers: List[str]) -> pd.DataFrame:
+        """
+        Enrich universe with ADV, Price, and Market Cap.
+        (Uses snapshots and fundamental estimates).
+        """
+        # Batch Fetch Snapshots for Last Price and Vol
+        chunk_size = 200
+        all_stats = []
+        
+        for i in range(0, len(tickers), chunk_size):
+            chunk = tickers[i : i + chunk_size]
+            url = f"{self.data_url}/v2/stocks/snapshots"
+            params = {"symbols": ",".join(chunk)}
+            res = self._request_with_retry(url, params=params)
+            data = res.json()
+            
+            for tk, snap in data.items():
+                close = snap.get("latestTrade", {}).get("p", 0.0)
+                vol = snap.get("dailyBar", {}).get("v", 0)
+                
+                all_stats.append({
+                    "symbol": tk,
+                    "last_price": close,
+                    "avg_volume": vol, # Daily proxy
+                    "avg_dollar_volume_30d": close * vol, # Simplify for scaling
+                    "market_cap": close * 1e7, # PLACEHOLDER: Real mcap would need fundamentals API
+                    "status": "tradable",
+                    "exchange": "NYSE", # Default
+                    "listed_only": True
+                })
+        
+        return pd.DataFrame(all_stats)
+
     def get_latest_quote(self, ticker: str) -> Optional[float]:
         """Get latest trade price (real-time)."""
         try:
-            url = f"{self.data_url}/v2/stocks/{ticker}/trades/latest"
-            response = requests.get(url, headers=self.headers)
-            response.raise_for_status()
-            
-            data = response.json()
-            if "trade" in data and "p" in data["trade"]:
-                return float(data["trade"]["p"])
+            if self._is_crypto(ticker):
+                clean_ticker = ticker.upper().replace("-", "/")
+                url = f"{self.data_url}/v1beta3/crypto/us/latest/trades"
+                params = {"symbols": clean_ticker}
+                response = self._request_with_retry(url, params=params)
+                data = response.json()
+                if "trades" in data and clean_ticker in data["trades"]:
+                    return float(data["trades"][clean_ticker]["p"])
+            else:
+                url = f"{self.data_url}/v2/stocks/{ticker}/trades/latest"
+                response = self._request_with_retry(url)
+                data = response.json()
+                if "trade" in data and "p" in data["trade"]:
+                    return float(data["trade"]["p"])
             return None
         except Exception as e:
             logger.error(f"Failed to get latest quote for {ticker}: {e}")

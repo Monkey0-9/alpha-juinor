@@ -13,7 +13,7 @@ def volatility_shock_filter(prices: pd.Series, window=20, shock_level=2.5) -> pd
     """
     Avoid trading during volatility explosions
     """
-    returns = prices.pct_change()
+    returns = prices.pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).fillna(0)
     rolling_vol = returns.rolling(window).std()
     shock = rolling_vol > rolling_vol.mean() * shock_level
     allowed = (~shock).astype(int)

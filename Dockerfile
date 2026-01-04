@@ -14,7 +14,7 @@ COPY requirements.txt .
 RUN pip install --user --no-cache-dir -r requirements.txt
 
 # Phase 2: Runtime
-FROM python:3.11-slim as runtime
+FROM python:3.11-slim-bookworm as runtime
 
 WORKDIR /app
 
@@ -34,13 +34,6 @@ COPY . .
 
 # Create necessary directories
 RUN mkdir -p output/backtests logs
-
-# Set institutional defaults (Override at runtime)
-ENV ALPACA_API_KEY=""
-ENV ALPACA_SECRET_KEY=""
-ENV ALERT_EMAIL=""
-ENV ALERT_PASSWORD=""
-ENV ALERT_TO=""
 
 # Entrypoint to allow passing arguments to main.py
 ENTRYPOINT ["python", "main.py"]
