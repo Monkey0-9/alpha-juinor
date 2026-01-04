@@ -361,6 +361,13 @@ class RealisticExecutionHandler:
                 return None
 
         # Estimate vol and adv
+        price_history = pd.to_numeric(price_history, errors='coerce').astype(float)
+        volume_history = pd.to_numeric(volume_history, errors='coerce').astype(float)
+        
+        if price_history.empty or volume_history.empty:
+            logger.warning(f"Aborting fill for {order.ticker}: Empty history arrays.")
+            return None
+            
         vol, adv = self._estimate_vol_and_adv(price_history, volume_history)
 
         # If adv fallback (None), use bar_volume conservatively but log

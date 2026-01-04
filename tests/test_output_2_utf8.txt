@@ -1,0 +1,63 @@
+﻿F                                                                        [100%]
+================================== FAILURES ===================================
+_____________________ test_backtester_execution_pipeline ______________________
+
+tmp_path = WindowsPath('C:/Users/Praveen P/AppData/Local/Temp/pytest-of-Praveen P/pytest-41/test_backtester_execution_pipe0')
+
+    def test_backtester_execution_pipeline(tmp_path):
+        provider = MockProvider()
+    
+        # Execution handler with visible costs & participation constraints
+        execution = RealisticExecutionHandler(
+            commission_pct=0.002,
+            max_participation_rate=0.05,
+            impact_coeff=0.20,
+            adv_lookback=3,
+            vol_lookback=3,
+            min_vol_fallback=0.01,
+        )
+    
+        engine = BacktestEngine(
+            provider=provider,
+            initial_capital=1_000_000.0,
+            execution_handler=execution,
+        )
+    
+        # -----------------------------------------------------
+        # Strategy: intentionally oversized order \u2192 partial fill
+        # -----------------------------------------------------
+        def strategy_fn(timestamp, prices, engine_ref):
+            blotter = engine_ref.get_blotter()
+            # Execution handler requires min 5 bars of history for volatility calc.
+            # MockProvider starts Jan 2. We wait until we have enough history.
+            # Jan 2, 3, 4, 5, 6, 9...
+            if blotter.orders_df().empty and timestamp.day > 9:
+                # Request more than participation allows
+                return [Order("TEST", 20_000, OrderType.MARKET, timestamp)]
+            return []
+    
+        # -----------------------------------------------------
+        # Run engine (institutional signature)
+        # -----------------------------------------------------
+        engine.run(
+            start_date="2023-01-02",
+            tickers=["TEST"],
+            strategy_fn=strategy_fn,
+        )
+    
+        # -----------------------------------------------------
+        # Blotter integrity
+        # -----------------------------------------------------
+        blotter = engine.get_blotter()
+        orders = blotter.orders_df()
+        trades = blotter.trades_df()
+    
+>       assert len(orders) == 1, "Exactly one order must be recorded"
+E       AssertionError: Exactly one order must be recorded
+E       assert 0 == 1
+E        +  where 0 = len(Empty DataFrame\nColumns: []\nIndex: [])
+
+tests\test_backtester.py:116: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_backtester.py::test_backtester_execution_pipeline - Asserti...
+1 failed, 3 deselected in 1.97s

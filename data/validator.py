@@ -1,75 +1,70 @@
-# data/validator.py
+
 import pandas as pd
 import numpy as np
-from typing import List, Dict
+import logging
+from typing import Tuple, Dict
+
+logger = logging.getLogger("data_validator")
 
 class DataValidator:
     """
-    Validate and clean market data.
+    Utility for fail-fast validation of market data.
+    Ensures OHLC consistency and numeric integrity.
     """
     
     @staticmethod
-    def validate_ohlcv(df: pd.DataFrame, ticker: str = "UNKNOWN") -> Dict[str, any]:
+    def validate_ohlc(df: pd.DataFrame, ticker: str = "Unknown") -> pd.DataFrame:
         """
-        Validate OHLCV DataFrame.
-        Returns dict with 'valid' (bool) and 'issues' (list).
-        """
-        issues = []
-        
-        # 1. Check required columns
-        required = ["Open", "High", "Low", "Close", "Volume"]
-        missing_cols = [col for col in required if col not in df.columns]
-        if missing_cols:
-            issues.append(f"Missing columns: {missing_cols}")
-            return {"valid": False, "issues": issues, "ticker": ticker}
-        
-        # 2. Check for NaNs
-        nan_counts = df[required].isnull().sum()
-        if nan_counts.any():
-            issues.append(f"NaN values found: {nan_counts[nan_counts > 0].to_dict()}")
-        
-        # 3. Check for negative prices
-        for col in ["Open", "High", "Low", "Close"]:
-            if (df[col] < 0).any():
-                issues.append(f"Negative {col} prices detected")
-        
-        # 4. Check OHLC relationship
-        if not df.empty:
-            invalid_bars = (df["High"] < df["Low"]) | (df["High"] < df["Close"]) | (df["Low"] > df["Close"])
-            if invalid_bars.any():
-                issues.append(f"Invalid OHLC relationships in {invalid_bars.sum()} bars")
-        
-        # 5. Check for extreme volume spikes (>100x median)
-        if not df.empty and len(df) > 20:
-            median_vol = df["Volume"].median()
-            if median_vol > 0:
-                extreme_vol = (df["Volume"] > median_vol * 100).sum()
-                if extreme_vol > 0:
-                    issues.append(f"Extreme volume spikes: {extreme_vol} bars")
-        
-        valid = len(issues) == 0
-        return {"valid": valid, "issues": issues, "ticker": ticker}
-    
-    @staticmethod
-    def clean_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Clean OHLCV data:
-        - Forward fill NaNs
-        - Clip negative prices to previous close
+        Validates OHLC data:
+        1. High >= Low
+        2. Open/Close within [Low, High] range
+        3. Identifies and removes malformed rows.
         """
         if df.empty:
             return df
+            
+        initial_count = len(df)
         
-        df = df.copy()
-        
-        # Forward fill NaNs
-        # Forward fill NaNs
-        df = df.ffill()
-        
-        # Clip negative prices
-        price_cols = ["Open", "High", "Low", "Close"]
-        for col in price_cols:
+        # 1. Ensure numeric types
+        for col in ['Open', 'High', 'Low', 'Close']:
             if col in df.columns:
-                df[col] = df[col].clip(lower=0.01)  # Minimum price 1 cent
+                df[col] = pd.to_numeric(df[col], errors='coerce')
         
-        return df
+        # 2. Check High >= Low
+        mask = df['High'] >= df['Low']
+        
+        # 3. Check Open/Close within range
+        mask &= (df['Open'] >= df['Low']) & (df['Open'] <= df['High'])
+        mask &= (df['Close'] >= df['Low']) & (df['Close'] <= df['High'])
+        
+        # 4. Filter out NaNs if any after coercion
+        mask &= df[['Open', 'High', 'Low', 'Close']].notna().all(axis=1)
+        
+        cleaned_df = df[mask].copy()
+        dropped_count = initial_count - len(cleaned_df)
+        
+        if dropped_count > 0:
+            logger.warning(
+                f"[VALIDATOR] Dropped {dropped_count} malformed rows for {ticker}. "
+                f"Reason: OHLC inconsistency or NaNs."
+            )
+            
+        return cleaned_df
+
+    @staticmethod
+    def sanitize_series(s: pd.Series, ticker: str = "Unknown") -> pd.Series:
+        """
+        Standard sanitation for numeric series in the pipeline.
+        - Casts to float
+        - Replaces inf with NaN
+        - Drops NaN
+        """
+        initial_val = len(s)
+        s = pd.to_numeric(s, errors='coerce').astype(float, copy=False)
+        s = s.replace([np.inf, -np.inf], np.nan).dropna()
+        
+        dropped = initial_val - len(s)
+        if dropped > 0:
+            logger.debug(f"[VALIDATOR] {ticker}: {dropped} bars dropped during sanitation.")
+            
+        return s

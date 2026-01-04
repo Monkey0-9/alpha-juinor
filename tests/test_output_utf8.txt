@@ -1,0 +1,572 @@
+﻿F.F.                                                                     [100%]
+================================== FAILURES ===================================
+_____________________ test_backtester_execution_pipeline ______________________
+
+tmp_path = WindowsPath('C:/Users/Praveen P/AppData/Local/Temp/pytest-of-Praveen P/pytest-39/test_backtester_execution_pipe0')
+
+    def test_backtester_execution_pipeline(tmp_path):
+        provider = MockProvider()
+    
+        # Execution handler with visible costs & participation constraints
+        execution = RealisticExecutionHandler(
+            commission_pct=0.002,
+            max_participation_rate=0.05,
+            impact_coeff=0.20,
+            adv_lookback=3,
+            vol_lookback=3,
+            min_vol_fallback=0.01,
+        )
+    
+        engine = BacktestEngine(
+            provider=provider,
+            initial_capital=1_000_000.0,
+            execution_handler=execution,
+        )
+    
+        # -----------------------------------------------------
+        # Strategy: intentionally oversized order \u2192 partial fill
+        # -----------------------------------------------------
+        def strategy_fn(timestamp, prices, engine_ref):
+            blotter = engine_ref.get_blotter()
+            # Execution handler requires min 5 bars of history for volatility calc.
+            # MockProvider starts Jan 2. We wait until we have enough history.
+            # Jan 2, 3, 4, 5, 6, 9...
+            if blotter.orders_df().empty and timestamp.day > 9:
+                # Request more than participation allows
+                return [Order("TEST", 20_000, OrderType.MARKET, timestamp)]
+            return []
+    
+        # -----------------------------------------------------
+        # Run engine (institutional signature)
+        # -----------------------------------------------------
+        engine.run(
+            start_date="2023-01-02",
+            tickers=["TEST"],
+            strategy_fn=strategy_fn,
+        )
+    
+        # -----------------------------------------------------
+        # Blotter integrity
+        # -----------------------------------------------------
+        blotter = engine.get_blotter()
+        orders = blotter.orders_df()
+        trades = blotter.trades_df()
+    
+>       assert len(orders) == 1, "Exactly one order must be recorded"
+E       AssertionError: Exactly one order must be recorded
+E       assert 0 == 1
+E        +  where 0 = len(Empty DataFrame\nColumns: []\nIndex: [])
+
+tests\test_backtester.py:116: AssertionError
+------------------------------ Captured log call ------------------------------
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-02 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-03 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-04 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-05 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-06 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-09 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-10 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-11 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-12 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-13 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-16 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-17 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-18 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-19 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-20 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-23 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-24 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-25 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-26 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-27 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-30 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-31 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-01 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-02 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-03 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-06 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-07 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-08 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-09 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-10 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-13 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-14 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-15 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-16 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-17 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-20 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-21 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-22 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-23 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-24 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-27 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-28 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-01 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-02 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-03 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-06 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-07 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-08 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-09 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-10 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-13 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-14 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-15 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-16 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-17 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-20 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-21 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-22 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-23 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-24 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-27 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-28 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-29 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-30 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-31 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-03 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-04 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-05 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-06 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-07 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-10 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-11 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-12 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-13 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-14 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-17 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-18 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-19 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-20 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-21 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-24 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-25 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-26 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-27 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-28 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-01 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-02 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-03 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-04 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-05 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-08 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-09 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-10 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-11 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-12 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-15 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-16 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-17 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-18 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-19 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-22 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-23 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-24 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-25 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-26 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-29 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-30 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-31 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-01 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-02 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-05 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-06 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-07 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-08 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-09 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-12 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-13 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-14 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-15 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-16 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-19 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-20 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-21 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-22 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-23 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-26 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-27 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-28 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-29 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-30 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-03 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-04 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-05 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-06 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-07 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-10 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-11 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-12 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-13 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-14 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-17 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-18 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-19 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-20 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-21 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-24 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-25 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-26 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-27 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-28 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-31 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-01 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-02 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-03 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-04 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-07 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-08 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-09 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-10 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-11 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-14 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-15 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-16 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-17 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-18 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-21 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-22 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-23 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-24 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-25 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-28 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-29 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-30 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-31 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-01 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-04 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-05 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-06 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-07 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-08 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-11 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-12 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-13 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-14 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-15 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-18 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-19 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-20 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-21 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-22 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-25 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-26 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-27 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-28 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-29 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-02 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-03 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-04 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-05 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-06 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-09 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-10 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-11 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-12 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-13 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-16 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-17 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-18 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-19 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-20 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-23 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-24 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-25 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-26 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-27 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-30 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-31 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-01 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-02 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-03 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-06 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-07 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-08 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-09 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-10 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-13 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-14 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-15 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-16 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-17 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-20 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-21 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-22 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-23 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-24 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-27 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-28 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-29 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-30 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-12-01 00:00:00: 'Portfolio' object has no attribute 'get_blotter'
+_______________________ test_risk_kill_switch_authority _______________________
+
+    def test_risk_kill_switch_authority():
+        """
+        Validation Fix #3: Kill-Switch Authority
+        Validation Fix #4: Remove Silent Fallbacks
+        Verify that if Strategy (via RiskManager) raises RuntimeError, the Engine CRASHES (does not swallow).
+        """
+        provider = MockProvider()
+        engine = BacktestEngine(provider=provider, initial_capital=1_000_000.0)
+    
+        def kamikaze_strategy(ts, prices, eng):
+            # Simulate RiskManager.check_portfolio_risk returning FREEZE -> raising RuntimeError
+            raise RuntimeError("RISK KILL-SWITCH: LEVERAGE EXCEEDED")
+    
+        try:
+            engine.run("2023-01-01", tickers=["TEST"], strategy_fn=kamikaze_strategy)
+        except RuntimeError as e:
+            assert "RISK KILL-SWITCH" in str(e)
+            print("\\n\u2705 Verified: Kill-Switch successfully crashed the engine.")
+            return
+    
+>       pytest.fail("\u274c Engine swallowed the Kill-Switch exception! This violates Fix #4.")
+E       Failed: \u274c Engine swallowed the Kill-Switch exception! This violates Fix #4.
+
+tests\test_backtester.py:284: Failed
+------------------------------ Captured log call ------------------------------
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-02 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-03 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-04 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-05 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-06 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-09 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-10 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-11 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-12 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-13 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-16 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-17 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-18 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-19 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-20 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-23 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-24 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-25 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-26 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-27 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-30 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-01-31 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-01 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-02 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-03 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-06 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-07 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-08 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-09 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-10 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-13 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-14 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-15 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-16 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-17 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-20 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-21 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-22 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-23 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-24 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-27 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-02-28 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-01 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-02 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-03 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-06 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-07 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-08 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-09 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-10 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-13 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-14 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-15 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-16 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-17 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-20 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-21 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-22 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-23 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-24 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-27 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-28 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-29 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-30 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-03-31 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-03 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-04 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-05 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-06 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-07 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-10 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-11 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-12 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-13 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-14 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-17 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-18 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-19 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-20 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-21 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-24 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-25 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-26 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-27 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-04-28 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-01 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-02 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-03 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-04 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-05 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-08 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-09 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-10 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-11 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-12 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-15 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-16 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-17 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-18 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-19 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-22 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-23 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-24 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-25 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-26 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-29 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-30 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-05-31 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-01 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-02 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-05 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-06 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-07 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-08 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-09 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-12 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-13 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-14 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-15 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-16 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-19 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-20 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-21 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-22 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-23 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-26 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-27 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-28 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-29 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-06-30 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-03 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-04 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-05 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-06 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-07 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-10 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-11 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-12 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-13 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-14 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-17 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-18 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-19 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-20 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-21 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-24 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-25 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-26 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-27 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-28 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-07-31 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-01 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-02 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-03 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-04 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-07 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-08 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-09 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-10 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-11 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-14 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-15 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-16 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-17 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-18 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-21 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-22 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-23 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-24 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-25 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-28 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-29 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-30 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-08-31 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-01 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-04 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-05 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-06 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-07 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-08 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-11 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-12 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-13 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-14 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-15 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-18 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-19 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-20 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-21 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-22 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-25 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-26 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-27 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-28 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-09-29 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-02 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-03 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-04 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-05 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-06 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-09 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-10 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-11 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-12 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-13 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-16 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-17 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-18 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-19 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-20 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-23 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-24 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-25 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-26 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-27 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-30 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-10-31 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-01 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-02 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-03 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-06 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-07 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-08 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-09 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-10 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-13 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-14 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-15 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-16 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-17 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-20 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-21 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-22 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-23 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-24 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-27 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-28 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-29 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-11-30 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+ERROR    backtest.engine:engine.py:275 Strategy execution failed at 2023-12-01 00:00:00: RISK KILL-SWITCH: LEVERAGE EXCEEDED
+=========================== short test summary info ===========================
+FAILED tests/test_backtester.py::test_backtester_execution_pipeline - Asserti...
+FAILED tests/test_backtester.py::test_risk_kill_switch_authority - Failed: \u274c...
+2 failed, 2 passed in 1.85s

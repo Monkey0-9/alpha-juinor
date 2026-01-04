@@ -1,5 +1,230 @@
 [
   {
+    "run_id": "run_20260104T072022Z_f8404959",
+    "timestamp": "2026-01-04T07:22:56.068702Z",
+    "strategy": "unknown",
+    "tickers": [],
+    "git_hash": "64b3063299e7f0afd462fb969fcb3bea9a12494e",
+    "metrics": {
+      "final_equity": 718255.368784125,
+      "total_return": -0.28177743018100276,
+      "sharpe": -0.581536297280719,
+      "max_drawdown": -0.4122825214490765
+    },
+    "path": "output\\backtests\\run_20260104T072022Z_f8404959"
+  },
+  {
+    "run_id": "run_20260104T070440Z_16f734a8",
+    "timestamp": "2026-01-04T07:06:53.470290Z",
+    "strategy": "unknown",
+    "tickers": [],
+    "git_hash": "64b3063299e7f0afd462fb969fcb3bea9a12494e",
+    "metrics": {
+      "final_equity": 789407.6663333237,
+      "total_return": -0.21061524372742035,
+      "sharpe": -0.40028016774240516,
+      "max_drawdown": -0.36168206988383633
+    },
+    "path": "output\\backtests\\run_20260104T070440Z_16f734a8"
+  },
+  {
+    "run_id": "run_20260104T062233Z_14a2bde1",
+    "timestamp": "2026-01-04T06:25:16.073465Z",
+    "strategy": "unknown",
+    "tickers": [],
+    "git_hash": "64b3063299e7f0afd462fb969fcb3bea9a12494e",
+    "metrics": {
+      "final_equity": 791331.4145141132,
+      "total_return": -0.2086915513773372,
+      "sharpe": -0.3964560191601336,
+      "max_drawdown": -0.36167564064441504
+    },
+    "path": "output\\backtests\\run_20260104T062233Z_14a2bde1"
+  },
+  {
+    "run_id": "run_20260104T060030Z_d80a2d28",
+    "timestamp": "2026-01-04T06:03:12.803886Z",
+    "strategy": "unknown",
+    "tickers": [],
+    "git_hash": "64b3063299e7f0afd462fb969fcb3bea9a12494e",
+    "metrics": {
+      "final_equity": 874444.5922221172,
+      "total_return": -0.1256099587547097,
+      "sharpe": null,
+      "max_drawdown": null
+    },
+    "path": "output\\backtests\\run_20260104T060030Z_d80a2d28"
+  },
+  {
+    "run_id": "run_20260104T053121Z_01a647f7",
+    "timestamp": "2026-01-04T05:31:33.762052Z",
+    "strategy": "unknown",
+    "tickers": [
+      "QQQ",
+      "BTC-USD",
+      "NVDA",
+      "GLD",
+      "TSLA",
+      "MSFT"
+    ],
+    "git_hash": "64b3063299e7f0afd462fb969fcb3bea9a12494e",
+    "metrics": {
+      "final_equity": 1009095.4288598993,
+      "total_return": 0.00904397240907362,
+      "sharpe": null,
+      "max_drawdown": null
+    },
+    "path": "output\\backtests\\run_20260104T053121Z_01a647f7"
+  },
+  {
+    "run_id": "run_20260104T053008Z_f3b41c77",
+    "timestamp": "2026-01-04T05:30:26.870840Z",
+    "strategy": "unknown",
+    "tickers": [
+      "QQQ",
+      "BTC-USD",
+      "NVDA",
+      "ETH-USD"
+    ],
+    "git_hash": "64b3063299e7f0afd462fb969fcb3bea9a12494e",
+    "metrics": {
+      "final_equity": 944592.0996588587,
+      "total_return": -0.05548286201875885,
+      "sharpe": null,
+      "max_drawdown": null
+    },
+    "path": "output\\backtests\\run_20260104T053008Z_f3b41c77"
+  },
+  {
+    "run_id": "run_20260104T052900Z_4a3a30ea",
+    "timestamp": "2026-01-04T05:29:09.930070Z",
+    "strategy": "unknown",
+    "tickers": [
+      "QQQ",
+      "BTC-USD",
+      "NVDA",
+      "GLD"
+    ],
+    "git_hash": "64b3063299e7f0afd462fb969fcb3bea9a12494e",
+    "metrics": {
+      "final_equity": 910072.4728296902,
+      "total_return": -0.0899214240862497,
+      "sharpe": null,
+      "max_drawdown": null
+    },
+    "path": "output\\backtests\\run_20260104T052900Z_4a3a30ea"
+  },
+  {
+    "run_id": "run_20260104T052713Z_3974745c",
+    "timestamp": "2026-01-04T05:28:15.098058Z",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "BTC-USD",
+      "ETH-USD",
+      "NVDA",
+      "GLD"
+    ],
+    "git_hash": "64b3063299e7f0afd462fb969fcb3bea9a12494e",
+    "metrics": {
+      "final_equity": 924911.1494438131,
+      "total_return": -0.0749501105270316,
+      "sharpe": -0.1503155332914168,
+      "max_drawdown": -0.3564371095130665
+    },
+    "path": "output\\backtests\\run_20260104T052713Z_3974745c"
+  },
+  {
+    "run_id": "run_20260104T051947Z_7e0d1b63",
+    "timestamp": "2026-01-04T05:22:02.815490Z",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "64b3063299e7f0afd462fb969fcb3bea9a12494e",
+    "metrics": {
+      "final_equity": 1110406.7479628357,
+      "total_return": 0.11098662918998592,
+      "sharpe": 0.1915208201730317,
+      "max_drawdown": -0.1491980016997827
+    },
+    "path": "output\\backtests\\run_20260104T051947Z_7e0d1b63"
+  },
+  {
+    "run_id": "run_20260104T050332Z_f5c9ceab",
+    "timestamp": "2026-01-04T05:03:35.964358Z",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "TLT"
+    ],
+    "git_hash": "64b3063299e7f0afd462fb969fcb3bea9a12494e",
+    "metrics": {
+      "final_equity": 1239640.4523335046,
+      "total_return": 0.23998076610446706,
+      "sharpe": 0.7213215742121292,
+      "max_drawdown": -0.09188681362420559
+    },
+    "path": "output\\backtests\\run_20260104T050332Z_f5c9ceab"
+  },
+  {
+    "run_id": "run_20260104T050237Z_0c64b7a6",
+    "timestamp": "2026-01-04T05:02:47.123582Z",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD"
+    ],
+    "git_hash": "64b3063299e7f0afd462fb969fcb3bea9a12494e",
+    "metrics": {
+      "final_equity": 1657997.2079159683,
+      "total_return": 0.6588289474945901,
+      "sharpe": 0.5021698797936406,
+      "max_drawdown": -0.19655064262526112
+    },
+    "path": "output\\backtests\\run_20260104T050237Z_0c64b7a6"
+  },
+  {
+    "run_id": "run_20260104T050057Z_dab96da5",
+    "timestamp": "2026-01-04T05:01:00.600181Z",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "TLT"
+    ],
+    "git_hash": "64b3063299e7f0afd462fb969fcb3bea9a12494e",
+    "metrics": {
+      "final_equity": 1478115.17715831,
+      "total_return": 0.478611851559787,
+      "sharpe": 1.252039919242322,
+      "max_drawdown": -0.0850277945633714
+    },
+    "path": "output\\backtests\\run_20260104T050057Z_dab96da5"
+  },
+  {
+    "run_id": "run_20260104T045904Z_3d956453",
+    "timestamp": "2026-01-04T04:59:08.087275Z",
+    "strategy": "unknown",
+    "tickers": [
+      "SPY",
+      "TLT"
+    ],
+    "git_hash": "64b3063299e7f0afd462fb969fcb3bea9a12494e",
+    "metrics": {
+      "final_equity": 1478110.7639511935,
+      "total_return": 0.47860743690122987,
+      "sharpe": 1.2520201461134144,
+      "max_drawdown": -0.08502807607964824
+    },
+    "path": "output\\backtests\\run_20260104T045904Z_3d956453"
+  },
+  {
     "run_id": "run_20260104T025417Z_b4d27b3f",
     "timestamp": "2026-01-04T02:54:19.204804Z",
     "strategy": "mini-quant-fund-institutional",

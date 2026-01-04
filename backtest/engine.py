@@ -266,13 +266,12 @@ class BacktestEngine:
             # 1. Strategy & Execution
             # -------------------------
             # Call strategy to generate new orders
-            try:
-                # Pass close_prices (clean dictionary)
-                new_orders = strategy_fn(ts, close_prices, self.portfolio) or []
-                if new_orders:
-                     self.open_orders.extend(new_orders)
-            except Exception as e:
-                logger.error(f"Strategy execution failed at {ts}: {e}")
+            # Fail fast if strategy crashes - institutional requirement.
+            new_orders = strategy_fn(ts, close_prices, self) or []
+            if new_orders:
+                for o in new_orders:
+                    self.blotter.record_order(o)
+                self.open_orders.extend(new_orders)
 
             # Process Open Orders (Execution Simulation)
             active_orders = []

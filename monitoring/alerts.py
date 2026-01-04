@@ -1,100 +1,61 @@
 # monitoring/alerts.py
-import smtplib
-import logging
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from typing import Dict, Optional
 import os
+import requests
+import logging
+import asyncio
+from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
 class AlertManager:
     """
-    Monitor system metrics and send alerts when thresholds are breached.
-    
-    Setup for email alerts (optional, free with Gmail):
-    - ALERT_EMAIL: Your Gmail address
-    - ALERT_PASSWORD: Gmail app password (not your regular password!)
-    - ALERT_TO: Recipient email
-    
-    Generate Gmail app password: https://myaccount.google.com/apppasswords
+    Institutional Alerting System.
+    Supports Telegram, Slack, and Discord.
     """
     
-    def __init__(self, config: Optional[Dict] = None):
-        self.config = config or self._default_config()
-        self.email_enabled = all([
-            os.getenv("ALERT_EMAIL"),
-            os.getenv("ALERT_PASSWORD"),
-            os.getenv("ALERT_TO")
-        ])
+    def __init__(self):
+        self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+        self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
+        self.slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+        self.discord_webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
         
-        if not self.email_enabled:
-            logger.info("Email alerts disabled (env vars not set)")
-    
-    def _default_config(self) -> Dict:
-        """Default alert thresholds."""
-        return {
-            "max_drawdown_pct": 0.10,  # Alert if DD > 10%
-            "volatility_spike_factor": 3.0,  # Alert if vol > 3x normal
-            "large_loss_pct": 0.05,  # Alert if single-day loss > 5%
+    def send_telegram(self, message: str):
+        """Send message via Telegram."""
+        if not self.telegram_bot_token or not self.telegram_chat_id:
+            return
+            
+        url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
+        payload = {
+            "chat_id": self.telegram_chat_id,
+            "text": f"🚨 [QUANT-FUND] 🚨\n{message}",
+            "parse_mode": "Markdown"
         }
-    
-    def check_drawdown(self, current_dd: float):
-        """Alert if drawdown exceeds threshold."""
-        if abs(current_dd) > self.config["max_drawdown_pct"]:
-            self._send_alert(
-                subject="⚠️ Max Drawdown Alert",
-                message=f"Drawdown: {current_dd*100:.2f}% (Threshold: {self.config['max_drawdown_pct']*100:.0f}%)"
-            )
-    
-    def check_volatility(self, current_vol: float, baseline_vol: float):
-        """Alert if volatility spikes."""
-        if current_vol > baseline_vol * self.config["volatility_spike_factor"]:
-            self._send_alert(
-                subject="⚠️ Volatility Spike Alert",
-                message=f"Current Vol: {current_vol*100:.2f}% (Baseline: {baseline_vol*100:.2f}%)"
-            )
-    
-    def check_daily_loss(self, loss_pct: float):
-        """Alert if single-day loss is large."""
-        if abs(loss_pct) > self.config["large_loss_pct"]:
-            self._send_alert(
-                subject="⚠️ Large Loss Alert",
-                message=f"Daily Loss: {loss_pct*100:.2f}% (Threshold: {self.config['large_loss_pct']*100:.0f}%)"
-            )
-    
-    def _send_alert(self, subject: str, message: str):
-        """Send alert via email and log."""
-        logger.warning(f"ALERT: {subject} - {message}")
+        try:
+            requests.post(url, json=payload, timeout=5)
+        except Exception as e:
+            logger.error(f"Telegram alert failed: {e}")
+
+    def send_slack(self, message: str):
+        """Send message via Slack Webhook."""
+        if not self.slack_webhook_url:
+            return
+            
+        payload = {"text": f"*[QUANT-FUND]*: {message}"}
+        try:
+            requests.post(self.slack_webhook_url, json=payload, timeout=5)
+        except Exception as e:
+            logger.error(f"Slack alert failed: {e}")
+
+    def alert(self, message: str, level: str = "INFO"):
+        """Broadcast alert to all enabled channels."""
+        msg = f"[{level}] {message}"
+        logger.info(f"ALERT: {msg}")
         
-        if self.email_enabled:
-            try:
-                self._send_email(subject, message)
-            except Exception as e:
-                logger.error(f"Failed to send email alert: {e}")
-    
-    def _send_email(self, subject: str, body: str):
-        """Send email via Gmail SMTP."""
-        sender_email = os.getenv("ALERT_EMAIL")
-        sender_password = os.getenv("ALERT_PASSWORD")
-        recipient_email = os.getenv("ALERT_TO")
-        
-        msg = MIMEMultipart()
-        msg["From"] = sender_email
-        msg["To"] = recipient_email
-        msg["Subject"] = f"[Mini Quant Fund] {subject}"
-        
-        msg.attach(MIMEText(body, "plain"))
-        
-        # Gmail SMTP
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(sender_email, sender_password)
-            server.send_message(msg)
-        
-        logger.info(f"Email alert sent to {recipient_email}")
-    def send_critical_error(self, error: Exception):
-        """Alert on system crash or critical failure."""
-        self._send_alert(
-            subject="🚨 CRITICAL SYSTEM FAILURE",
-            message=f"System crashed with error: {str(error)}"
-        )
+        # Simple sync dispatch (good for main loop if not high freq)
+        self.send_telegram(msg)
+        self.send_slack(msg)
+
+    async def alert_async(self, message: str, level: str = "INFO"):
+        """Async dispatch to prevent blocking trading loop."""
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, self.alert, message, level)

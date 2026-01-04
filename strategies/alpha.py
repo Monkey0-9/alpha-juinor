@@ -8,6 +8,8 @@ import numpy as np
 
 def _minmax_scale(s: pd.Series) -> pd.Series:
     """Scale series to 0..1 using min/max (safe)."""
+    s = pd.to_numeric(s, errors='coerce').astype(float)
+    s = s.replace([np.inf, -np.inf], np.nan).dropna()
     if s.empty:
         return s
     mn = s.min()
@@ -15,6 +17,22 @@ def _minmax_scale(s: pd.Series) -> pd.Series:
     if pd.isna(mn) or pd.isna(mx) or mx == mn:
         return pd.Series(0.0, index=s.index)
     return (s - mn) / (mx - mn)
+
+
+def safe_pct_change(series: pd.Series) -> pd.Series:
+    """Strict pct_change with no implicit forward-fill and inf/nan removal."""
+    r = series.pct_change(fill_method=None)
+    r = r.replace([np.inf, -np.inf], np.nan).dropna()
+    return pd.to_numeric(r, errors='coerce').astype(float)
+
+
+def safe_clip(raw: pd.Series, prices_index: pd.Index) -> pd.Series:
+    """Safe clipping with empty-series guard returning aligned zeros."""
+    raw = pd.to_numeric(raw, errors='coerce').astype(float)
+    raw = raw.replace([np.inf, -np.inf], np.nan).dropna()
+    if raw.empty:
+        return pd.Series(0.0, index=prices_index)
+    return raw.clip(lower=0.0, upper=1.0)
 
 
 def _ensure_series(data: pd.DataFrame | pd.Series) -> pd.Series:
@@ -61,8 +79,7 @@ class TrendAlpha(Alpha):
         slope = ema_s.diff(5) / ema_s.shift(5)
         raw = score + 0.5 * slope
 
-        raw = raw.replace([np.inf, -np.inf], np.nan).fillna(0)
-        return _minmax_scale(raw)
+        return safe_clip(raw, prices.index)
 
 
 class MeanReversionAlpha(Alpha):
@@ -83,7 +100,7 @@ class MeanReversionAlpha(Alpha):
 
         sma_short = prices.rolling(self.short).mean()
         dev = prices - sma_short
-        vol = prices.pct_change().rolling(self.lookback_std).std().replace(0, np.nan)
+        vol = safe_pct_change(prices).rolling(self.lookback_std).std().replace(0, np.nan)
         z = (dev / (prices * vol)).fillna(0)  # normalized stretch
 
         # mean reversion expects negative signal when price is far above SMA (we want to short),
@@ -97,8 +114,7 @@ class MeanReversionAlpha(Alpha):
         # Invert z so that low z (oversold) becomes high value
         raw = -z 
         
-        raw = raw.replace([np.inf, -np.inf], np.nan).fillna(0)
-        return _minmax_scale(raw)
+        return safe_clip(raw, prices.index)
 
 
 class RSIAlpha(Alpha):
@@ -127,7 +143,7 @@ class RSIAlpha(Alpha):
         # Alpha 0.0 when RSI is high (overbought)
         # Linear map: (100 - RSI) / 100
         raw = (100 - rsi) / 100.0
-        return raw.clip(0, 1)
+        return safe_clip(raw, prices.index)
 
 
 class MACDAlpha(Alpha):
@@ -153,7 +169,7 @@ class MACDAlpha(Alpha):
 
         hist = macd - sig
         # Higher histogram -> stronger bullish momentum
-        return _minmax_scale(hist)
+        return safe_clip(hist, prices.index)
 
 
 class BollingerBandAlpha(Alpha):
@@ -186,7 +202,7 @@ class BollingerBandAlpha(Alpha):
         # If pct_b is 0 (at lower band), score is 1.0
         # If pct_b is 1 (at upper band), score is 0.0
         score = 1.0 - pct_b
-        return score.fillna(0.5).clip(0, 1)
+        return safe_clip(score, prices.index)
 
 
 class CompositeAlpha(Alpha):
@@ -211,9 +227,15 @@ class CompositeAlpha(Alpha):
         if len(self.history_prices) < 30:
             return # Keep equal weights until enough history
             
-        # 1. Calculate Returns
+        # 1. Calculate Returns (INSTITUTIONAL: Explicit fill_method)
         prices = pd.Series(self.history_prices)
-        returns = prices.pct_change().shift(-1).dropna() # aligned so ret[t] is return form t to t+1
+        returns = (
+            prices
+            .pct_change(fill_method=None)
+            .shift(-1)
+            .replace([np.inf, -np.inf], np.nan)
+            .dropna()
+        )
         
         if len(returns) < 20:
             return
@@ -327,5 +349,4 @@ class CompositeAlpha(Alpha):
         # df columns are alphas. w is vector.
         # df is (T, N), w is (N,)
         conv = (df * w).sum(axis=1)
-
-        return conv.clip(0, 1)
+        return safe_clip(conv, prices.index)

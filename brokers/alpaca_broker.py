@@ -55,6 +55,9 @@ class AlpacaExecutionHandler:
         """
         results = []
         for order in orders:
+            # Alpaca Ticker Mapping (e.g. ETH-USD -> ETHUSD for crypto)
+            ticker = order.ticker.replace("-", "") if "-" in order.ticker else order.ticker
+            
             side = "buy" if order.quantity > 0 else "sell"
             qty = abs(order.quantity)
             if qty < 0.0001: 
@@ -62,7 +65,7 @@ class AlpacaExecutionHandler:
             
             # Alpaca requires string side
             payload = {
-                "symbol": order.ticker,
+                "symbol": ticker,
                 "qty": str(round(qty, 4)),  # fractional shares supported to 4 decimals
                 "side": side,
                 "type": "market", 

@@ -1,0 +1,3 @@
+2026-01-04 10:17:30,554 [INFO] Starting Backtest: bt_20260104_101730
+2026-01-04 10:17:31,823 [INFO] Building price panel...
+2026-01-04 10:17:35,459 [INFO] Results saved to output\runs\bt_20260104_101730

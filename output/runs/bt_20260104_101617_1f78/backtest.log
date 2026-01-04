@@ -1,0 +1,2 @@
+2026-01-04 10:16:17,391 [INFO] Starting Backtest: bt_20260104_101617_1f78
+2026-01-04 10:16:19,742 [ERROR] Engine Crash: 'BacktestEngine' object has no attribute 'get_price_panel'

@@ -1,0 +1,45 @@
+# configs/golden_config.yaml
+# INSTITUTIONAL GOLDEN CONFIGURATION (IMMUTABLE)
+# This file defines the validated baseline for production operations.
+# Any changes to this file will change its SHA256 hash and require re-validation.
+
+# 1. Trading Universe
+universe:
+  tickers:
+    - QQQ
+    - BTC-USD
+    - NVDA
+    - ETH-USD
+    - MSFT
+  data_source: "yahoo"
+
+# 2. Execution Parameters
+execution:
+  mode: "paper"  # paper | backtest | live
+  initial_capital: 1000000.0
+  rebalance_frequency: "daily"
+  commission_bps: 2.0  # 0.02% 
+  slippage_model: "probabilistic"
+
+# 3. Alpha Ensemble Weights
+alpha:
+  technical_weight: 0.5
+  ml_weight: 0.5
+  macro_weight: 0.0  # Optional overlay disabled for baseline
+  use_regime_filter: true
+
+# 4. Institutional Risk Limits (HARD LIMITS)
+risk:
+  max_gross_leverage: 1.2
+  max_net_leverage: 1.0
+  max_position_size_pct: 0.30  # Max 30% in any single asset
+  max_sector_exposure_pct: 0.60
+  target_volatility_annualized: 0.18
+  max_daily_drawdown_limit: 0.03 # 3% daily stop
+  max_total_drawdown_limit: 0.15 # 15% system kill-switch
+
+# 5. Monitoring & Reconciliation
+ops:
+  reconciliation_threshold_bps: 10.0 # 0.1% drift allowed
+  min_data_fill_rate: 0.95
+  alert_level: "INFO" 

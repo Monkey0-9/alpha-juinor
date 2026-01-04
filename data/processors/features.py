@@ -21,10 +21,14 @@ class FeatureEngineer:
         df = prices.copy()
         features = pd.DataFrame(index=df.index)
 
-        # 1. Base Returns (Target proxy)
+        # 1. Base Returns (Target proxy) - INSTITUTIONAL: Explicit fill_method
         # We predict forward returns, but for features we use past returns
-        features["ret_1d"] = df["Close"].pct_change()
-        features["ret_5d"] = df["Close"].pct_change(5)
+        def safe_returns(s, periods=1):
+            r = s.pct_change(periods=periods, fill_method=None)
+            return r.replace([np.inf, -np.inf], np.nan)
+
+        features["ret_1d"] = safe_returns(df["Close"])
+        features["ret_5d"] = safe_returns(df["Close"], periods=5)
         features["log_ret"] = np.log(df["Close"] / df["Close"].shift(1))
 
         # 2. Volatility
@@ -60,9 +64,9 @@ class FeatureEngineer:
         # Volume Z-Score (Institutional Liquidity Signal)
         features["vol_z"] = (df["Volume"] - df["Volume"].rolling(20).mean()) / df["Volume"].rolling(20).std().replace(0, np.nan)
 
-        # 5. Volatility-Adjusted Momentum (Institutional "Price Momentum / Vol")
-        # Captures how 'clean' the trend is
-        features["mom_vol_adj"] = features["ret_21d"] / (features["vol_21d"] + 1e-6) if "ret_21d" in features else (df["Close"].pct_change(21) / features["vol_21d"])
+        # 5. Volatility-Adjusted Momentum (INSTITUTIONAL: Safe division)
+        ret_21d = safe_returns(df["Close"], periods=21)
+        features["mom_vol_adj"] = ret_21d / (features["vol_21d"] + 1e-6)
 
         # 6. Intraday Dynamics
         features["high_low_range"] = (df["High"] - df["Low"]) / df["Close"]
@@ -75,8 +79,10 @@ class FeatureEngineer:
                 for lag in [1, 2, 3, 5]:
                     features[f"{col}_lag_{lag}"] = features[col].shift(lag)
 
-        # Drop NaNs created by windows/lags
-        # We don't drop here to allow alignment, but caller should handle it.
+        # Final sanitation - Institutional Guard
+        features = features.apply(pd.to_numeric, errors='coerce').astype(float)
+        features = features.replace([np.inf, -np.inf], np.nan).dropna()
+        
         return features
 
     def compute_target(self, prices: pd.DataFrame, forward_window: int = 1) -> pd.Series:
@@ -85,5 +91,6 @@ class FeatureEngineer:
         """
         # Close to Close return 'forward_window' days ahead
         # shift(-k) brings future value to current row
-        target = prices["Close"].pct_change(forward_window).shift(-forward_window)
+        target = prices["Close"].pct_change(periods=forward_window, fill_method=None).shift(-forward_window)
+        target = target.replace([np.inf, -np.inf], np.nan).dropna()
         return target

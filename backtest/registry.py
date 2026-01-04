@@ -136,26 +136,15 @@ class BacktestRegistry:
     def create_run(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Create a new run directory with unique ID.
-        
-        Returns:
-            dict with 'run_id' and 'path' of the created directory
-            
-        Raises:
-            RuntimeError if directory already exists (immutability guarantee)
         """
-        # Generate unique run_id with timestamp
         timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
         unique_suffix = uuid.uuid4().hex[:8]
         run_id = f"run_{timestamp}_{unique_suffix}"
         
         run_dir = self.base_dir / run_id
         
-        # IMMUTABILITY: Never overwrite existing runs
         if run_dir.exists():
-            raise RuntimeError(
-                f"Run directory {run_id} already exists. "
-                "This violates immutability - runs cannot be overwritten."
-            )
+            raise RuntimeError(f"Run directory {run_id} already exists.")
         
         run_dir.mkdir(parents=True, exist_ok=False)
         
@@ -175,56 +164,24 @@ class BacktestRegistry:
     ) -> str:
         """
         Save all required artifacts for a run with checksums and metadata.
-        
-        Required artifacts:
-        - config.json
-        - equity.csv
-        - trades.csv (can be empty)
-        - data_manifest.json
-        - meta.json (with git_hash, checksums, python_version)
-        - requirements.txt
-        
-        Args:
-            run_id: Run identifier (from create_run)
-            config: Strategy configuration dict
-            equity_df: Equity curve DataFrame
-            trades_df: Trades DataFrame (optional)
-            data_manifest: Data source metadata (optional)
-            extra_meta: Additional metadata to include (optional)
-            
-        Returns:
-            run_id for reference
         """
         run_dir = self.base_dir / run_id
         
         if not run_dir.exists():
-            raise ValueError(f"Run directory {run_id} does not exist. Call create_run first.")
+            raise ValueError(f"Run directory {run_id} does not exist.")
         
-        # -------------------------
-        # 1. Save config.json
-        # -------------------------
         config_path = run_dir / "config.json"
         self._atomic_write_text(config_path, json.dumps(config, indent=2, default=str))
         
-        # -------------------------
-        # 2. Save equity.csv
-        # -------------------------
         equity_path = run_dir / "equity.csv"
         self._atomic_write_df(equity_path, equity_df)
         
-        # -------------------------
-        # 3. Save trades.csv
-        # -------------------------
         trades_path = run_dir / "trades.csv"
         if trades_df is not None and not trades_df.empty:
             self._atomic_write_df(trades_path, trades_df)
         else:
-            # Create empty placeholder
             pd.DataFrame().to_csv(trades_path, index=False)
         
-        # -------------------------
-        # 4. Save data_manifest.json
-        # -------------------------
         data_manifest_path = run_dir / "data_manifest.json"
         manifest_data = data_manifest or {}
         self._atomic_write_text(
@@ -232,16 +189,10 @@ class BacktestRegistry:
             json.dumps(manifest_data, indent=2, default=str)
         )
         
-        # -------------------------
-        # 5. Save requirements.txt
-        # -------------------------
         req_path = run_dir / "requirements.txt"
         requirements = self._freeze_requirements()
         self._atomic_write_text(req_path, requirements)
         
-        # -------------------------
-        # 6. Compute checksums for all artifacts
-        # -------------------------
         artifacts = {}
         for artifact_path in [config_path, equity_path, trades_path, 
                               data_manifest_path, req_path]:
@@ -251,9 +202,6 @@ class BacktestRegistry:
                     "size_bytes": artifact_path.stat().st_size,
                 }
         
-        # -------------------------
-        # 7. Save meta.json with git hash, checksums, Python version
-        # -------------------------
         meta = {
             "run_id": run_id,
             "timestamp_utc": datetime.utcnow().isoformat() + "Z",
@@ -262,49 +210,40 @@ class BacktestRegistry:
             "artifacts": artifacts,
         }
         
-        # Add any extra metadata
         if extra_meta:
             meta.update(extra_meta)
         
         meta_path = run_dir / "meta.json"
         self._atomic_write_text(meta_path, json.dumps(meta, indent=2, default=str))
         
-        # -------------------------
-        # 8. Update central manifest
-        # -------------------------
-        # Extract metrics from equity for manifest summary
+        # Update manifest
         metrics = {}
         if not equity_df.empty:
             try:
-                if 'equity' in equity_df.columns:
-                    final_equity = float(equity_df['equity'].iloc[-1])
-                    initial_equity = float(equity_df['equity'].iloc[0])
-                elif 'total_value' in equity_df.columns:
-                    final_equity = float(equity_df['total_value'].iloc[-1])
-                    initial_equity = float(equity_df['total_value'].iloc[0])
-                else:
-                    # Use first numeric column
-                    numeric_cols = equity_df.select_dtypes(include=['number']).columns
-                    if len(numeric_cols) > 0:
-                        final_equity = float(equity_df[numeric_cols[0]].iloc[-1])
-                        initial_equity = float(equity_df[numeric_cols[0]].iloc[0])
-                    else:
-                        final_equity = None
-                        initial_equity = None
+                # heuristic to find equity column
+                cand = [c for c in equity_df.columns if "equity" in c.lower() or "nav" in c.lower() or "total_value" in c.lower()]
+                col = cand[0] if cand else equity_df.columns[0]
+                final_equity = float(equity_df[col].iloc[-1])
+                initial_equity = float(equity_df[col].iloc[0])
+                total_return = (final_equity / initial_equity) - 1.0
                 
-                if final_equity and initial_equity:
-                    total_return = (final_equity / initial_equity) - 1.0
-                    metrics = {
-                        "final_equity": final_equity,
-                        "total_return": total_return,
-                    }
+                # Sharpe (if returns in meta)
+                sharpe = extra_meta.get("sharpe_ratio") if extra_meta else None
+                mdd = extra_meta.get("max_drawdown") if extra_meta else None
+                
+                metrics = {
+                    "final_equity": final_equity,
+                    "total_return": total_return,
+                    "sharpe": sharpe,
+                    "max_drawdown": mdd
+                }
             except Exception:
                 pass
         
         record = {
             "run_id": run_id,
             "timestamp": meta["timestamp_utc"],
-            "strategy": config.get("strategy", config.get("strategy_name", "unknown")),
+            "strategy": config.get("strategy_name", "unknown"),
             "tickers": config.get("tickers", []),
             "git_hash": meta["git_hash"],
             "metrics": metrics,
@@ -312,132 +251,23 @@ class BacktestRegistry:
         }
         
         manifest = self._load_manifest()
-        manifest.insert(0, record)  # newest first
+        manifest.insert(0, record)
         self._write_manifest(manifest)
         
-        return run_id
-
-    def validate_run(self, run_id: str) -> Dict[str, Any]:
-        """
-        Validate integrity of run artifacts by checking checksums.
-        
-        Returns:
-            dict with validation results
-        """
-        run_dir = self.base_dir / run_id
-        
-        if not run_dir.exists():
-            return {"valid": False, "error": f"Run {run_id} not found"}
-        
-        meta_path = run_dir / "meta.json"
-        if not meta_path.exists():
-            return {"valid": False, "error": "meta.json not found"}
-        
-        # Load meta.json
-        with open(meta_path, "r") as f:
-            meta = json.load(f)
-        
-        stored_checksums = meta.get("artifacts", {})
-        
-        # Verify each artifact
-        mismatches = []
-        for artifact_name, stored_info in stored_checksums.items():
-            artifact_path = run_dir / artifact_name
-            
-            if not artifact_path.exists():
-                mismatches.append(f"{artifact_name}: file missing")
-                continue
-            
-            # Recompute checksum
-            current_checksum = self._sha256_of_file(artifact_path)
-            stored_checksum = stored_info.get("sha256")
-            
-            if current_checksum != stored_checksum:
-                mismatches.append(
-                    f"{artifact_name}: checksum mismatch "
-                    f"(expected {stored_checksum[:8]}..., got {current_checksum[:8]}...)"
-                )
-        
-        return {
-            "valid": len(mismatches) == 0,
-            "mismatches": mismatches,
-            "run_id": run_id,
-            "git_hash": meta.get("git_hash"),
-        }
-
-    def register_run(
-        self,
-        config: Dict[str, Any],
-        results_df: pd.DataFrame,
-        metrics: Dict[str, Any],
-        extra_artifacts: Dict[str, pd.DataFrame] | None = None,
-    ) -> str:
-        """
-        Legacy method for backward compatibility.
-        
-        DEPRECATED: Use create_run() + save_artifacts() instead.
-        """
-        run_id = uuid.uuid4().hex[:10]
-        timestamp = datetime.utcnow().isoformat() + "Z"
-
-        run_dir = self.base_dir / run_id
-        run_dir.mkdir(exist_ok=False)
-
-        # Save config
-        with open(run_dir / "config.json", "w") as f:
-            json.dump(config, f, indent=2, default=str)
-
-        # Save primary result
-        results_df.to_csv(run_dir / "equity.csv")
-
-        # Save extra artifacts (optional)
-        if extra_artifacts:
-            artifacts_dir = run_dir / "artifacts"
-            artifacts_dir.mkdir()
-            for name, df in extra_artifacts.items():
-                df.to_csv(artifacts_dir / f"{name}.csv")
-
-        # Update manifest
-        record = {
-            "run_id": run_id,
-            "timestamp": timestamp,
-            "strategy": config.get("strategy", config.get("strategy_name", "unknown")),
-            "metrics": {
-                "final_equity": metrics.get("final_equity"),
-                "total_return": metrics.get("total_return"),
-                "annualized_vol": metrics.get("annualized_vol"),
-                "sharpe": metrics.get("sharpe"),
-                "max_drawdown": metrics.get("max_drawdown"),
-            },
-            "path": str(run_dir),
-        }
-
-        manifest = self._load_manifest()
-        manifest.insert(0, record)  # newest first
-        self._write_manifest(manifest)
-
-        print(f"   [Registry] Run {run_id} registered.")
         return run_id
 
     def list_runs(self) -> List[Dict[str, Any]]:
-        """
-        Return list of all registered runs (metadata only).
-        """
         return self._load_manifest()
 
     def load_run(self, run_id: str) -> Dict[str, Any]:
-        """
-        Load a full run (metadata + equity curve).
-        """
         manifest = self._load_manifest()
         for r in manifest:
             if r["run_id"] == run_id:
                 run_dir = Path(r["path"])
                 equity = pd.read_csv(run_dir / "equity.csv", index_col=0, parse_dates=True)
-
                 return {
                     "meta": r,
-                    "equity": equity,
+                    "results": equity,
                 }
+        raise KeyError(f"Run {run_id} not found.")
 
-        raise KeyError(f"Run {run_id} not found in registry.")

@@ -1,24 +1,9 @@
-from abc import ABC, abstractmethod
+from .base import DataProvider
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 import numpy as np
-
-class DataProvider(ABC):
-    """
-    Abstract interface for fetching market data.
-    Enables swapping distinct data sources (Yahoo, Bloomberg, Polygon) without changing downstream code.
-    """
-    
-    @abstractmethod
-    def fetch_ohlcv(self, ticker: str, start_date: str, end_date: str = None) -> pd.DataFrame:
-        """
-        Fetch OHLCV data for a given ticker.
-        Returns DataFrame with columns: Open, High, Low, Close, Volume.
-        index should be DatetimeIndex.
-        """
-        pass
 
 class YahooDataProvider(DataProvider):
     def fetch_ohlcv(self, ticker: str, start_date: str, end_date: str = None) -> pd.DataFrame:
@@ -55,6 +40,10 @@ class YahooDataProvider(DataProvider):
             
         df.index = pd.to_datetime(df.index)
         
+        # INSTITUTIONAL: Proactive Validation
+        from data.validator import DataValidator
+        df = DataValidator.validate_ohlc(df, ticker=ticker)
+        
         return df
 
     def get_panel(self, tickers: List[str], start_date: str, end_date: Optional[str] = None) -> pd.DataFrame:
@@ -72,3 +61,15 @@ class YahooDataProvider(DataProvider):
         panel = pd.DataFrame(data)
         panel.columns = pd.MultiIndex.from_tuples(panel.columns)
         return panel
+
+    def get_latest_quote(self, ticker: str) -> Optional[float]:
+        """Fetch the latest price for a ticker using Yahoo Finance."""
+        try:
+            # We fetch a tiny slice of data to get the latest price
+            # Using period='1d' and interval='1m' for real-time-ish price
+            data = yf.download(ticker, period="1d", interval="1m", progress=False, auto_adjust=True)
+            if not data.empty:
+                return float(data["Close"].iloc[-1].iloc[0]) if isinstance(data["Close"].iloc[-1], pd.Series) else float(data["Close"].iloc[-1])
+            return None
+        except Exception:
+            return None

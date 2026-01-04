@@ -159,7 +159,9 @@ class RiskManager:
         
         # 2. Volatility Component
         # 21-day realized vol
-        returns = spy_history.pct_change().dropna()
+        returns = spy_history.pct_change(fill_method=None)
+        returns = returns.replace([np.inf, -np.inf], np.nan).dropna()
+        
         if len(returns) < 21:
             current_vol = 0.01
         else:
@@ -379,7 +381,9 @@ class RiskManager:
             )
 
         # 1. Realized Volatility Calculation
-        returns = prices.pct_change().dropna()
+        returns = prices.pct_change(fill_method=None)
+        returns = returns.replace([np.inf, -np.inf], np.nan).dropna()
+        
         realized_vol = returns.std() * np.sqrt(252) if len(returns) > 10 else self.target_vol_limit
         realized_vol = max(realized_vol, 0.05) # Floor at 5% to avoid division by zero/extreme scaling
 

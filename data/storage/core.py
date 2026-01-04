@@ -5,7 +5,7 @@ from pathlib import Path
 class DataStore:
     """
     Manages local storage of market data using Parquet files.
-    Ensures fast I/O and reproducibility.
+    Ensures fast I/O and institutional reproducibility.
     """
     
     def __init__(self, data_dir: str = "data/raw"):
@@ -13,23 +13,22 @@ class DataStore:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         
     def save(self, ticker: str, df: pd.DataFrame):
-        """Save DataFrame to CSV."""
+        """Save DataFrame to Parquet."""
         if df.empty:
             return
             
-        file_path = self.data_dir / f"{ticker}.csv"
-        df.to_csv(file_path)
-        print(f"   [Save] Saved {ticker} to {file_path}")
+        file_path = self.data_dir / f"{ticker}.parquet"
+        df.to_parquet(file_path)
+        print(f"   [Save] Persisted {ticker} to {file_path}")
         
     def load(self, ticker: str) -> pd.DataFrame:
-        """Load DataFrame from CSV."""
-        file_path = self.data_dir / f"{ticker}.csv"
+        """Load DataFrame from Parquet."""
+        file_path = self.data_dir / f"{ticker}.parquet"
         
         if not file_path.exists():
-            print(f"   [Error] {file_path} not found.")
             return pd.DataFrame()
             
-        return pd.read_csv(file_path, index_col=0, parse_dates=True)
+        return pd.read_parquet(file_path)
         
     def exists(self, ticker: str) -> bool:
-        return (self.data_dir / f"{ticker}.csv").exists()
+        return (self.data_dir / f"{ticker}.parquet").exists()

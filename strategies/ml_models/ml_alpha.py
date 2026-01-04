@@ -5,7 +5,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import clone
 from typing import Optional
 
-from strategies.features import FeatureEngineer
+from data.processors.features import FeatureEngineer
 from strategies.alpha import Alpha
 
 class MLAlpha(Alpha):
