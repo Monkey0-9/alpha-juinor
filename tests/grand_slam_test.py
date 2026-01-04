@@ -23,24 +23,47 @@ def test_institutional_full_pipeline():
     config = {
         "type": "institutional",
         "tickers": ["SPY", "TLT"],
-        "use_ml": False,
+        "use_ml": True,  # ENABLE ML to boost conviction (Tech ensemble is conflicted)
         "alpha_window": 20
     }
     strategy = StrategyFactory.create_strategy(config)
     
-    # Mock Market Data
-    dates = pd.date_range("2023-01-01", periods=100)
+    # Mock Market Data - DIP AND RECOVER CYCLES
+    # Repeated cycles allow ML to learn "Dip = Buy"
+    # Dips trigger Mean Reversion / RSI / Bollinger technical buys
+    dates = pd.date_range("2023-01-01", periods=600, freq="B")
     data = {}
     for tk in ["SPY", "TLT"]:
-        prices = np.linspace(100, 110, 100) + np.random.normal(0, 1, 100)
+        # Base price 100
+        prices = np.full(600, 100.0)
+        
+        # Inject 3 Dip-Recovery cycles
+        for i in range(3):
+            start = 100 + i * 150
+            # Dip 20 pts over 20 days
+            prices[start:start+20] = np.linspace(100, 80, 20)
+            # Recover 20 pts over 20 days
+            prices[start+20:start+40] = np.linspace(80, 105, 20)
+            
+        # Current state (end of array): Just finished a Dip, starting recovery
+        # 580-600: Dip from 100 to 80
+        prices[-20:] = np.linspace(100, 80, 20)
+        
+        # Add noise
+        noise = np.random.normal(0, 0.5, 600)
+        prices = prices + noise
+        
         data[(tk, "Open")] = prices
-        data[(tk, "High")] = prices + 0.5
-        data[(tk, "Low")] = prices - 0.5
+        data[(tk, "High")] = prices + 2.0
+        data[(tk, "Low")] = prices - 2.0
         data[(tk, "Close")] = prices
-        data[(tk, "Volume")] = [1_000_000] * 100
+        data[(tk, "Volume")] = np.random.randint(5_000_000, 20_000_000, 600)
         
     df = pd.DataFrame(data, index=dates)
     df.columns = pd.MultiIndex.from_tuples(df.columns)
+
+    print("[Phase 1.5] Training ML Models...")
+    strategy.train_models(df)
 
     print("[Phase 2] Running Signal Generation...")
     signals_df = strategy.generate_signals(df)

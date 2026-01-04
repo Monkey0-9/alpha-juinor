@@ -14,7 +14,7 @@ from portfolio.optimizer import MeanVarianceOptimizer
 
 @pytest.fixture
 def mock_price_data():
-    dates = pd.date_range("2023-01-01", periods=200, freq="B")
+    dates = pd.date_range("2023-01-01", periods=600, freq="B")
     df = pd.DataFrame(index=dates)
     # Generate random walk
     np.random.seed(42)
