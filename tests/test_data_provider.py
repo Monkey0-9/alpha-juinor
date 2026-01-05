@@ -4,7 +4,7 @@ import shutil
 import os
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from data.collectors.yahoo_collector import YahooDataProvider
+from data.providers.yahoo import YahooDataProvider
 from data.storage.core import DataStore
 
 class TestDataLayer(unittest.TestCase):

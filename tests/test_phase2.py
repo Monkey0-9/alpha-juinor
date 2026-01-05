@@ -31,25 +31,17 @@ class TestPhase2(unittest.TestCase):
         # Downtrend: 100 -> 50
         downtrend = np.linspace(100, 50, 250)
         # High noise
-        noise_high = np.random.normal(0, 0.02, 250) # 2% daily -> 32% annual
+        noise_high = np.random.normal(0, 0.06, 250) # 6% daily -> Extreme Vol
         prices_bad = pd.Series(downtrend * (1 + noise_high))
         
+        # Simulate time passage to build volatility history correctly
+        # The RiskManager needs to see the history evolve to calculate percentiles
+        # We start with enough history (200) for MAs, then step forward
         rm = RiskManager() # Reset
-        rm.update_regime(prices_bad)
-        
-        # Vol percentile needs history. We simulate feed.
-        # But our update_regime logic calculates vol from passed history tail.
-        # History > 50 points triggers percentile logic.
-        # Wait, rm._vol_history needs to be populated over time in real app.
-        # In test, we might only get 1 data point of vol from update_regime call?
-        # update_regime: "self._vol_history.append(current_vol)"
-        # If we call it once, len is 1. Percentile is 0.5.
-        # So we need to call it multiple times or manually populate?
-        # Let's populate _vol_history to simulate high vol context
-        rm._vol_history = [0.01] * 100 # Low vol history
-        # Now we feed high vol regime.
-        
-        rm.update_regime(prices_bad)
+        # Seed with low volatility history to make the upcoming high vol register as extreme
+        rm._vol_history = [0.05] * 100  # 5% annual vol baseline
+        for i in range(200, 251):
+            rm.update_regime(prices_bad.iloc[:i])
         # Current vol will be high (~30%). Percentile should be 1.0 (High).
         # Price (approx 50) < MA200 (approx 75). -> Downtrend.
         # Should be BEAR_CRISIS.

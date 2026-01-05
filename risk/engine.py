@@ -245,7 +245,7 @@ class RiskManager:
              self.is_risk_on = False 
              
         # PHASE 4: MARKOV REGIME UPDATE
-        regime_probs = self.markov_model.update(spy_history)
+        regime_probs = self.markov_model.update(returns)
         panic_prob = regime_probs.get("panic_prob", 0.0)
         
         # Determine Regime based on Markov Probabilities

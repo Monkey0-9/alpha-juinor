@@ -5,7 +5,7 @@ import numpy as np
 import logging
 from .failure_injector import FailureInjector
 from main import run_production_pipeline
-from data.collectors.yahoo_collector import YahooDataProvider
+from data.providers.yahoo import YahooDataProvider
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

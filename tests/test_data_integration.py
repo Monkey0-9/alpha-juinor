@@ -9,9 +9,9 @@ from datetime import datetime, timedelta
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from data.collectors.data_router import DataRouter
-from data.collectors.binance_collector import BinanceDataProvider
-from data.collectors.fred_collector import FredDataProvider
-from data.collectors.stooq_collector import StooqDataProvider
+from data.providers.binance import BinanceDataProvider
+from data.providers.fred import FredDataProvider
+from data.providers.stooq import StooqDataProvider
 
 class TestDataIntegration(unittest.TestCase):
     
