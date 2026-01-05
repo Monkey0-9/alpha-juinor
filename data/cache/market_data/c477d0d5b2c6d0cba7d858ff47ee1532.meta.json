@@ -1,0 +1,9 @@
+{
+  "ticker": "GLD",
+  "start_date": "2020-11-27",
+  "end_date": "2023-01-01",
+  "data_type": "ohlcv",
+  "cached_at": "2026-01-05T18:05:30.230389",
+  "rows": 527,
+  "ttl_hours": 24.0
+}
