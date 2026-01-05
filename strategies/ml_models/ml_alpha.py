@@ -1,7 +1,12 @@
 # strategies/ml_alpha.py
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor
+try:
+    import lightgbm as lgb
+    LIGHTGBM_AVAILABLE = True
+except ImportError:
+    from sklearn.ensemble import RandomForestRegressor
+    LIGHTGBM_AVAILABLE = False
 from sklearn.base import clone
 from typing import Optional
 
@@ -11,61 +16,89 @@ from strategies.alpha import Alpha
 class MLAlpha(Alpha):
     """
     Machine Learning Alpha.
-    Trains a Random Forest models to predict forward returns.
+    Uses LightGBM (preferred) or Random Forest for forward return prediction.
     """
 
     def __init__(self, feature_engineer: FeatureEngineer, min_samples: int = 250):
         self.fe = feature_engineer
-        self.model = RandomForestRegressor(
-            n_estimators=50, 
-            max_depth=5, 
-            min_samples_leaf=10, 
-            random_state=42,
-            n_jobs=-1
-        )
+        
+        if LIGHTGBM_AVAILABLE:
+            self.model = lgb.LGBMRegressor(
+                n_estimators=100,
+                max_depth=5,
+                learning_rate=0.05,
+                num_leaves=31,
+                min_child_samples=20,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=42,
+                n_jobs=-1,
+                verbose=-1  # Suppress training logs
+            )
+            self.model_type = "LightGBM"
+        else:
+            self.model = RandomForestRegressor(
+                n_estimators=50, 
+                max_depth=5, 
+                min_samples_leaf=10, 
+                random_state=42,
+                n_jobs=-1
+            )
+            self.model_type = "RandomForest"
+        
         self.is_trained = False
         self.ml_ready = False
-        self.train_window = min_samples # Align validation logic
-        self.retrain_interval = 63 # Retrain every quarter (~63 business days)
+        self.train_window = min_samples
+        self.retrain_interval = 63  # Retrain quarterly
         self.last_train_date: Optional[pd.Timestamp] = None
         self.last_features: Optional[pd.DataFrame] = None
+        self.feature_importance_: Optional[pd.Series] = None
 
     def train(self, prices_history: pd.DataFrame):
         """
         Train the model on historical data.
-        prices_history: DataFrame with Open, High, Low, Close, Volume
         """
         if len(prices_history) < self.train_window:
-            print(f"[MLAlpha] Insufficient history to train. Need {self.train_window}, got {len(prices_history)}.")
+            print(f"[MLAlpha] Insufficient history. Need {self.train_window}, got {len(prices_history)}.")
             return
 
-        # Institutional Alignment: We want to ensure features and target use the SAME raw data subset
-        # before they start dropping rows internally.
         print(f"[MLAlpha] Generating features and 5d forward targets for {len(prices_history)} bars...")
         X = self.fe.compute_features(prices_history)
-        y = self.fe.compute_target(prices_history, forward_window=5) # Predict 5-day return
+        y = self.fe.compute_target(prices_history, forward_window=5)
 
         # Align X and y
-        # y has NaNs at end (forward look), X has NaNs at start (lags)
         data = pd.concat([X, y.rename("target")], axis=1).dropna()
         
         if data.empty:
             print("[MLAlpha] No valid data after alignment.")
             return
 
-        # Train/Test logic (simplified: train on all valid history for this "mini" fund)
         X_train = data[X.columns]
         y_train = data["target"]
 
-        print(f"[MLAlpha] Training Random Forest on {len(X_train)} samples...")
-        self.model.fit(X_train, y_train)
+        print(f"[MLAlpha] Training {self.model_type} on {len(X_train)} samples...")
+        
+        if LIGHTGBM_AVAILABLE:
+            # Use early stopping for efficiency
+            self.model.fit(
+                X_train, y_train,
+                eval_set=[(X_train, y_train)],
+                callbacks=[lgb.early_stopping(stopping_rounds=10, verbose=False)]
+            )
+        else:
+            self.model.fit(X_train, y_train)
+        
         self.is_trained = True
         self.ml_ready = True
-        self.last_features = X.iloc[[-1]] # Cache last features for live check if needed
+        self.last_features = X.iloc[[-1]]
         
-        # Feature importance debug
-        # importances = pd.Series(self.model.feature_importances_, index=X.columns).sort_values(ascending=False)
-        # print("Top Features:\n", importances.head(3))
+        # Store feature importance
+        if hasattr(self.model, 'feature_importances_'):
+            self.feature_importance_ = pd.Series(
+                self.model.feature_importances_, 
+                index=X.columns
+            ).sort_values(ascending=False)
+            print(f"   Top features: {', '.join(self.feature_importance_.head(3).index.tolist())}")
 
     def compute(self, prices: pd.Series) -> pd.Series:
         """

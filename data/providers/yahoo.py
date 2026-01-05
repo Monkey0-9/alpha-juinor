@@ -5,13 +5,25 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 import numpy as np
 from utils.timezone import normalize_index_utc
+from data.cache.market_cache import get_cache
 
 class YahooDataProvider(DataProvider):
+    def __init__(self, enable_cache: bool = True, cache_ttl_hours: int = 24):
+        self.enable_cache = enable_cache
+        self.cache = get_cache(ttl_hours=cache_ttl_hours) if enable_cache else None
+    
     def fetch_ohlcv(self, ticker: str, start_date: str, end_date: str = None) -> pd.DataFrame:
-        print(f"   [Download] Fetching {ticker} from Yahoo Finance...")
-        
         if end_date is None:
             end_date = datetime.today().strftime('%Y-%m-%d')
+        
+        # Try cache first
+        if self.enable_cache:
+            cached_data = self.cache.get(ticker, start_date, end_date)
+            if cached_data is not None:
+                print(f"   [Cache Hit] {ticker} from cache")
+                return cached_data
+        
+        print(f"   [Download] Fetching {ticker} from Yahoo Finance...")
             
         # yfinance download
         # yfinance download
@@ -72,6 +84,10 @@ class YahooDataProvider(DataProvider):
         # INSTITUTIONAL: Proactive Validation
         from data.validator import DataValidator
         df = DataValidator.validate_ohlc(df, ticker=ticker)
+        
+        # Cache the result
+        if self.enable_cache and not df.empty:
+            self.cache.set(ticker, start_date, end_date, df)
         
         return df
 
