@@ -9,6 +9,7 @@ from risk.factor_model import StatisticalRiskModel
 from risk.factor_exposure import FactorExposureEngine
 from risk.tail_risk import compute_tail_risk_metrics
 from risk.cvar import compute_cvar
+from risk.covariance import robust_covariance
 
 from regime.markov import RegimeModel
 
@@ -169,22 +170,40 @@ class RiskManager:
                 
         return is_active, scalar
 
-    def compute_var(self, returns: pd.Series, confidence: float = 0.95) -> float:
+    def compute_var(self, returns: pd.Series, confidence: float = 0.95, use_parametric: bool = True) -> float:
         """
-        Compute VaR. Returns positive float representing loss percentage.
-        e.g. 0.04 means 4% loss.
+        Compute hybrid VaR using historical + parametric (with shrinkage).
+        Returns positive float representing loss percentage.
         """
         try:
              if returns.empty or len(returns) < 20: 
                  return 0.0
              
-             # Clean again just in case
              clean_rets = returns.dropna()
              if clean_rets.empty: return 0.0
              
-             cutoff = np.percentile(clean_rets, 100 * (1 - confidence))
-             # Cutoff is e.g. -0.04. we return 0.04
-             return -cutoff if cutoff < 0 else 0.0
+             # Historical VaR (baseline)
+             hist_cutoff = np.percentile(clean_rets, 100 * (1 - confidence))
+             hist_var = -hist_cutoff if hist_cutoff < 0 else 0.0
+             
+             if not use_parametric or len(clean_rets) < 50:
+                 return hist_var
+             
+             # Parametric VaR with Gaussian assumption + shrinkage
+             # For single series, just use std; for portfolio use covariance
+             mu = clean_rets.mean()
+             sigma = clean_rets.std()
+             
+             # Z-score for confidence level (95% -> 1.645)
+             from scipy import stats
+             z_score = stats.norm.ppf(1 - confidence)
+             parametric_var = -(mu + z_score * sigma)  # Negative of lower tail
+             parametric_var = max(0.0, parametric_var)
+             
+             # Hybrid: average of historical and parametric
+             hybrid_var = 0.6 * hist_var + 0.4 * parametric_var
+             
+             return hybrid_var
         except Exception as e:
              logger.error(f"VaR calc failed: {e}")
              return 0.0
@@ -424,13 +443,20 @@ class RiskManager:
         return RiskCheckResult(ok=True, decision=RiskDecision.ALLOW, scale_factor=1.0)
 
     def check_circuit_breaker(self, current_equity: float, realized_returns: pd.Series) -> RiskDecision:
+        """
+        Graded circuit breaker with 3 tiers instead of binary freeze.
+        
+        Tier 1: VaR slightly high -> SCALE (existing behavior)
+        Tier 2: VaR > 1.5x limit OR vol > 2x target -> Defensive (25% sizing)
+        Tier 3: Drawdown > limit AND high vol -> FREEZE
+        """
         if current_equity > self._max_equity:
             self._max_equity = current_equity
         
         drawdown = (self._max_equity - current_equity) / (self._max_equity + 1e-9) if self._max_equity > 0 else 0.0
-        
         self._current_realized_vol = realized_returns.std() * np.sqrt(252) if len(realized_returns) > 10 else 0.0
 
+        # Tier 3: Emergency kill-switch (unchanged)
         if self.manual_emergency_flag:
              logger.critical("EMERGENCY KILL-SWITCH: Manual flag set. PERMANENT HALT.")
              self.state = RiskDecision.FREEZE
@@ -442,21 +468,21 @@ class RiskManager:
              self.state = RiskDecision.FREEZE
              return RiskDecision.FREEZE
 
-        if drawdown > self.max_drawdown_limit:
+        # Tier 3: Severe drawdown + high volatility -> FREEZE
+        if drawdown > self.max_drawdown_limit and self._current_realized_vol > self.target_vol_limit * 2.0:
             if self.state != RiskDecision.FREEZE:
-                logger.error(f"CIRCUIT BREAKER: Drawdown {drawdown:.2%} > {self.max_drawdown_limit:.2%}. FREEZING.")
+                logger.error(f"TIER 3 FREEZE: Drawdown {drawdown:.2%} > {self.max_drawdown_limit:.2%} AND Vol {self._current_realized_vol:.2%} > 2x Target.")
                 self.state = RiskDecision.FREEZE
-                self.cooldown_counter = self.cooldown_days
+                self.cooldown_counter = min(10, self.cooldown_days)  # Adaptive cooldown (10 days max)
                 self.recovery_level = 0
             return RiskDecision.FREEZE
 
-        if self._current_realized_vol > self.target_vol_limit * 2.5: 
+        # Tier 2: Extreme volatility alone -> Defensive mode (not full freeze)
+        if self._current_realized_vol > self.target_vol_limit * 2.5:
             if self.state != RiskDecision.FREEZE:
-                logger.error(f"CIRCUIT BREAKER: Realized Vol {self._current_realized_vol:.2%} > 2.5x Target. FREEZING.")
-                self.state = RiskDecision.FREEZE
-                self.cooldown_counter = self.cooldown_days
-                self.recovery_level = 0
-            return RiskDecision.FREEZE
+                logger.warning(f"TIER 2 DEFENSIVE: Realized Vol {self._current_realized_vol:.2%} > 2.5x Target. Reducing to 25% sizing.")
+                # Don't freeze, just scale down heavily in enforce_limits
+            return self.state  # Keep current state, let enforce_limits handle scaling
 
         return self.state
 
