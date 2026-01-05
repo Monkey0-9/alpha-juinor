@@ -1,7 +1,7 @@
 import logging
 import pandas as pd
 import requests
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 import os
 from data.providers.base import DataProvider
