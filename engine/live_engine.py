@@ -22,11 +22,16 @@ class LiveEngine:
         self.risk_manager = risk_manager
         self.portfolio_value = float(initial_capital)
         self.head_trader = HeadOfTrading()
+        self.crash_mode = False
         
     def run_once(self, tickers: List[str], strategy_fn: Callable):
         """
         Executes a single rebalance cycle (usually daily).
         """
+        if self.crash_mode:
+            logger.critical("[SAFE MODE] LIVE ENGINE IS IN SAFE MODE (CRASH). SKIPPING CYCLE.")
+            return
+
         logger.info(f"--- Starting Live Rebalance Cycle: {get_now_utc()} ---")
         
         # 1. Sync State with Broker
@@ -48,9 +53,42 @@ class LiveEngine:
         logger.info(f"Fetching market data from {start_date} to {end_date}...")
         full_panel = self.provider.get_panel(tickers, start_date, end_date)
         
+        # --- INSTITUTIONAL HARDENING: REMOVE FAILED SYMBOLS ---
+        # Requirement: "If a symbol fails all data providers, it must be permanently removed from the active universe."
         if full_panel.empty:
-            logger.error("Market data panel is empty. Cannot generate signals.")
+             logger.error("Market data panel is completely empty. Skipping cycle (no data).")
+             return
+
+        # Identification of failed tickers: 
+        # Tickers present in 'tickers' list but NOT in full_panel columns (or have all NaNs)
+        fetched_tickers = set(full_panel.columns.get_level_values(0).unique())
+        failed_tickers = set(tickers) - fetched_tickers
+        
+        if failed_tickers:
+             logger.warning(f"DATA INTEGRITY: Dropping {len(failed_tickers)} failed tickers from UNIVERSE permanently.")
+             logger.warning(f"Dropped: {list(failed_tickers)[:10]}...")
+             
+             # Permanent Removal for this runtime session
+             for bad_tk in failed_tickers:
+                 if bad_tk in tickers:
+                     tickers.remove(bad_tk)
+             
+             # Also update local reference if using filtering
+             # But 'tickers' passed in is likely a reference to the main list in main.py loop or copy
+             # Ideally we return the valid list or the caller should know.
+             # In main.py loop logic, 'active_tickers' is passed. Modifying it in-place affects next iterations.
+             # This satisfies "Once a symbol fails in a session, never retry it."
+
+        # Re-check if we have anything left
+        if not tickers:
+             logger.error("No valid tickers remaining after data filter. Aborting cycle.")
+             return
+
+        # --- CRASH SURVIVAL SWITCH ---
+        if self._check_crash_conditions(full_panel):
+            self.enter_safe_mode()
             return
+        # -----------------------------
 
         # Build current prices map
         current_prices = {}
@@ -60,7 +98,10 @@ class LiveEngine:
                 current_prices[tk] = price
             else:
                 # Fallback to last close in panel
-                current_prices[tk] = full_panel[tk]['Close'].iloc[-1]
+                if tk in full_panel:
+                    current_prices[tk] = full_panel[tk]['Close'].iloc[-1]
+                else:
+                    logger.warning(f"Price unavailable for {tk} (No Live Quote & No History). Skipping.")
         
         # 3. Instantiate a 'Mock' Portfolio for the Strategy
         from backtest.portfolio import Portfolio
@@ -99,6 +140,17 @@ class LiveEngine:
                 diag = self.risk_manager.explain_diagnostics(self.portfolio_value)
                 msg = f"⚠️ **HIGH RISK MODE** ⚠️\n\n{diag}\n\nSystem will proceed automatically with defensive sizing."
                 alert(msg, level="WARNING")
+                
+            # --- CAPITAL PRESERVATION CHECK ---
+            # Explicit call if needed, though enforce_limits usually handles it.
+            # But per user request we can log it here.
+            is_cap_pres, cap_scalar = self.risk_manager.check_capital_preservation(self.portfolio_value, 20.0) # VIX placeholder if not passed, but strategy has Macro
+            if is_cap_pres:
+                logger.info(f"CAPITAL PRESERVATION ACTIVE: Global Scalar {cap_scalar:.2f}")
+                # We can apply this global scalar to all orders
+                for o in orders:
+                    o.quantity *= cap_scalar
+
 
         # 5. PORTFOLIO-LEVEL RISK AUDIT (Institutional Safety Guard)
         if self.risk_manager:
@@ -136,7 +188,7 @@ class LiveEngine:
             if self.risk_manager.state == "FREEZE":
                 logger.error("RISK STATE: FREEZE. Execution aborted.")
                 return
-
+ 
         # 6. Final Order Sanitization (Fractional Rounding)
         final_orders = []
         for o in orders:
@@ -188,3 +240,51 @@ class LiveEngine:
     def _build_price_panel(self, tickers: List[str], start_date: str, end_date: Optional[str] = None):
         """Mock compatibility for strategy.train_models."""
         return self.provider.get_panel(tickers, start_date, end_date)
+
+    def _check_crash_conditions(self, full_panel: pd.DataFrame) -> bool:
+        """
+        Detects anomalies requiring immediate Kill-Switch.
+        1. Liquidity Collapse (Zero Volume for >50% of universe)
+        2. Extreme Gap (Price drop > 20% in single bar)
+        """
+        if full_panel.empty: return False
+        
+        # 1. Liquidity Check
+        if 'Volume' in full_panel.columns.get_level_values(0):
+            # Check last row volume
+            last_vols = full_panel.xs('Volume', axis=1, level=1).iloc[-1]
+            zero_vols = (last_vols == 0).sum()
+            if zero_vols > (len(last_vols) * 0.5):
+                logger.critical(f"CRASH DETECTED: Liquidity Collapse. {zero_vols}/{len(last_vols)} assets have 0 volume.")
+                return True
+
+        # 2. Flash Crash Check
+        # Check percentage change of last bar vs previous
+        if 'Close' in full_panel.columns.get_level_values(0):
+            closes = full_panel.xs('Close', axis=1, level=1)
+            # Use fill_method=None to avoid future warning, handle NaNs
+            returns = closes.pct_change(fill_method=None).iloc[-1]
+            # If any major asset drops > 20% instantly
+            crashers = returns[returns < -0.20]
+            if not crashers.empty:
+                logger.critical(f"CRASH DETECTED: Flash Crash. {crashers.index.tolist()} dropped > 20%.")
+                return True
+                
+        return False
+
+    def enter_safe_mode(self):
+        """
+        Triggers Hard Fail-Safe.
+        """
+        logger.critical("🛑 ENTERING SAFE MODE. TERMINATING OPERATIONS.")
+        from monitoring.alerts import alert
+        alert("🚨 **CRASH SWITCH TRIGGERED** 🚨\n\nSystem has entered SAFE MODE.\n- All orders cancelled.\n- Trading loop paused.\n- Manual intervention required.", level="CRITICAL")
+        
+        # Attempt to cancel all orders
+        try:
+            self.handler.cancel_all_orders()
+            logger.info("SAFE MODE: Cancelled all open orders.")
+        except Exception as e:
+            logger.error(f"SAFE MODE FAIL: Could not cancel orders: {e}")
+            
+        self.crash_mode = True

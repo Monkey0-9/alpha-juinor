@@ -4,6 +4,7 @@ import yfinance as yf
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 import numpy as np
+from utils.timezone import normalize_index_utc
 
 class YahooDataProvider(DataProvider):
     def fetch_ohlcv(self, ticker: str, start_date: str, end_date: str = None) -> pd.DataFrame:
@@ -64,11 +65,9 @@ class YahooDataProvider(DataProvider):
             # Find columns case-insensitively if needed, but usually auto_adjust gives Proper Case
             pass
             
-        df.index = pd.to_datetime(df.index)
-        if df.index.tz is None:
-            df.index = df.index.tz_localize("UTC")
-        else:
-            df.index = df.index.tz_convert("UTC")
+        # Use centralized utility
+        from utils.timezone import normalize_index_utc
+        df = normalize_index_utc(df)
         
         # INSTITUTIONAL: Proactive Validation
         from data.validator import DataValidator

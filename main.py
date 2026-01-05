@@ -17,7 +17,9 @@ from configs.config_manager import ConfigManager
 
 load_dotenv()
 
-from data.collectors.yahoo_collector import YahooDataProvider
+# NEW: Import Data Router
+from data.collectors.data_router import DataRouter
+
 from strategies.factory import StrategyFactory
 from risk.engine import RiskManager
 from portfolio.allocator import InstitutionalAllocator
@@ -32,9 +34,11 @@ from ops.generate_daily_report import generate_report
 from brokers.alpaca_broker import AlpacaExecutionHandler
 from data.collectors.alpaca_collector import AlpacaDataProvider
 from engine.live_engine import LiveEngine
+from engine.market_listener import MarketListener
 from brokers.mock_broker import MockBroker
 from utils.time import to_utc, get_now_utc
 from data.universe_manager import UnifiedUniverseManager
+from utils.timezone import normalize_index_utc
 
 logger = logging.getLogger("InstitutionalDriver")
 
@@ -42,6 +46,12 @@ def run_production_pipeline():
     """
     Main entry point for the validated institutional pipeline.
     """
+    try:
+         # Basic logging setup immediately to catch early errors
+         logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+    except Exception:
+         pass
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--refresh-universe", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -58,10 +68,17 @@ def run_production_pipeline():
     
     # 2. Setup Resources
     registry = BacktestRegistry(base_dir=str(Path("output/backtests")))
-    alerts = AlertManager()
+    try:
+        alerts = AlertManager()
+    except Exception as e:
+        logger.warning(f"AlertManager init failed (likely .env issue): {e}")
+        alerts = None
     
     # 0. Generate Daily Checklist
-    generate_daily_checklist(cfg_hash)
+    try:
+        generate_daily_checklist(cfg_hash)
+    except Exception:
+        pass
     
     # Audit Meta
     meta = {
@@ -86,31 +103,51 @@ def run_production_pipeline():
         """Specialized routing provider that respects entitlements."""
         class RoutingProvider:
             def __init__(self):
-                self.alpaca = AlpacaDataProvider()
-                self.yahoo = YahooDataProvider()
+                # Use the new Smart Router
+                self.router = DataRouter()
             
             def get_panel(self, tickers: List[str], start_date: str, end_date: Optional[str] = None) -> pd.DataFrame:
                 data = {}
                 for tk in tickers:
-                    # ROUTE: -USD is crypto -> Alpaca, else -> Yahoo (to avoid 403)
-                    if "-USD" in tk or "BTC" in tk or "ETH" in tk:
-                        df = self.alpaca.fetch_ohlcv(tk, start_date, end_date)
-                    else:
-                        df = self.yahoo.fetch_ohlcv(tk, start_date, end_date)
-                    
-                    if not df.empty:
-                        for col in df.columns:
-                            data[(tk, col)] = df[col]
+                    # Delegate to Smart Router (Binance -> Yahoo -> Stooq -> etc)
+                    # This implementation handles caching and fallback automatically
+                    try:
+                        df = self.router.get_price_history(tk, start_date, end_date)
+                        
+                        if not df.empty:
+                            if 'Close' not in df.columns:
+                                logger.warning(f"Data for {tk} missing 'Close' column. Columns: {df.columns}")
+                                continue
+                                
+                            # Flatten: We need (Ticker, Field) -> Series
+                            df = normalize_index_utc(df) # DOUBLE SAFETY
+                            for col in df.columns:
+                                data[(tk, col)] = df[col]
+                        else:
+                             logger.warning(f"Router returned empty DataFrame for {tk}. Check providers.")
+                    except Exception as e:
+                        logger.error(f"Failed to fetch {tk}: {e}")
+                        continue
                 
-                if not data: return pd.DataFrame()
+                if not data: 
+                    logger.warning("RoutingProvider: No data fetched for any ticker.")
+                    return pd.DataFrame()
+
+                # Construct DataFrame from dict of Series
                 panel = pd.DataFrame(data)
-                panel.columns = pd.MultiIndex.from_tuples(panel.columns)
+                # Ensure columns are MultiIndex (Ticker, Field)
+                if not isinstance(panel.columns, pd.MultiIndex):
+                     panel.columns = pd.MultiIndex.from_tuples(panel.columns)
+                
                 return panel
 
             def get_latest_quote(self, ticker: str) -> Optional[float]:
-                if "-USD" in ticker or "BTC" in ticker or "ETH" in ticker:
-                    return self.alpaca.get_latest_quote(ticker)
-                return self.yahoo.get_latest_quote(ticker)
+                return self.router.get_latest_price(ticker)
+            
+            # Allow access to underlying router for macro data
+            @property
+            def router_instance(self):
+                return self.router
         
         return RoutingProvider()
 
@@ -121,8 +158,9 @@ def run_production_pipeline():
         base_tickers = universe['tickers']
 
     # 1b. Universe Discovery (Phase 15)
-    provider_raw = AlpacaDataProvider() # Access to discovery
-    um = UnifiedUniverseManager(provider_raw)
+    # 1b. Universe Discovery (Phase 15)
+    # provider_raw = AlpacaDataProvider() # Access to discovery - REMOVED, NOT USED IN INIT
+    um = UnifiedUniverseManager("configs/universe.json")
     
     # If using full market config or tickers is not explicit
     if args.tickers:
@@ -164,9 +202,10 @@ def run_production_pipeline():
     )
     
     # 3. Model Warming
-    start_date = "2023-01-01" # Baseline start
-    train_start = (pd.to_datetime(start_date) - timedelta(days=90)).strftime("%Y-%m-%d")
-    logger.info(f"Phase 1: Warming models from {train_start}...")
+    start_date = "2023-01-01" 
+    # FIX: Fetch 365 days for ML to satisfy "Need 500" validation (approx 252 trading days + buffer)
+    train_start = (pd.to_datetime(start_date) - timedelta(days=400)).strftime("%Y-%m-%d")
+    logger.info(f"Phase 1: Warming models from {train_start} (Deep History for ML)...")
     train_panel = engine._build_price_panel(active_tickers, train_start, start_date)
     if train_panel is not None:
         strategy.train_models(train_panel)
@@ -206,9 +245,25 @@ def run_production_pipeline():
         if len(pit_data) < 20: return []
         
         # Generation
-        signals = strategy.generate_signals(pit_data).iloc[-1].to_dict()
-        prices_map = {tk: pit_data[tk]["Close"] for tk in pit_data.columns.levels[0]}
-        vols_map = {tk: pit_data[tk]["Volume"] for tk in pit_data.columns.levels[0]}
+        # Fetch Macro Context (FRED/AlphaVantage) for Global Decision Making
+        # Access safely via engine_ptr provider wrapper
+        macro_ctx = None
+        try:
+             # Our provider wrapper has an internal 'router' attribute, but it's inside the class instance
+             # engine_ptr.provider is the RoutingProvider INSTANCE
+             if hasattr(engine_ptr.provider, 'router'):
+                 macro_ctx = engine_ptr.provider.router.get_macro_context()
+        except Exception:
+             pass
+
+        signals = strategy.generate_signals(pit_data, macro_context=macro_ctx).iloc[-1].to_dict()
+        
+        # FIX: iterate over existing columns only, not all levels in metadata
+        # This prevents KeyError if a ticker is in levels but not in dataframe columns
+        valid_tickers = pit_data.columns.get_level_values(0).unique()
+        
+        prices_map = {tk: pit_data[tk]["Close"] for tk in valid_tickers}
+        vols_map = {tk: pit_data[tk]["Volume"] for tk in valid_tickers}
         
         return allocator.allocate(
             signals, 
@@ -230,7 +285,7 @@ def run_production_pipeline():
         with open("output/meta.json", "w") as f:
             json.dump(meta, f, indent=4)
         logger.info(f"Final Backtest Meta saved. Duration: {meta['duration_seconds']:.2f}s")
-
+        
         res = engine.get_results()
         if not res.empty:
             equity = res["equity"]
@@ -254,6 +309,7 @@ def run_production_pipeline():
             attribution = attr_engine.calculate_attribution(res, engine.get_blotter().trades_df())
             logger.info(f"Performance Attribution: {attribution}")
             logger.info(f"GOLDEN RUN COMPLETE! ID: {run_id}")
+            
     elif exec_cfg['mode'] in ["paper", "live"]:
         if exec_cfg['mode'] == "live":
             # MANDATORY ENFORCEMENT: --live requires manual confirmation
@@ -285,8 +341,8 @@ def run_production_pipeline():
         )
         
         # Initialize Monitoring
-        alert_mgr = AlertManager()
-        alert_mgr.alert(f"Autonomous Trading Loop Started. Frequency: {exec_cfg['rebalance_frequency']}")
+        if alerts:
+            alerts.alert(f"Autonomous Trading Loop Started. Frequency: {exec_cfg['rebalance_frequency']}")
 
         # SCHEDULE STATE
         last_report_date = None
@@ -294,11 +350,10 @@ def run_production_pipeline():
 
         while True:
             try:
-                now = datetime.now()
-                
                 # ---------------------------------------------------------
                 # 1. DAILY REPORT SCHEDULER (Evening 5:30 PM - 6:00 PM)
                 # ---------------------------------------------------------
+                now = datetime.now()
                 # Target: 17:30
                 if now.hour == 17 and now.minute >= 30:
                     today_str = now.strftime("%Y-%m-%d")
@@ -307,43 +362,92 @@ def run_production_pipeline():
                         try:
                             generate_report()
                             last_report_date = today_str
-                            alert_mgr.alert("Daily Report Sent Successfully.", level="SCHEDULER")
+                            if alerts:
+                                alerts.alert("Daily Report Sent Successfully.", level="SCHEDULER")
                         except Exception as e:
                             logger.error(f"Report generation failed: {e}")
-                            alert_mgr.alert(f"Report Failed: {e}", level="ERROR")
+                            if alerts:
+                                alerts.alert(f"Report Failed: {e}", level="ERROR")
 
                 # ---------------------------------------------------------
-                # 2. TRADING CYCLE (Keep existing Hourly cadence)
+                # 2. REAL-TIME EVENT LOOP (The "Listener")
                 # ---------------------------------------------------------
+                # Initialize Listener using the internal router instance if available, else provider
+                router_inst = provider.router_instance if hasattr(provider, 'router_instance') else None
+                if 'listener' not in locals():
+                    logger.info("Initializing Real-Time Market Listener...")
+                    # Fallback to provider if it acts as router, or ensure router is accessible
+                    # In our code, provider is RoutingProvider which has .router property
+                    listener_router = router_inst if router_inst else provider 
+                    listener = MarketListener(listener_router, active_tickers)
+                
+                # A. Adaptive Polling (Micro-Sleep)
+                # We poll frequently (~1s) to check if any ticker logic needs to run
+                # The listener class handles per-ticker rate limiting.
+                time.sleep(1.0) 
+                
+                # B. Check for Schedule (Hourly Heartbeat / Rebalance)
+                # Still run full rebalance periodically to ensure portfolio weights are roughly correct
+                is_scheduled_run = False
                 if time.time() - last_trade_time > 3600:
-                    # Heartbeat (Only send diagnosis if HIGH or EXTREME risk)
-                    if 'live_engine' in locals() and risk_mgr:
-                        tier = risk_mgr.get_risk_tier(live_engine.portfolio_value)
-                        if tier in ["HIGH", "EXTREME"]:
-                            diag = risk_mgr.explain_diagnostics(live_engine.portfolio_value)
-                            alert_mgr.heartbeat(diagnosis=diag)
-                        else:
-                            alert_mgr.heartbeat()  # Normal heartbeat without diagnosis
-                    else:
-                        alert_mgr.heartbeat()
-    
-                    # Execute today's rebalance
+                    logger.info("Triggering Scheduled Hourly Rebalance...")
+                    is_scheduled_run = True
+
+                # C. Check for Market Events
+                events = listener.tick()
+                if events:
+                    logger.warning(f"MARKET EVENTS DETECTED: {events}")
+                    for evt in events:
+                        if alerts: alerts.alert(f"EVENT: {evt}", level="CRITICAL")
+                
+                # D. Execution Trigger
+                # Run engine IF: Scheduled OR Significant Event
+                if events:
+                     # FAST PATH: Check for Critical CRASH Events
+                     # Institutional Requirement 3: Dual-Speed Intelligence
+                     for evt in events:
+                         if "FLASH_CRASH" in evt:
+                             logger.critical("⚡ FAST PATH TRIGGERED: Executing EMERGENCY PROTOCOL.")
+                             live_engine.enter_safe_mode()
+                             # Wait for manual recovery
+                             while live_engine.crash_mode:
+                                 time.sleep(10)
+                                 logger.warning("System in SAFE MODE. Waiting for restart...")
+                             break # Exit event loop if crashed
+                
+                if is_scheduled_run or (events and not live_engine.crash_mode):
+                    # SLOW PATH: Normal Rebalance / Volatility Adjustment
+                    # Heartbeat / Diagnosis
+                    if alerts:
+                        risk_tier = "NORMAL"
+                        if risk_mgr:
+                            risk_tier = risk_mgr.get_risk_tier(live_engine.portfolio_value)
+                        
+                        if events or risk_tier in ["HIGH", "EXTREME"]:
+                            diag = risk_mgr.explain_diagnostics(live_engine.portfolio_value) if risk_mgr else "N/A"
+                            alerts.heartbeat(diagnosis=diag)
+                        elif is_scheduled_run:
+                            alerts.heartbeat()
+
+                    # Execute Rebalance / Reaction
                     live_engine.run_once(active_tickers, strategy_fn)
                     last_trade_time = time.time()
                     
-                    # Update meta
-                    meta["duration_seconds"] = time.time() - start_time
+                    # Update Meta
+                    if 'start_time' in locals():
+                        meta["duration_seconds"] = time.time() - start_time
                     with open("output/meta.json", "w") as f:
                         json.dump(meta, f, indent=4)
-                    
-                    logger.info("Trading Cycle Complete. Next cycle in ~1 hour.")
-                
-                # High-res polling for scheduler accuracy
-                time.sleep(60) 
-                
+                        
+                    logger.info("Cycle Complete. Resuming Surveillance...")
+
+            except KeyboardInterrupt:
+                logger.warning("User stopped the loop.")
+                break
             except Exception as e:
-                logger.error(f"Error in 24/7 loop: {e}")
-                time.sleep(60) # Short sleep on error before retry
+                logger.error(f"PIPELINE ERROR: {e}")
+                # "Solid Rock" Stability: Don't crash, just cool down briefly
+                time.sleep(5) 
     
     # Initial Meta Persistence
     try:
@@ -355,5 +459,4 @@ def run_production_pipeline():
         logger.warning(f"Failed to save initial meta.json: {e}")
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
     run_production_pipeline()

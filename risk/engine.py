@@ -10,7 +10,10 @@ from risk.factor_exposure import FactorExposureEngine
 from risk.tail_risk import compute_tail_risk_metrics
 from risk.cvar import compute_cvar
 
-logger = logging.getLogger(__name__)
+import logging
+from risk.tail_risk import compute_tail_risk_metrics
+from regime.markov import RegimeModel
+
 
 from enum import Enum
 
@@ -106,6 +109,10 @@ class RiskManager:
         self.pca = StatisticalRiskModel(n_components=3)
         self.factor_engine = FactorExposureEngine(self.pca)
         self.factor_limit = 0.50 # Max exposure to any single factor
+        
+        # Advanced Institutional Models (Phase 4)
+        self.markov_model = RegimeModel()
+
 
         # Stress Scenarios (Institutional Shock Scenarios)
         self.stress_scenarios = {
@@ -136,16 +143,51 @@ class RiskManager:
         self.manual_approval_threshold = 0.15  # Require approval if DD > 15%
         self.high_risk_threshold = 0.08        # Alert but auto-handle if DD > 8%
 
+    def check_capital_preservation(self, current_equity: float, vix_level: float = 20.0) -> Tuple[bool, float]:
+        """
+        Global Capital Preservation Check.
+        Triggers if:
+        1. VIX > 30 (Extreme Fear)
+        2. Drawdown > 15% (Approaching Max Limit)
+        
+        Returns: (is_active, scalar_factor)
+        """
+        is_active = False
+        scalar = 1.0
+        
+        # Check VIX
+        if vix_level > 30.0:
+            is_active = True
+            scalar = 0.5
+            
+        # Check Drawdown
+        if self._max_equity > 0:
+            dd = (self._max_equity - current_equity) / self._max_equity
+            if dd > 0.15:
+                is_active = True
+                scalar = min(scalar, 0.5)
+                
+        return is_active, scalar
+
     def compute_var(self, returns: pd.Series, confidence: float = 0.95) -> float:
         """
         Compute VaR. Returns positive float representing loss percentage.
         e.g. 0.04 means 4% loss.
         """
-        if returns.empty or len(returns) < 20: 
-            return 0.0
-        cutoff = np.percentile(returns, 100 * (1 - confidence))
-        # Cutoff is e.g. -0.04. we return 0.04
-        return -cutoff if cutoff < 0 else 0.0
+        try:
+             if returns.empty or len(returns) < 20: 
+                 return 0.0
+             
+             # Clean again just in case
+             clean_rets = returns.dropna()
+             if clean_rets.empty: return 0.0
+             
+             cutoff = np.percentile(clean_rets, 100 * (1 - confidence))
+             # Cutoff is e.g. -0.04. we return 0.04
+             return -cutoff if cutoff < 0 else 0.0
+        except Exception as e:
+             logger.error(f"VaR calc failed: {e}")
+             return 0.0
 
     def calculate_stress_loss(self, target_weights: Union[Dict, pd.Series]) -> Dict[str, float]:
         portfolio_beta = 1.0 
@@ -202,6 +244,30 @@ class RiskManager:
              self.regime = RiskRegime.BEAR_CRISIS
              self.is_risk_on = False 
              
+        # PHASE 4: MARKOV REGIME UPDATE
+        regime_probs = self.markov_model.update(spy_history)
+        panic_prob = regime_probs.get("panic_prob", 0.0)
+        
+        # Determine Regime based on Markov Probabilities
+        if panic_prob > 0.30:
+            self.regime = RiskRegime.BEAR_CRISIS
+            self.is_risk_on = False
+            logger.warning(f"MARKOV ALERT: High Panic Probability {panic_prob:.1%}")
+        elif regime_probs.get("bear_prob", 0.0) > 0.50:
+            self.regime = RiskRegime.BEAR_QUIET
+            self.is_risk_on = False
+        elif regime_probs.get("bull_prob", 0.0) > 0.50:
+             self.regime = RiskRegime.BULL_QUIET
+             self.is_risk_on = True
+             
+        # Fallback to Volatility logic if Markov is uncertain
+        else:
+             if is_high_vol:
+                 self.regime = RiskRegime.BULL_VOLATILE
+             else:
+                 self.regime = RiskRegime.BULL_QUIET
+             self.is_risk_on = True
+             
         self._spy_ma200 = ma200
         self._last_spy_price = current_spy
 
@@ -230,9 +296,15 @@ class RiskManager:
                  decision=RiskDecision.REJECT, 
                  violations=[f"Drawdown {dd:.1%} > {self.max_drawdown_limit:.1%} Limit"]
              )
-        elif dd > 0.05:
-             dd_scalar = max(0.0, (self.max_drawdown_limit - dd) / 0.13)
-             dd_violation = f"Drawdown {dd:.1%} > 5% (Scaler {dd_scalar:.2f})"
+        # 7. Drawdown Adaptation (Exponential Decay)
+        # Risk = Risk0 * exp(-lambda * DD)
+        if dd > 0.0:
+             # Lambda = 5 aggressive decay
+             # DD=10% -> exp(-0.5) = 0.60 (40% cut)
+             # DD=20% -> exp(-1.0) = 0.36 (64% cut)
+             dd_scalar = np.exp(-5.0 * dd)
+             if dd > 0.05:
+                  dd_violation = f"Drawdown {dd:.1%} (ExpScaler {dd_scalar:.2f})"
 
         recovery_scalar = 1.0
         if self.state == RiskDecision.RECOVERY:
@@ -275,11 +347,17 @@ class RiskManager:
 
         current_var = self.compute_var(portfolio_returns)
         
-        # New CVaR / Tail Risk
+        # New CVaR / Tail Risk (Updated with EVT)
         if self.use_cvar_gate or self.use_evt_gate:
+            # Using the new EVT implementation defined in tail_risk.py
             tail_metrics = compute_tail_risk_metrics(portfolio_returns)
             current_cvar = tail_metrics['cvar']
             ev_score = tail_metrics['evtrisk_score']
+            tail_idx = tail_metrics['tail_index']
+            
+            if tail_idx > 0.3: # Critical Fat Tail Warning
+                 violations.append(f"EVT Alert: Fat Tail (xi={tail_idx:.2f})")
+                 raw_scale *= 0.5
         else:
             current_cvar = 0.0
             ev_score = 0.0
@@ -457,12 +535,18 @@ class RiskManager:
             primary_reason=reason
         )
 
-    def explain_diagnostics(self, current_equity: float) -> str:
+    def explain_diagnostics(self, current_equity: float, current_sharpe: float = 0.0) -> str:
         
         dd = (self._max_equity - current_equity) / (self._max_equity + 1e-9) if self._max_equity > 0 else 0.0
         
         lines = []
         lines.append(f"🔍 **DIAGNOSIS: PORTFOLIO STRESS**")
+        
+        # 9. Strategy Decay (Stability Ratio)
+        # Stability = Sharpe_Realized / Sharpe_Target (0.05 daily ~ 0.8 annual? let's assume target is 1.5)
+        # If Rolling Sharpe drops significantly, strategy might be decaying
+        if current_sharpe < 0.5: # Annualized < 0.5 is poor
+             lines.append("⚠️ **Strategy Decay**: Realized Sharpe is low. Alpha may be fading.")
         
         if self.regime in [RiskRegime.BEAR_CRISIS, RiskRegime.BEAR_QUIET]:
             lines.append("📉 **Root Cause**: Adverse Market Regime (Bearish).")

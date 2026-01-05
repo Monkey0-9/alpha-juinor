@@ -14,7 +14,7 @@ class MLAlpha(Alpha):
     Trains a Random Forest models to predict forward returns.
     """
 
-    def __init__(self, feature_engineer: FeatureEngineer, train_window: int = 500):
+    def __init__(self, feature_engineer: FeatureEngineer, min_samples: int = 250):
         self.fe = feature_engineer
         self.model = RandomForestRegressor(
             n_estimators=50, 
@@ -25,7 +25,7 @@ class MLAlpha(Alpha):
         )
         self.is_trained = False
         self.ml_ready = False
-        self.train_window = train_window
+        self.train_window = min_samples # Align validation logic
         self.retrain_interval = 63 # Retrain every quarter (~63 business days)
         self.last_train_date: Optional[pd.Timestamp] = None
         self.last_features: Optional[pd.DataFrame] = None

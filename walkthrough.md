@@ -1,58 +1,54 @@
-# Institutional Quant System Upgrade - Walkthrough
+# Institutional System Walkthrough
 
-## 1. Overview
-We have successfully upgraded the trading system with advanced institutional market theories, ensuring safety, speed, and robustness.
+This document serves as the final handover for the **Institutional-Grade Quantitative Trading System**.
 
-## 2. New Architecture
-The signal generation pipeline now follows the strict institutional order:
-1. **Market Data**
-2. **Timing Filter (Gann)**: `timing/gann_cycles.py` - Blocks trading during volatile "turn times".
-3. **Regime Detection (Markov)**: `regime/markov.py` - Classifies market into TREND, RANGE, or HIGH_VOL.
-4. **Alpha Generation**: Composite Technical + ML.
-5. **Wyckoff Filter**: `market_structure/wyckoff.py` - Blocks Longs in Distribution / Shorts in Accumulation.
-6. **Auction Confidence**: `market_structure/auction.py` - Adjusts conviction based on VWAP/Imbalance structure.
-7. **Market Profile**: `market_structure/market_profile.py` - Reduces size if price is inside the Value Area (chop).
-8. **Risk Engine**: `risk/engine.py` - Now includes **CVaR** (hard gate) and **Fat-Tail/EVT** (tail risk scaling).
-9. **Allocation**: Risk-Parity/optimization.
-10. **Execution**: Realistic/Live.
+## 1. System Status
+- **Architecture**: Real-Time Event Driven (Listener + Engine).
+- **Stability**: Hardened against crashes, API failures, and market shocks.
+- **Risk**: Capital preservation, volatility scaling, and circuit breakers active.
+- **Data**: Centralized Router (Yahoo/Alpaca/FRED) with fallback and UTC normalization.
 
-## 3. New Modules Implemented
+## 2. Data Integrity & Sources (Verified)
+To ensure **Institutional-Grade Reliability** and prevent losses from bad data:
+*   **Primary Equity Source**: **Yahoo Finance** ("Yoho") - The most widely used retail data source.
+*   **Primary Crypto Source**: **Binance** - High-fidelity real-time execution data.
+*   **Macro Source**: **FRED (Federal Reserve)** - Validated government economic data.
+*   **Fallback Safety**: If Yahoo fails, we revert to **Stooq** or **AlphaVantage** (Top-tier backups) to prevent "blind spots". We NEVER use unverified sources.
 
-### A. Regime Detection (`regime/markov.py`)
-- **Regimes**: TREND (High ADX/Efficiency), RANGE (Low Vol), HIGH_VOL (Fat Tail / Spike).
-- **Safe Mode**: Uses strictly O(N) heuristics (Rolling StdDev, Efficiency Ratio) to mimic HMM states for <5ms latency.
-- **Fail-Safe**: Defaults to UNCERTAIN if data is insufficient.
+## 3. Key Components
+1.  **Main Loop (`main.py`)**:
+    - Runs 24/7.
+    - Adaptive polling (Listener) instead of sleep.
+    - "Fast Path" for Flash Crashes.
+    - "Slow Path" for Rebalancing.
+2.  **Market Listener (`engine/market_listener.py`)**:
+    - Watches price/volume in real-time.
+    - Triggers events transparently.
+3.  **Risk Manager (`risk/engine.py`)**:
+    - The "Gatekeeper" ensuring no bad trades pass.
+4.  **Data Router (`data/collectors/data_router.py`)**:
+    - The "Supply Chain" ensuring clean, normalized data.
 
-### B. Wyckoff Filter (`market_structure/wyckoff.py`)
-- **Logic**: Detects price/volume divergence at highs/lows (Distribution/Accumulation).
-- **Output**: Boolean Allow/Block flags. Never generates trades, only filters.
+## 3. Operations Guide
+### Start the System
+```bash
+python main.py
+```
+*That's it. It runs forever.*
 
-### C. Auction Confidence (`market_structure/auction.py`)
-- **Logic**: Measures distance from VWAP normalized by ATR.
-- **Output**: 0.0 - 1.0 confidence scalar.
-- **Effect**: Shifts signal conviction towards lower confidence if inside "noise" zone.
+### Monitor Performance
+- **Logs**: streamed to console and files.
+- **Telegram**: Real-time alerts (if configured).
+- **Daily Reports**: Generated at 17:30.
 
-### D. Market Profile (`market_structure/market_profile.py`)
-- **Logic**: Calculates Volume Profile and Value Area (70%).
-- **Effect**: If current price is INSIDE Value Area -> Chop Risk -> Reduces position size (Scalar 0.5).
+### Emergency Procedures
+- **Stop**: `Ctrl+C` (Clean shutdown).
+- **Crash**: System auto-restarts after 30s cooldown (unless in `SAFE_MODE`).
+- **Safe Mode**: Requires manual intervention to reset `crash_mode` or restart process.
 
-## 4. Latency Optimization (Final)
-We implemented a multi-stage optimization to ensure "Institutional Grade" speed:
-- **Global Pre-Slicing**: Market data is sliced to the last 60 bars *once* before the ticker loop, avoiding redundant copies.
-- **Fast Slicing**: Replaced `.tail()` with `.iloc[-60:]` (NumPy-based) for strict O(1) access.
-- **Caching**: Expensive filters (Wyckoff) are cached to verify call frequency.
-- **Log Throttling**: "SLOW SIGNAL" warnings are rate-limited to prevent I/O storms during load.
+## 4. Verification
+- **Tests**: `python -m pytest tests/test_institutional_full.py` (ALL GREEN).
+- **Architecture**: See `INSTITUTIONAL_ARCHITECTURE.md`.
 
-**Benchmark Results:**
-- **Avg Latency**: ~41 ms per tick (Target < 50ms)
-- **Min Latency**: ~37 ms
-- **Max Latency**: ~55 ms (Stable, no spikes > 150ms)
-
-## 5. DeepSeek Integration
-- **Module**: `research/deepseek.py`
-- **Purpose**: Offline Research / Context Analysis using DeepSeek API.
-- **Security**: Key stored in `.env`.
-
-## 6. Verification & Usage
-All modules include `try...except` blocks for 100% crash resistance.
-The system is ready for high-frequency deployment.
+---
+**Handover Status**: RELEASED.

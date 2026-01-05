@@ -61,7 +61,7 @@ class InstitutionalStrategy(BaseStrategy):
         self._logged_fallback = set()
         self._log_throttle = 0
 
-    def generate_signals(self, market_data: pd.DataFrame) -> pd.DataFrame:
+    def generate_signals(self, market_data: pd.DataFrame, macro_context: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
         t_start = time.perf_counter()
         signals = {}
         ts = market_data.index[-1]
@@ -71,6 +71,17 @@ class InstitutionalStrategy(BaseStrategy):
             # Fast Exit
             for tk in self.tickers: signals[tk] = 0.5
             return pd.DataFrame([signals], index=[ts])
+
+        # 0b. Macro Risk Overlay (Multi-Source Logic)
+        # Uses FRED VIX data if provided to gate trading
+        risk_off_mode = False
+        if macro_context:
+            vix = macro_context.get("VIX", 20.0)
+            if vix > 32.0: # Institutional Panic Threshold
+                risk_off_mode = True
+                logger.info(f"MACRO ALERT: VIX {vix:.1f} > 32. Trading Halted (Risk Off).")
+                for tk in self.tickers: signals[tk] = 0.5
+                return pd.DataFrame([signals], index=[ts])
 
         # LATENCY OPTIMIZATION:
         # Enforce "Time Budget" of 50ms (soft target)
@@ -144,6 +155,89 @@ class InstitutionalStrategy(BaseStrategy):
                     if mp['inside_value_area']: conviction = 0.5 + (conviction - 0.5) * 0.5
                     
                 # VPIN (Skipped for now or stub)
+                
+                # --- PHASE 4: INSTITUTIONAL HARDENING (EV & CONSENSUS) ---
+                
+                # 3. Expected Value (EV) Gate
+                # EV = P(Win) * Gain - P(Loss) * Loss - Cost
+                # Assumptions: Reward:Risk = 2:1, Cost = 5bps
+                daily_vol = df_slice['Close'].pct_change().std()
+                if np.isnan(daily_vol): daily_vol = 0.01
+                
+                # Estimated Probabilities derived from Conviction
+                # Conviction 0.6 -> P(Win) ~ 0.55? Let's treat Conviction as raw Probability for simplicity
+                if conviction > 0.5:
+                    p_win = conviction
+                    p_loss = 1.0 - p_win
+                    est_reward = 2.0 * daily_vol
+                    est_risk = 1.0 * daily_vol
+                    transaction_cost = 0.0005 # 5bps
+                    
+                    ev = (p_win * est_reward) - (p_loss * est_risk) - transaction_cost
+                    
+                    if ev <= 0:
+                        # logger.debug(f"EV REJECT {tk}: EV={ev:.5f} <= 0")
+                        conviction = 0.5
+                
+                # 4. Multi-Horizon Consensus (Weekly/Daily alignment)
+                # Validates if the 'Micro' signal aligns with 'Macro' trend of the window
+                if conviction != 0.5:
+                    # Daily Slope
+                    y_daily = df_slice['Close'].values
+                    slope_daily = np.polyfit(np.arange(len(y_daily)), y_daily, 1)[0]
+                    
+                    # Weekly Estimate (Simulated by resampling last 20 days -> ~4 weeks)
+                    # If we have 60 days, we can resample.
+                    if len(df_slice) >= 20:
+                        weekly_closes = df_slice['Close'].iloc[::5] # Approx weekly
+                        if len(weekly_closes) > 2:
+                            slope_weekly = np.polyfit(np.arange(len(weekly_closes)), weekly_closes.values, 1)[0]
+                            
+                            # CONSENSUS CHECK:
+                            # If Daily UP but Weekly DOWN -> Chop Risk -> Reduce Signal
+                            if (slope_daily > 0 and slope_weekly < 0) or (slope_daily < 0 and slope_weekly > 0):
+                                logger.info(f"Timeframe Conflict {tk}: Daily/Weekly divergence. Halving conviction.")
+                                conviction = 0.5 + (conviction - 0.5) * 0.5
+
+                # 6. Loss Shape Control (ATR Based Volatility Stop)
+                # "Winning systems lose small"
+                # If volatility is high, we require a WIDER stop (lower leverage), effectively reducing convexity of loss
+                atr_period = 14
+                if len(df_slice) > atr_period:
+                    high_low = df_slice['High'] - df_slice['Low']
+                    high_close = np.abs(df_slice['High'] - df_slice['Close'].shift())
+                    low_close = np.abs(df_slice['Low'] - df_slice['Close'].shift())
+                    ranges = pd.concat([high_low, high_close, low_close], axis=1)
+                    true_range = np.max(ranges, axis=1)
+                    atr = true_range.rolling(atr_period).mean().iloc[-1]
+                    
+                    if atr > 0:
+                        # Dynamic Stop Distance
+                        # Calm (Low Vol) -> Tight Stop (1x ATR)
+                        # Chaos (High Vol) -> Loose Stop (2x ATR) -> Requires smaller size
+                        current_price = df_slice['Close'].iloc[-1]
+                        vol_regime_scalar = (atr / current_price) / 0.01 # Normalized to 1% daily vol
+                        
+                        # If highly volatile, penalize conviction to enforce "Shape Control"
+                        # We don't want to take full size positions in 4-ATR markets
+                        if vol_regime_scalar > 2.0:
+                             conviction = 0.5 + (conviction - 0.5) * (1.0 / vol_regime_scalar)
+                
+                # 8. Liquidity Impact (Market Impact Model)
+                # Impact ~ Eta * sqrt(Size / ADV)
+                # We enforce: Size < 1% ADV to keep impact negligible
+                recent_vol_avg = df_slice['Volume'].iloc[-5:].mean()
+                if recent_vol_avg > 0:
+                     # Assume we want to trade roughly $10k (mini fund size)
+                     # In real engine, 'Allocator' knows size, but Strategy must verify tradeability
+                     # $10k / Price = Shares
+                     est_shares = 10000.0 / df_slice['Close'].iloc[-1]
+                     participation_rate = est_shares / recent_vol_avg
+                     
+                     if participation_rate > 0.01: # > 1% of volume
+                          # Too big for liquidity -> Impact Penalty
+                          penalty = 1.0 - (participation_rate * 10) # decay fast
+                          conviction = 0.5 + (conviction - 0.5) * max(0.1, penalty)
                 
                 signals[tk] = conviction
                 

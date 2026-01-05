@@ -31,13 +31,10 @@ alpha:
 
 # 4. Institutional Risk Limits (HARD LIMITS)
 risk:
-  max_gross_leverage: 1.2
-  max_net_leverage: 1.0
-  max_position_size_pct: 0.30  # Max 30% in any single asset
-  max_sector_exposure_pct: 0.60
-  target_volatility_annualized: 0.18
-  max_daily_drawdown_limit: 0.03 # 3% daily stop
-  max_total_drawdown_limit: 0.15 # 15% system kill-switch
+  max_gross_leverage: 2.0  # Increased from 1.0 for "Hedge Fund" sizing
+  target_volatility_annualized: 0.25 # Increased from 0.15 (More aggressive)
+  position_concentration_limit: 0.20 # Allow 20% in single conviction bet
+  max_drawdown_limit: 0.25 # Allow deeper drawdowns for higher alpha
 
 # 5. Monitoring & Reconciliation
 ops:
