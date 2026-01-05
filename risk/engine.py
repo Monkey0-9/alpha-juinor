@@ -10,9 +10,9 @@ from risk.factor_exposure import FactorExposureEngine
 from risk.tail_risk import compute_tail_risk_metrics
 from risk.cvar import compute_cvar
 
-import logging
-from risk.tail_risk import compute_tail_risk_metrics
 from regime.markov import RegimeModel
+
+logger = logging.getLogger(__name__)
 
 
 from enum import Enum
@@ -348,6 +348,7 @@ class RiskManager:
         current_var = self.compute_var(portfolio_returns)
         
         # New CVaR / Tail Risk (Updated with EVT)
+        raw_scale = 1.0
         if self.use_cvar_gate or self.use_evt_gate:
             # Using the new EVT implementation defined in tail_risk.py
             tail_metrics = compute_tail_risk_metrics(portfolio_returns)
@@ -363,8 +364,6 @@ class RiskManager:
             ev_score = 0.0
 
         if dd_violation: violations.append(dd_violation)
-        
-        raw_scale = 1.0
         
         if self.use_evt_gate and ev_score > 0.4: # Low tolerance for fat tails
              tail_scalar = 1.0 - ev_score
