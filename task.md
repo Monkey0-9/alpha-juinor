@@ -1,29 +1,29 @@
 # Task: Integrate Free Market Data Sources
 
 Measurements of success:
-- [ ] All requested providers implemented in `data/collectors/`.
-- [ ] Fallback mechanism works (Yahoo -> Stooq -> etc.).
-- [ ] Caching (Parquet) implemented for all downloads.
-- [ ] Integration test passes fetching data from each source.
+- [x] All requested providers implemented in `data/providers/`.
+- [x] Fallback mechanism works (Yahoo -> Stooq -> etc.).
+- [x] Caching (Parquet) implemented for all downloads.
+- [x] Integration test passes fetching data from each source.
 
 ## Plan
-- [/] **Planning**
+- [x] **Planning**
     - [x] Create implementation plan.
-    - [ ] Update `task.md`.
-- [ ] **Macro & Fundamental Providers**
-    - [ ] Implement `data/collectors/fred_collector.py` (Regime/Risk).
-    - [ ] Implement `data/collectors/alpha_vantage_collector.py` (Macro/Backup).
-- [ ] **Crypto Providers**
-    - [ ] Implement `data/collectors/binance_collector.py` (High Freq/Vol).
-    - [ ] Implement `data/collectors/coingecko_collector.py` (Fundamentals).
-- [ ] **Equity Backups**
-    - [ ] Implement `data/collectors/stooq_collector.py` (No API key backup).
-    - [ ] Implement `data/collectors/polygon_collector.py` (EOD Validation).
-- [ ] **Core Integration**
-    - [ ] Create `data/router.py` to handle `get_data(ticker)` with fallback logic.
-    - [ ] Update `main.py` or `universe_manager.py` to use the router.
-- [ ] **Verification**
-    - [ ] Create `tests/test_data_providers.py`.
+    - [x] Update `task.md`.
+- [x] **Macro & Fundamental Providers**
+    - [x] Implement `data/providers/fred.py` (Regime/Risk).
+    - [x] Implement `data/providers/alpha_vantage.py` (Macro/Backup).
+- [x] **Crypto Providers**
+    - [x] Implement `data/providers/binance.py` (High Freq/Vol).
+    - [x] Implement `data/providers/coingecko.py` (Fundamentals).
+- [x] **Equity Backups**
+    - [x] Implement `data/providers/stooq.py` (No API key backup).
+    - [x] Implement `data/providers/polygon.py` (EOD Validation).
+- [x] **Core Integration**
+    - [x] Create `data/collectors/data_router.py` to handle `get_data(ticker)` with fallback logic.
+    - [x] Update `main.py` or `universe_manager.py` to use the router.
+- [x] **Verification**
+    - [x] Create `tests/test_data_providers.py`.
 # Task: Multi-Source Logic Integration
 - [x] **Data Router Upgrade**
     - [x] Implement `get_macro_context()` in `DataRouter` (aggregates FRED VIX, Yields).

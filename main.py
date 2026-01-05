@@ -202,7 +202,7 @@ def run_production_pipeline():
     )
     
     # 3. Model Warming
-    start_date = "2023-01-01" 
+    start_date = "2025-05-01"
     # FIX: Fetch 365 days for ML to satisfy "Need 500" validation (approx 252 trading days + buffer)
     train_start = (pd.to_datetime(start_date) - timedelta(days=400)).strftime("%Y-%m-%d")
     logger.info(f"Phase 1: Warming models from {train_start} (Deep History for ML)...")

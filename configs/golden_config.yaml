@@ -16,7 +16,7 @@ universe:
 
 # 2. Execution Parameters
 execution:
-  mode: "paper"  # paper | backtest | live
+  mode: "backtest"  # paper | backtest | live
   initial_capital: 1000000.0
   rebalance_frequency: "daily"
   commission_bps: 2.0  # 0.02% 
@@ -53,3 +53,7 @@ features:
   use_fat_tail_protection: true
   use_vpin_filter: true
   use_cointegration_filter: false # Research only for now
+
+# 7. Data Provider API Keys
+data_providers:
+  polygon_api_key: "bRAf6qbh9IkaI_ZlU2CrItZFqR2m00zq"

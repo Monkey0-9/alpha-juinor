@@ -234,7 +234,8 @@ class BacktestEngine:
             raise RuntimeError("Price panel empty.")
 
         # Filter iteration to start at start_date, but keep full_panel for .loc[:ts] lookbacks
-        trading_panel = full_panel[full_panel.index >= pd.to_datetime(start_date)]
+        start_ts = pd.to_datetime(start_date)
+        trading_panel = full_panel[full_panel.index >= start_ts]
         if trading_panel.empty:
             raise RuntimeError(f"No trading data available starting at {start_date}")
 
