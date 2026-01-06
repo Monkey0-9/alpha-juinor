@@ -6,6 +6,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from utils.time import get_now_utc
+import asyncio
 
 logger = logging.getLogger("MarketListener")
 
@@ -33,50 +34,64 @@ class MarketListener:
         self.vol_spike_threshold = 0.02 # 2% move in short window
         self.tick_counter = 0 # For visual heartbeat
         
-    def tick(self) -> List[str]:
+        # Performance: True Async concurrency (no thread pool needed)
+        # self.executor = ThreadPoolExecutor(...) -> Removed in favor of asyncio.create_task
+        
+    async def tick_async(self) -> List[str]:
         """
-        Main heartbeat method. Called frequently by the main loop.
-        Returns a list of detected event descriptions.
+        Main heartbeat method (Optimized for Speed via asyncio).
+        Parallelizes polling and analysis using native async tasks.
         """
-        events = []
         now = time.time()
         
-        # VISUAL HEARTBEAT (User Reassurance)
-        # Every 5 ticks (approx 5s), log a "Scanning" message
-        self.tick_counter += 1
-        if self.tick_counter % 5 == 0:
-            logger.info(f"⚡ [SURVEILLANCE] Scanning {len(self.tickers)} assets... Market Normal.")
-        
+        # 1. Identity tasks due for polling
+        tickers_to_poll = []
         for ticker in self.tickers:
             is_crypto = "-USD" in ticker
             interval = self.crypto_interval if is_crypto else self.equity_interval
-            
-            # 1. Check if due for poll
             last_t = self.last_poll_time.get(ticker, 0)
-            if now - last_t < interval:
-                continue
-                
-            # 2. Poll Data (Lightweight)
-            try:
-                price = self.router.get_latest_price(ticker)
-                self.last_poll_time[ticker] = now
-                
-                if price is None:
-                    continue
-                    
-                # 3. Analyze for Events
-                event = self._analyze_tick(ticker, price)
-                if event:
-                    events.append(event)
-                    
-                # Update State
-                self.last_prices[ticker] = price
-                
-            except Exception as e:
-                # Log debug only to avoid spam
-                logger.debug(f"Listener Poll Failed {ticker}: {e}")
+            if now - last_t >= interval:
+                tickers_to_poll.append(ticker)
+        
+        if not tickers_to_poll:
+            return []
+
+        # 2. visual heartbeat
+        self.tick_counter += 1
+        if self.tick_counter % 5 == 0:
+            logger.info(f"[SURVEILLANCE] Scanning {len(tickers_to_poll)}/{len(self.tickers)} assets in parallel...")
+
+        # 3. Parallel Execution via asyncio.gather
+        tasks = [self._poll_and_analyze_async(ticker) for ticker in tickers_to_poll]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        events = []
+        for ticker, result in zip(tickers_to_poll, results):
+            if isinstance(result, Exception):
+                logger.debug(f"Listener Parallel Poll Failed {ticker}: {result}")
+            elif result:
+                events.append(result)
                 
         return events
+
+    async def _poll_and_analyze_async(self, ticker: str) -> Optional[str]:
+        """Worker function for async scanner."""
+        try:
+            price = await self.router.get_latest_price_async(ticker)
+            self.last_poll_time[ticker] = time.time()
+            
+            if price is None:
+                return None
+                
+            event = self._analyze_tick(ticker, price)
+            self.last_prices[ticker] = price
+            return event
+        except Exception as e:
+            raise e
+
+    def tick(self) -> List[str]:
+        """Sync wrapper for compatibility, but recommend tick_async."""
+        return asyncio.run(self.tick_async())
 
     def _analyze_tick(self, ticker: str, current_price: float) -> Optional[str]:
         """Detects anomalies between last price and current price."""
@@ -88,18 +103,27 @@ class MarketListener:
         
         pct_change = (current_price - last_price) / last_price
         
-        # 1. Flash Crash Detection
-        if pct_change < -self.crash_threshold:
-            # INSTITUTIONAL VERIFICATION: Cross-check with secondary source
-            # "Get confirmation of analysis" - User Request
+        # 1. Anomaly Detection Logic (Institutional Requirement 3.1)
+        # Any move > 5% requires cross-check. Moves > 30% are treated as FLASH_CRASH.
+        abs_move = abs(pct_change)
+        
+        if abs_move > 0.05:
+            # Mandate secondary confirmation for significant moves
             if self.router.cross_check_quote(ticker, current_price):
-                return f"FLASH_CRASH: {ticker} dropped {pct_change:.2%} detected at {get_now_utc()} (VERIFIED)"
+                if pct_change < -0.30:
+                    return f"FLASH_CRASH: {ticker} dropped {pct_change:.2%} (VERIFIED)"
+                return f"VOLATILITY_SPIKE: {ticker} moved {pct_change:.2%} (VERIFIED)"
             else:
-                logger.warning(f"Flash Crash Detected for {ticker} but FAILED Cross-Check. Ignoring as Glitch.")
-                return None
+                # If unverified, we treat it as a glitch if it's extreme (>50%)
+                if abs_move > 0.50:
+                    logger.error(f"ANOMALY REJECTED: {ticker} moved {pct_change:.2%} but FAILED cross-check. Filtering as glitch.")
+                    return None
+                else:
+                    logger.warning(f"Unverified move detected for {ticker} ({pct_change:.2%}). Cross-check failed.")
+                    return None
             
-        # 2. Volatility/Breakout (Upside or Downside)
-        if abs(pct_change) > self.vol_spike_threshold:
+        # 2. Normal Volatility/Breakout
+        if abs_move > self.vol_spike_threshold:
             return f"VOLATILITY_SPIKE: {ticker} moved {pct_change:.2%}"
             
         return None

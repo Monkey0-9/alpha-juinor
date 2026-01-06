@@ -1,0 +1,7 @@
+2026-01-06 01:44:33 [WARNING] dotenv.main:38: python-dotenv could not parse statement starting at line 11
+2026-01-06 01:44:33 [WARNING] dotenv.main:38: python-dotenv could not parse statement starting at line 11
+2026-01-06 01:44:33 [WARNING] InstitutionalDriver:45: .env line 12 missing '=' separator: Alpaca API Credentials
+2026-01-06 01:49:22 [WARNING] dotenv.main:38: python-dotenv could not parse statement starting at line 11
+2026-01-06 01:49:22 [WARNING] dotenv.main:38: python-dotenv could not parse statement starting at line 11
+2026-01-06 01:49:22 [WARNING] InstitutionalDriver:45: .env line 12 missing '=' separator: Alpaca API Credentials
+2026-01-06 01:50:24 [INFO] test:1: Logger test successful

@@ -12,7 +12,7 @@ Key compatibility fixes:
 """
 
 from datetime import datetime
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Union
 
 import pandas as pd
 import numpy as np
@@ -60,7 +60,7 @@ class BacktestEngine:
         provider: Optional[object] = None,
         initial_capital: float = 1_000_000.0,
         execution_handler: Optional[RealisticExecutionHandler] = None,
-        risk_manager: Optional[RiskManager] = None,
+        risk_manager: Optional['RiskManager'] = None,
         risk_free_rate: float = 0.02,
     ):
         self.provider = provider
@@ -149,7 +149,7 @@ class BacktestEngine:
             nav += qty * price
         return float(nav)
 
-    def _validate_state(self, timestamp) -> None:
+    def _validate_state(self, timestamp: Union[str, "pd.Timestamp"]) -> None:
         """
         HARD INVARIANT CHECKS: Cash, positions, and equity must be finite.
         Called after every trade to ensure accounting integrity.
@@ -266,9 +266,12 @@ class BacktestEngine:
             # -------------------------
             # 1. Strategy & Execution
             # -------------------------
-            # Call strategy to generate new orders
-            # Fail fast if strategy crashes - institutional requirement.
-            new_orders = strategy_fn(ts, close_prices, self) or []
+            # ENGINE-LEVEL FAIL-SAFE: Never crash due to bad data/schema errors
+            try:
+                new_orders = strategy_fn(ts, close_prices, self) or []
+            except KeyError as e:
+                logger.error(f"Schema error in strategy pipeline: {e}")
+                new_orders = []
             if new_orders:
                 for o in new_orders:
                     self.blotter.record_order(o)

@@ -17,20 +17,20 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.pipeline import Pipeline
 from sklearn.feature_selection import SelectKBest, f_regression, mutual_info_regression
 
+logger = logging.getLogger(__name__)
+
 # Deep Learning imports (optional)
 try:
-    import tensorflow as tf
-    from tensorflow.keras.models import Sequential, Model
-    from tensorflow.keras.layers import Dense, LSTM, Dropout, BatchNormalization
-    from tensorflow.keras.layers import Conv1D, MaxPooling1D, Flatten, Input
-    from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-    from tensorflow.keras.optimizers import Adam
+    import tensorflow as tf  # type: ignore
+    from tensorflow.keras.models import Sequential, Model  # type: ignore
+    from tensorflow.keras.layers import Dense, LSTM, Dropout, BatchNormalization  # type: ignore
+    from tensorflow.keras.layers import Conv1D, MaxPooling1D, Flatten, Input  # type: ignore
+    from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint  # type: ignore
+    from tensorflow.keras.optimizers import Adam  # type: ignore
     DEEP_LEARNING_AVAILABLE = True
 except ImportError:
     DEEP_LEARNING_AVAILABLE = False
     logger.warning("TensorFlow not available. Deep learning features disabled.")
-
-logger = logging.getLogger(__name__)
 
 class InstitutionalMLEngine:
     """

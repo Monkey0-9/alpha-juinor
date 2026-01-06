@@ -40,9 +40,16 @@ def _ensure_series(data: pd.DataFrame | pd.Series) -> pd.Series:
     FAIL FAST: Extracts 'Close' column if DataFrame provided.
     Ensures alpha models operate on deterministic scalar prices.
     """
+    if data is None:
+        return pd.Series(dtype=float)
+        
     if isinstance(data, pd.DataFrame):
         if "Close" not in data.columns:
-            raise ValueError("Institutional Abort: Market data missing required 'Close' column.")
+            # Check for MultiIndex
+            if isinstance(data.columns, pd.MultiIndex) and "Close" in data.columns.get_level_values(1):
+                 # Extract 'Close' from the first ticker if it's a slice
+                 return data.xs('Close', axis=1, level=1).iloc[:, 0]
+            raise ValueError(f"Institutional Abort: Market data missing required 'Close' column. Columns: {data.columns.tolist()}")
         return data["Close"]
     return data
 

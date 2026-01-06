@@ -1,0 +1,9 @@
+{
+  "ticker": "ETH-USD",
+  "start_date": "2025-04-28",
+  "end_date": "2026-01-05",
+  "data_type": "ohlcv",
+  "cached_at": "2026-01-05T20:24:51.110489",
+  "rows": 252,
+  "ttl_hours": 24.0
+}

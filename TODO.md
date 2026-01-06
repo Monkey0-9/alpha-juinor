@@ -1,68 +1,31 @@
-# Institutional Quantitative Trading System - Implementation Plan
+# Institutional Quant Trading System Fixes
 
-## ✅ Phase 1: Core Infrastructure (COMPLETED)
-- [x] Implement distributed data router with real-time streaming
-- [x] Add premium data sources (Bloomberg/Reuters integration)
-- [x] Create institutional risk management system
-- [x] Build comprehensive backtesting engine
-- [x] Implement execution simulation with market impact
+## 1. Fix InstitutionalStrategy.generate_signals Return Type
+- **File**: strategies/institutional_strategy.py
+- **Function**: generate_signals
+- **Problem**: Returns dict instead of DataFrame, causing .iloc[-1] to fail in main.py
+- **Fix**: Aggregate alpha signals per ticker, return single-row DataFrame
 
-## ✅ Phase 2: Advanced Analytics (COMPLETED)
-- [x] Add technical indicators library (150+ indicators)
-- [x] Implement portfolio optimization algorithms
-- [x] Create advanced reporting and visualization
-- [x] Build compliance and audit trail system
-- [x] Add distributed computing capabilities
+## 2. Add Schema Enforcement in Data Router
+- **File**: data/collectors/data_router.py
+- **Function**: get_price_history
+- **Problem**: No validation that returned data is DataFrame with required columns
+- **Fix**: Add assertions for DataFrame type and column presence
 
-## ✅ Phase 3: Advanced Analytics & AI (COMPLETED)
-- [x] Reinforcement Learning for Trading Strategies
-- [x] Natural Language Processing for News Analysis
-- [x] Adaptive Learning Algorithms
-- [x] Multi-Agent Reinforcement Learning
+## 3. Fix Dotenv Parsing and Environment Validation
+- **File**: main.py
+- **Function**: run_production_pipeline
+- **Problem**: load_dotenv() may not parse correctly, no validation of env vars
+- **Fix**: Validate critical env vars at startup, fail fast if missing
 
-## ✅ Phase 4: Production & Scale (COMPLETED)
-- [x] Implement cloud-native architecture with Kubernetes
-- [x] Add real-time monitoring and alerting system
-- [x] Implement automated scaling and load balancing
-- [x] Add comprehensive security and compliance automation
-- [x] Implement real-time performance monitoring and optimization
+## 4. Add Graceful Failure in Live Engine
+- **File**: engine/live_engine.py
+- **Function**: run_once
+- **Problem**: One asset failure crashes full rebalance
+- **Fix**: Wrap per-asset logic in try-except, log errors, continue
 
-## ✅ Phase 5: Advanced Features (COMPLETED)
-- [x] Quantum computing integration for portfolio optimization
-- [x] Advanced machine learning with federated learning
-- [x] Real-time market microstructure analysis
-- [x] Cross-asset correlation and contagion modeling
-- [x] Institutional-grade API and integration layer
-- [x] Advanced regulatory reporting automation
-
-## 📊 System Architecture Overview
-
-### Core Components
-- **Data Layer**: Distributed data router with 20+ data providers
-- **Analytics Engine**: ML/AI-powered strategy development
-- **Risk Engine**: Real-time risk monitoring and position management
-- **Execution Layer**: Institutional-grade order execution
-- **Infrastructure**: Cloud-native Kubernetes deployment
-
-### Key Technologies
-- **Languages**: Python, C++ (performance-critical components)
-- **Data Processing**: Apache Kafka, Redis, PostgreSQL
-- **ML/AI**: TensorFlow, PyTorch, scikit-learn
-- **Infrastructure**: Kubernetes, Docker, AWS/GCP/Azure
-- **Monitoring**: Prometheus, Grafana, ELK Stack
-
-### Performance Metrics
-- **Latency**: Sub-millisecond for high-frequency strategies
-- **Throughput**: 100,000+ orders/second
-- **Uptime**: 99.99% availability
-- **Data Processing**: Real-time analysis of 1000+ symbols
-
-### Security & Compliance
-- **Encryption**: End-to-end encryption with key rotation
-- **Access Control**: Role-based access with audit trails
-- **Compliance**: SOC 2, GDPR, ISO 27001 automated checks
-- **Monitoring**: Real-time security scanning and alerting
-
----
-
-*This system represents the most advanced quantitative trading platform available, combining institutional-grade infrastructure with cutting-edge AI capabilities.*
+## 5. Ensure Single-Row DataFrame Handling in Allocator
+- **File**: portfolio/allocator.py
+- **Function**: allocate
+- **Problem**: Potential Series vs DataFrame issues in signal processing
+- **Fix**: Add type checks and conversions for signals input

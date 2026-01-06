@@ -6,6 +6,7 @@ Eliminates duplicate downloads and reduces latency.
 """
 import os
 import json
+import pickle
 import hashlib
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -95,7 +96,8 @@ class MarketDataCache:
                 return None
             
             # Load data
-            df = pd.read_json(cache_path, orient='split')
+            with open(cache_path, 'rb') as f:
+                df = pickle.load(f)
             
             self.stats["hits"] += 1
             logger.debug(f"Cache hit: {ticker} ({start_date} to {end_date})")

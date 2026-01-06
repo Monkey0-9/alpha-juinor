@@ -41,15 +41,21 @@ class DataValidator:
         mask &= df[['Open', 'High', 'Low', 'Close']].notna().all(axis=1)
         
         cleaned_df = df[mask].copy()
-        dropped_count = initial_count - len(cleaned_df)
         
-        if dropped_count > 0:
-            logger.warning(
-                f"[VALIDATOR] Dropped {dropped_count} malformed rows for {ticker}. "
-                f"Reason: OHLC inconsistency or NaNs."
-            )
+        # 5. Volatility Sanity Bound: Drop rows with > 50% move in a single bar
+        # For equities/crypto, a single-bar 50% move is almost always a split/data error
+        # unless it's a micro-cap. We use a tight bound for institutional safety.
+        rets = cleaned_df['Close'].pct_change(fill_method=None).abs()
+        # We also ffill() the returns for the mask to ensure we don't drop the first row incorrectly
+        spike_mask = (rets < 0.50) | (rets.isna())
+        
+        final_df = cleaned_df[spike_mask.reindex(cleaned_df.index, fill_value=True)].copy()
+        spike_drops = len(cleaned_df) - len(final_df)
+        
+        if spike_drops > 0:
+            logger.error(f"[VALIDATOR] Dropped {spike_drops} bars for {ticker} due to EXTREME price spike (>50%).")
             
-        return cleaned_df
+        return final_df
 
     @staticmethod
     def sanitize_series(s: pd.Series, ticker: str = "Unknown") -> pd.Series:

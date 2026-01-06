@@ -1,0 +1,9 @@
+{
+  "ticker": "TSLA",
+  "start_date": "2025-12-01",
+  "end_date": "2025-12-05",
+  "data_type": "ohlcv",
+  "cached_at": "2026-01-06T01:28:25.119579",
+  "rows": 4,
+  "ttl_hours": 24.0
+}

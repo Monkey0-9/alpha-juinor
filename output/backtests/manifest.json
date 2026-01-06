@@ -1,5 +1,47 @@
 [
   {
+    "run_id": "run_20260105T144138Z_9372d0d8",
+    "timestamp": "2026-01-05T14:41:46.888775Z",
+    "strategy": "unknown",
+    "tickers": [],
+    "git_hash": "ff33bda0f435e17c21289b6553456718bf6827fe",
+    "metrics": {
+      "final_equity": 1020038.6130703134,
+      "total_return": 0.01995766404935706,
+      "sharpe": 252.49045274201168,
+      "max_drawdown": 0.0
+    },
+    "path": "output\\backtests\\run_20260105T144138Z_9372d0d8"
+  },
+  {
+    "run_id": "run_20260105T143740Z_b579599b",
+    "timestamp": "2026-01-05T14:37:44.087886Z",
+    "strategy": "unknown",
+    "tickers": [],
+    "git_hash": "ff33bda0f435e17c21289b6553456718bf6827fe",
+    "metrics": {
+      "final_equity": 1020038.6130703134,
+      "total_return": 0.01995766404935706,
+      "sharpe": 252.49045274201168,
+      "max_drawdown": 0.0
+    },
+    "path": "output\\backtests\\run_20260105T143740Z_b579599b"
+  },
+  {
+    "run_id": "run_20260105T143011Z_642f8fa6",
+    "timestamp": "2026-01-05T14:30:14.965991Z",
+    "strategy": "unknown",
+    "tickers": [],
+    "git_hash": "ff33bda0f435e17c21289b6553456718bf6827fe",
+    "metrics": {
+      "final_equity": 1020038.6130703134,
+      "total_return": 0.01995766404935706,
+      "sharpe": 252.49045274201168,
+      "max_drawdown": 0.0
+    },
+    "path": "output\\backtests\\run_20260105T143011Z_642f8fa6"
+  },
+  {
     "run_id": "run_20260105T140057Z_7285933f",
     "timestamp": "2026-01-05T14:01:00.724979Z",
     "strategy": "unknown",

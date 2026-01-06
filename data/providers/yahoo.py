@@ -2,16 +2,27 @@ from .base import DataProvider
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
+import asyncio
 from typing import List, Optional, Dict
 import numpy as np
 from utils.timezone import normalize_index_utc
 from data.cache.market_cache import get_cache
 
 class YahooDataProvider(DataProvider):
+    # Yahoo capabilities - free provider, always available
+    supports_ohlcv = True
+    supports_latest_quote = True
+
     def __init__(self, enable_cache: bool = True, cache_ttl_hours: int = 24):
         self.enable_cache = enable_cache
         self.cache = get_cache(ttl_hours=cache_ttl_hours) if enable_cache else None
+        # Yahoo is free, so always authenticated
+        self._authenticated = True
     
+    async def fetch_ohlcv_async(self, ticker: str, start_date: str, end_date: str = None) -> pd.DataFrame:
+        """Async wrapper for blocking yfinance call."""
+        return await asyncio.to_thread(self.fetch_ohlcv, ticker, start_date, end_date)
+
     def fetch_ohlcv(self, ticker: str, start_date: str, end_date: str = None) -> pd.DataFrame:
         if end_date is None:
             end_date = datetime.today().strftime('%Y-%m-%d')
@@ -91,6 +102,22 @@ class YahooDataProvider(DataProvider):
         
         return df
 
+    async def get_panel_async(self, tickers: List[str], start_date: str, end_date: Optional[str] = None) -> pd.DataFrame:
+        """Parallel fetch for Yahoo tickers."""
+        tasks = [self.fetch_ohlcv_async(ticker, start_date, end_date) for ticker in tickers]
+        dfs = await asyncio.gather(*tasks)
+        
+        data = {}
+        for ticker, df in zip(tickers, dfs):
+            if not df.empty:
+                for col in df.columns:
+                    data[(ticker, col)] = df[col]
+        
+        if not data: return pd.DataFrame()
+        panel = pd.DataFrame(data)
+        panel.columns = pd.MultiIndex.from_tuples(panel.columns)
+        return panel
+
     def get_panel(self, tickers: List[str], start_date: str, end_date: Optional[str] = None) -> pd.DataFrame:
         """Fetch and combine multiple tickers into a MultiIndex panel."""
         data = {}
@@ -106,6 +133,10 @@ class YahooDataProvider(DataProvider):
         panel = pd.DataFrame(data)
         panel.columns = pd.MultiIndex.from_tuples(panel.columns)
         return panel
+
+    async def get_latest_quote_async(self, ticker: str) -> Optional[float]:
+        """Async wrapper for latest quote."""
+        return await asyncio.to_thread(self.get_latest_quote, ticker)
 
     def get_latest_quote(self, ticker: str) -> Optional[float]:
         """Fetch the latest price for a ticker using Yahoo Finance."""

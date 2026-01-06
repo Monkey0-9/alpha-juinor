@@ -1,0 +1,9 @@
+{
+  "ticker": "SPY",
+  "start_date": "2025-05-01",
+  "end_date": "2026-01-05",
+  "data_type": "ohlcv",
+  "cached_at": "2026-01-05T20:24:58.722627",
+  "rows": 170,
+  "ttl_hours": 24.0
+}

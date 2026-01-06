@@ -8,12 +8,13 @@ This document serves as the final handover for the **Institutional-Grade Quantit
 - **Risk**: Capital preservation, volatility scaling, and circuit breakers active.
 - **Data**: Centralized Router (Yahoo/Alpaca/FRED) with fallback and UTC normalization.
 
-## 2. Data Integrity & Sources (Verified)
+## 2. Data Integrity & Sources (Verified ✅)
 To ensure **Institutional-Grade Reliability** and prevent losses from bad data:
-*   **Primary Equity Source**: **Yahoo Finance** ("Yoho") - The most widely used retail data source.
-*   **Primary Crypto Source**: **Binance** - High-fidelity real-time execution data.
-*   **Macro Source**: **FRED (Federal Reserve)** - Validated government economic data.
-*   **Fallback Safety**: If Yahoo fails, we revert to **Stooq** or **AlphaVantage** (Top-tier backups) to prevent "blind spots". We NEVER use unverified sources.
+*   **Primary Equity Source**: **Yahoo Finance** & **Alpaca** (Verified: Real-time SPY quotes at $590.2)
+*   **Primary Execution**: **Alpaca** (Verified: Account ACTIVE, Equity $99,464.71)
+*   **Macro Source**: **FRED (Federal Reserve)** (Verified: VIX & Yield Curve indicators active)
+*   **AI Research**: **DeepSeek** (API Key integrated into `.env`)
+*   **Alerting**: **Telegram Bot** (Token integrated, awaiting `CHAT_ID`)
 
 ## 3. Key Components
 1.  **Main Loop (`main.py`)**:

@@ -4,6 +4,7 @@ import requests
 import logging
 import asyncio
 from typing import Optional, Dict, Any
+from time import time
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,14 @@ class AlertManager:
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
         self.slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL")
         self.discord_webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+
+        # Deduplication tracking
+        self._last_sent = {}  # key -> timestamp
+        self._dedup_window = int(os.getenv("ALERT_DEDUP_WINDOW_SECONDS", 600))  # 10 minutes default
+        self._notify_level = os.getenv("MONITOR_NOTIFY_LEVEL", "INFO").upper()
+        self._heartbeat_interval = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", 3600))  # 1 hour default
+        self._last_heartbeat = 0
+        self._last_status = None  # Track status changes
         
     def validate_config(self) -> bool:
         """Check if at least one alert channel is configured."""
@@ -69,29 +78,68 @@ class AlertManager:
             logger.error(f"Discord alert failed: {e}")
 
     def alert(self, message: str, level: str = "INFO"):
-        """Broadcast alert to all enabled channels."""
+        """Broadcast alert to all enabled channels with deduplication."""
+        # Check notification level
+        level_upper = level.upper()
+        if level_upper not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
+            level_upper = "INFO"
+
+        notify_levels = {"ERROR": 3, "WARNING": 2, "INFO": 1, "DEBUG": 0}
+        current_level_value = notify_levels.get(level_upper, 1)
+        required_level_value = notify_levels.get(self._notify_level, 1)
+
+        if current_level_value < required_level_value:
+            return  # Don't send alerts below the configured level
+
+        # Deduplication check
+        key = f"{level}:{message}"
+        now = time()
+        last_sent = self._last_sent.get(key, 0)
+        if (now - last_sent) < self._dedup_window:
+            logger.debug(f"Deduplicating alert: {key}")
+            return
+
+        self._last_sent[key] = now
+
         msg = f"[{level}] {message}"
         logger.info(f"ALERT: {msg}")
-        
+
         # Simple sync dispatch (good for main loop if not high freq)
         self.send_telegram(msg)
         self.send_slack(msg)
         self.send_discord(msg)
 
-    def heartbeat(self, diagnosis: Optional[str] = None):
-        """Send a specialized heartbeat ping with resource usage."""
+    def heartbeat(self, diagnosis: Optional[str] = None, force: bool = False):
+        """Send a specialized heartbeat ping with resource usage - only on state changes or intervals."""
+        now = time()
+
+        # Check if enough time has passed since last heartbeat
+        if not force and (now - self._last_heartbeat) < self._heartbeat_interval:
+            return
+
         try:
             import psutil
             process = psutil.Process(os.getpid())
             mem_mb = process.memory_info().rss / 1024 / 1024
-            msg = f"🟢 HEARTBEAT | Mem: {mem_mb:.1f}MB | Status: ACTIVE"
+            current_status = "ACTIVE"
+            msg = f"🟢 HEARTBEAT | Mem: {mem_mb:.1f}MB | Status: {current_status}"
             if diagnosis:
                 msg += f"\n\n{diagnosis}"
         except ImportError:
+            current_status = "ACTIVE"
             msg = "🟢 HEARTBEAT | Mem: [psutil missing] | Status: ACTIVE"
         except Exception as e:
-            msg = f"🟢 HEARTBEAT | Error: {e} | Status: ACTIVE"
-            
+            current_status = "ERROR"
+            msg = f"🟢 HEARTBEAT | Error: {e} | Status: {current_status}"
+
+        # Only send if status changed or forced
+        notify_on_change_only = os.getenv("NOTIFY_ON_STATE_CHANGE_ONLY", "false").lower() == "true"
+        if notify_on_change_only and not force:
+            if self._last_status == current_status:
+                return
+            self._last_status = current_status
+
+        self._last_heartbeat = now
         self.alert(msg, level="HEARTBEAT")
 
     async def alert_async(self, message: str, level: str = "INFO"):

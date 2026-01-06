@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 import hashlib
 
+logger = logging.getLogger(__name__)
+
 # NLP imports
 try:
     import nltk
@@ -48,8 +50,6 @@ try:
 except ImportError:
     NLP_AVAILABLE = False
     logger.warning("NLP libraries not available. NLP features disabled.")
-
-logger = logging.getLogger(__name__)
 
 class SentimentLabel(Enum):
     STRONG_NEGATIVE = -2

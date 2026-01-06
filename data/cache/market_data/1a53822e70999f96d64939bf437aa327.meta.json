@@ -1,0 +1,9 @@
+{
+  "ticker": "TLT",
+  "start_date": "2025-05-01",
+  "end_date": "2026-01-06",
+  "data_type": "ohlcv",
+  "cached_at": "2026-01-06T00:03:18.637553",
+  "rows": 171,
+  "ttl_hours": 24.0
+}

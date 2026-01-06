@@ -7,13 +7,13 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import logging
 
+from data.providers.base import DataProvider
 logger = logging.getLogger(__name__)
 
-class AlpacaDataProvider:
+class AlpacaDataProvider(DataProvider):
     """
     Alpaca Markets data provider (FREE for paper trading).
-    Supports historical bars and real-time quotes.
-    
+
     Setup:
     1. Sign up at alpaca.markets
     2. Get Paper Trading API keys
@@ -22,6 +22,8 @@ class AlpacaDataProvider:
        - ALPACA_SECRET_KEY
        - ALPACA_BASE_URL (default: https://paper-api.alpaca.markets)
     """
+    supports_ohlcv = True
+    supports_latest_quote = True
     
     def __init__(self, api_key: Optional[str] = None, secret_key: Optional[str] = None, base_url: Optional[str] = None, paper=True):
         self.api_key = api_key or os.getenv("ALPACA_API_KEY")
@@ -146,6 +148,11 @@ class AlpacaDataProvider:
         except Exception as e:
             logger.error(f"Alpaca fetch failed for {ticker}: {e}")
             return pd.DataFrame()
+
+    async def fetch_ohlcv_async(self, ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
+        """Async wrapper for Alpaca fetch."""
+        import asyncio
+        return await asyncio.to_thread(self.fetch_ohlcv, ticker, start_date, end_date)
     
     def get_all_assets(self, asset_class: str = "us_equity") -> List[Dict]:
         """Fetch all tradable assets from Alpaca."""
@@ -234,3 +241,20 @@ class AlpacaDataProvider:
         panel = pd.DataFrame(data)
         panel.columns = pd.MultiIndex.from_tuples(panel.columns)
         return panel
+
+    async def get_panel_async(self, tickers: List[str], start_date: str, end_date: Optional[str] = None) -> pd.DataFrame:
+        """Async wrapper for Alpaca panel fetch."""
+        import asyncio
+        return await asyncio.to_thread(self.get_panel, tickers, start_date, end_date)
+
+    async def get_latest_quote_async(self, ticker: str) -> Optional[float]:
+        """Async wrapper for Alpaca latest quote."""
+        import asyncio
+        return await asyncio.to_thread(self.get_latest_quote, ticker)
+
+    async def get_latest_prices_async(self, tickers: List[str]) -> Dict[str, float]:
+        """Fetch multiple latest prices in parallel."""
+        import asyncio
+        tasks = [self.get_latest_quote_async(tk) for tk in tickers]
+        results = await asyncio.gather(*tasks)
+        return {tk: pr for tk, pr in zip(tickers, results) if pr is not None}

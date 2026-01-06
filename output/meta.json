@@ -1,8 +1,8 @@
 {
-    "mode": "backtest",
-    "timestamp": "2026-01-05T14:00:54.552490+00:00",
+    "mode": "paper",
+    "timestamp": "2026-01-06T09:22:31.087324+00:00",
     "pandas_version": "2.1.4",
     "numpy_version": "1.26.4",
-    "git_commit": "f2be7e089f31fddf9470c911c21a3a39d32ee14e",
-    "duration_seconds": 5.799124717712402
+    "git_commit": "5fa1fdec466d63d5940f2b04d6d1bdc70f4ae0bb",
+    "duration_seconds": 44.20244359970093
 }

@@ -9,13 +9,19 @@ import pandas as pd
 import numpy as np
 import json
 import subprocess
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from typing import List, Optional, Any, Dict
+import sys
 
 # Institutional Config Management
 from configs.config_manager import ConfigManager
 
-load_dotenv()
+# Robust Dotenv Loading
+env_path = find_dotenv()
+if env_path:
+    load_dotenv(env_path, override=True)
+else:
+    print("No .env file found. Falling back to system environment variables.")
 
 # NEW: Import Data Router
 from data.collectors.data_router import DataRouter
@@ -41,6 +47,28 @@ from data.universe_manager import UnifiedUniverseManager
 from utils.timezone import normalize_index_utc
 
 logger = logging.getLogger("InstitutionalDriver")
+
+def validate_env():
+    """Fail-fast validation for critical environment variables."""
+    required = ["ALPACA_API_KEY", "ALPACA_SECRET_KEY"]
+    missing = [var for var in required if not os.getenv(var)]
+    
+    if os.getenv("EXECUTION_MODE") in ["paper", "live"] and missing:
+        logger.critical(f"CRITICAL CONFIG ERROR: Missing credentials for PRODUCTION mode: {missing}")
+        sys.exit(1)
+        
+    # Check for optional but recommended providers
+    if os.getenv("TELEGRAM_TOKEN") and not os.getenv("TELEGRAM_CHAT_ID"):
+        logger.warning("TELEGRAM_TOKEN found but TELEGRAM_CHAT_ID is missing. Alerts will not be sent.")
+        
+    # Check for common dotenv issues (e.g. quotes or spaces in keys)
+    for key in required:
+        val = os.getenv(key)
+        if val and (val.startswith("'") or val.startswith('"')):
+            logger.warning(f"POTENTIAL DOTENV PARSING ISSUE: Key {key} starts with quotes. Cleaning...")
+            os.environ[key] = val.strip("'").strip('"')
+
+validate_env()
 
 def run_production_pipeline():
     """
@@ -98,83 +126,49 @@ def run_production_pipeline():
     exec_cfg = cfg['execution']
     
     # Selection of Data Source (Institutional Data Policy)
-    # Crypto -> Alpaca (Unlimited free tier), Equities -> Yahoo (Silent fallback)
-    def router_provider(ticker_list: List[str]):
-        """Specialized routing provider that respects entitlements."""
-        class RoutingProvider:
-            def __init__(self):
-                # Use the new Smart Router
-                self.router = DataRouter()
-            
-            def get_panel(self, tickers: List[str], start_date: str, end_date: Optional[str] = None) -> pd.DataFrame:
-                data = {}
-                for tk in tickers:
-                    # Delegate to Smart Router (Binance -> Yahoo -> Stooq -> etc)
-                    # This implementation handles caching and fallback automatically
-                    try:
-                        df = self.router.get_price_history(tk, start_date, end_date)
-                        
-                        if not df.empty:
-                            if 'Close' not in df.columns:
-                                logger.warning(f"Data for {tk} missing 'Close' column. Columns: {df.columns}")
-                                continue
-                                
-                            # Flatten: We need (Ticker, Field) -> Series
-                            df = normalize_index_utc(df) # DOUBLE SAFETY
-                            for col in df.columns:
-                                data[(tk, col)] = df[col]
-                        else:
-                             logger.warning(f"Router returned empty DataFrame for {tk}. Check providers.")
-                    except Exception as e:
-                        logger.error(f"Failed to fetch {tk}: {e}")
-                        continue
-                
-                if not data: 
-                    logger.warning("RoutingProvider: No data fetched for any ticker.")
-                    return pd.DataFrame()
-
-                # Construct DataFrame from dict of Series
-                panel = pd.DataFrame(data)
-                # Ensure columns are MultiIndex (Ticker, Field)
-                if not isinstance(panel.columns, pd.MultiIndex):
-                     panel.columns = pd.MultiIndex.from_tuples(panel.columns)
-                
-                return panel
-
-            def get_latest_quote(self, ticker: str) -> Optional[float]:
-                return self.router.get_latest_price(ticker)
-            
-            # Allow access to underlying router for macro data
-            @property
-            def router_instance(self):
-                return self.router
+    class RoutingProvider:
+        def __init__(self):
+            # Use the new Smart Router
+            self.router = DataRouter()
         
-        return RoutingProvider()
+        def get_panel(self, tickers: List[str], start_date: str, end_date: Optional[str] = None) -> pd.DataFrame:
+            # Use High-Speed Parallel Fetcher
+            try:
+                return self.router.get_panel_parallel(tickers, start_date, end_date)
+            except Exception as e:
+                logger.error(f"Parallel fetch failed, falling back to sequential: {e}")
+                return pd.DataFrame()
+
+        def get_latest_price(self, ticker: str) -> Optional[float]:
+            """Consistent interface for LiveEngine."""
+            return self.router.get_latest_price(ticker)
+        
+        def get_latest_quote(self, ticker: str) -> Optional[float]:
+            """Alias for backward compatibility."""
+            return self.get_latest_price(ticker)
+        
+        @property
+        def router_instance(self):
+            return self.router
 
     if exec_cfg['mode'] in ['paper', 'live']:
         logger.info("INSTITUTIONAL: Using Entitlement-Aware Data Router for Production.")
-        base_tickers = universe['tickers']
-    else:
-        base_tickers = universe['tickers']
-
-    # 1b. Universe Discovery (Phase 15)
-    # 1b. Universe Discovery (Phase 15)
-    # provider_raw = AlpacaDataProvider() # Access to discovery - REMOVED, NOT USED IN INIT
-    um = UnifiedUniverseManager("configs/universe.json")
     
-    # If using full market config or tickers is not explicit
+    provider = RoutingProvider()
+
+    # 1b. Universe Discovery
+    um = UnifiedUniverseManager("configs/universe.json")
     if args.tickers:
         active_tickers = args.tickers.split(",")
         universe_meta = {}
     else:
-        # Full Market Discovery
         active_tickers = um.discover_and_filter(universe, force_refresh=args.refresh_universe)
-        # Limit to Top 500 for compute safety (Scaling heuristic)
         active_tickers = active_tickers[:500] 
-        universe_meta_df = pd.read_parquet(um.cache_path)
-        universe_meta = universe_meta_df.set_index("symbol").to_dict("index")
-
-    provider = router_provider(active_tickers)
+        try:
+            universe_meta_df = pd.read_parquet(um.cache_path)
+            universe_meta = universe_meta_df.set_index("symbol").to_dict("index")
+        except Exception:
+            universe_meta = {}
     
     risk_mgr = RiskManager(
         max_leverage=risk_cfg['max_gross_leverage'],
@@ -256,7 +250,12 @@ def run_production_pipeline():
         except Exception:
              pass
 
-        signals = strategy.generate_signals(pit_data, macro_context=macro_ctx).iloc[-1].to_dict()
+        gen_signals = strategy.generate_signals(pit_data, macro_context=macro_ctx)
+        if gen_signals.empty:
+            logger.warning(f"No signals generated for {ts}. Skipping rebalance.")
+            return []
+            
+        signals = gen_signals.iloc[-1].to_dict()
         
         # FIX: iterate over existing columns only, not all levels in metadata
         # This prevents KeyError if a ticker is in levels but not in dataframe columns
@@ -344,7 +343,8 @@ def run_production_pipeline():
         if alerts:
             alerts.alert(f"Autonomous Trading Loop Started. Frequency: {exec_cfg['rebalance_frequency']}")
 
-        # SCHEDULE STATE
+        # Loop persistence state
+        loop_error_count = 0
         last_report_date = None
         last_trade_time = 0.0
 
@@ -425,13 +425,16 @@ def run_production_pipeline():
                         
                         if events or risk_tier in ["HIGH", "EXTREME"]:
                             diag = risk_mgr.explain_diagnostics(live_engine.portfolio_value) if risk_mgr else "N/A"
-                            alerts.heartbeat(diagnosis=diag)
+                            alerts.heartbeat(diag)
                         elif is_scheduled_run:
                             alerts.heartbeat()
 
                     # Execute Rebalance / Reaction
                     live_engine.run_once(active_tickers, strategy_fn)
                     last_trade_time = time.time()
+                    
+                    # RESET ERROR COUNT ON SUCCESS
+                    loop_error_count = 0
                     
                     # Update Meta
                     if 'start_time' in locals():
@@ -442,12 +445,24 @@ def run_production_pipeline():
                     logger.info("Cycle Complete. Resuming Surveillance...")
 
             except KeyboardInterrupt:
-                logger.warning("User stopped the loop.")
+                logger.warning("User stopped the loop. Performing graceful shutdown...")
+                if 'live_engine' in locals():
+                    live_engine.enter_safe_mode()
                 break
             except Exception as e:
-                logger.error(f"PIPELINE ERROR: {e}")
-                # "Solid Rock" Stability: Don't crash, just cool down briefly
-                time.sleep(5) 
+                logger.error(f"PIPELINE ERROR: {e}", exc_info=True)
+                
+                loop_error_count += 1
+                if loop_error_count > 10:
+                    logger.critical("TOO MANY PIPELINE ERRORS. Hard-stopping for safety.")
+                    if 'live_engine' in locals():
+                        live_engine.enter_safe_mode()
+                    break
+                
+                # "Solid Rock" Stability: Adaptive Cooldown (Exponential-ish)
+                cooldown_sleep = min(300, 10 * loop_error_count)
+                logger.info(f"Cooling down for {cooldown_sleep}s before retry (Error #{loop_error_count})...")
+                time.sleep(cooldown_sleep) 
     
     # Initial Meta Persistence
     try:

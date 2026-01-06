@@ -16,7 +16,7 @@ universe:
 
 # 2. Execution Parameters
 execution:
-  mode: "backtest"  # paper | backtest | live
+  mode: "paper"  # paper | backtest | live
   initial_capital: 1000000.0
   rebalance_frequency: "daily"
   commission_bps: 2.0  # 0.02% 
@@ -40,7 +40,15 @@ risk:
 ops:
   reconciliation_threshold_bps: 10.0 # 0.1% drift allowed
   min_data_fill_rate: 0.95
-  alert_level: "INFO" 
+  alert_level: "INFO"
+
+# 6. Notification & Alerting (Added for spam reduction)
+notifications:
+  monitor_notify_level: "ERROR"  # Only send ERROR level alerts
+  heartbeat_interval_seconds: 3600  # Heartbeat once per hour
+  alert_dedup_window_seconds: 600  # Dedupe same alert for 10 minutes
+  enable_daily_summary: true
+  notify_on_state_change_only: true  # Only alert on state changes
 
 # 6. Feature Flags (Institutional Upgrades)
 features:
@@ -57,3 +65,4 @@ features:
 # 7. Data Provider API Keys
 data_providers:
   polygon_api_key: "bRAf6qbh9IkaI_ZlU2CrItZFqR2m00zq"
+  news_api_key: "0382afa018fe447abb2787152dc806c1"

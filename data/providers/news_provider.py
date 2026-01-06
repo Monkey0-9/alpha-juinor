@@ -15,17 +15,23 @@ class NewsDataProvider(DataProvider):
     Provides real-time news feeds and historical news data for alpha generation.
     """
 
+    # News capabilities
+    supports_news = True
+
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.getenv('NEWS_API_KEY')
+        self.api_key = api_key or os.getenv('NEWS_DATA_IO_KEY') or os.getenv('NEWS_API_KEY')
         self.session = None
-        self._authenticated = False
 
         # News data APIs
-        self.news_api = "https://api.financial-news.com"
+        self.news_data_io = "https://newsdata.io/api/1/news"
         self.alpha_vantage_news = "https://www.alphavantage.co/query"
 
         # Initialize connection
         self._initialize_connection()
+
+        # Disable if not authenticated
+        if not self._authenticated:
+            self.disabled = True
 
     def _initialize_connection(self):
         """Initialize news data API connections."""
@@ -35,18 +41,11 @@ class NewsDataProvider(DataProvider):
                 return
 
             self.session = requests.Session()
-            self.session.headers.update({
-                'Authorization': f'Bearer {self.api_key}',
-                'Content-Type': 'application/json'
-            })
-
-            # Test connection
-            response = self.session.get(f"{self.news_api}/status")
-            if response.status_code == 200:
-                self._authenticated = True
-                logger.info("News data provider initialized successfully")
-            else:
-                logger.warning(f"News API connection failed: {response.status_code}")
+            # NewsData.io uses apikey parameter, not Bearer token in regular headers
+            # But we keep session for connection pooling
+            
+            self._authenticated = True
+            logger.info("News data provider initialized for NewsData.io")
 
         except Exception as e:
             logger.error(f"Failed to initialize news provider: {e}")
@@ -91,27 +90,40 @@ class NewsDataProvider(DataProvider):
             return []
 
     def _fetch_financial_news(self, ticker: str, start_date: str, end_date: str, limit: int) -> List[Dict[str, Any]]:
-        """Fetch news from primary financial news API."""
+        """Fetch news from NewsData.io API."""
         try:
             params = {
-                'ticker': ticker,
-                'start_date': start_date,
-                'end_date': end_date,
-                'limit': limit,
-                'sort': 'relevance'
+                'apikey': self.api_key,
+                'q': ticker,
+                'language': 'en',
+                'category': 'business,technology'
             }
 
-            response = self.session.get(f"{self.news_api}/news", params=params, timeout=30)
+            response = self.session.get(self.news_data_io, params=params, timeout=30)
 
             if response.status_code == 200:
                 data = response.json()
-                return data.get('articles', [])
+                results = data.get('results', [])
+                
+                # Normalize to standard format
+                news_items = []
+                for item in results:
+                    news_items.append({
+                        'title': item.get('title', ''),
+                        'summary': item.get('description', ''),
+                        'source': item.get('source_id', ''),
+                        'url': item.get('link', ''),
+                        'published_at': item.get('pubDate', ''),
+                        'sentiment_score': 0.0, # Will be analyzed later
+                        'market_impact': 0.0
+                    })
+                return news_items
             else:
-                logger.warning(f"Financial news API failed: {response.status_code}")
+                logger.warning(f"NewsData.io API failed: {response.status_code} - {response.text}")
                 return []
 
         except Exception as e:
-            logger.error(f"Error fetching financial news for {ticker}: {e}")
+            logger.error(f"Error fetching NewsData.io news for {ticker}: {e}")
             return []
 
     def _fetch_alpha_vantage_news(self, ticker: str, limit: int) -> List[Dict[str, Any]]:

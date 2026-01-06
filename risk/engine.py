@@ -10,6 +10,7 @@ from risk.factor_exposure import FactorExposureEngine
 from risk.tail_risk import compute_tail_risk_metrics
 from risk.cvar import compute_cvar
 from risk.covariance import robust_covariance
+from data.utils.schema import ensure_dataframe
 
 from regime.markov import RegimeModel
 
@@ -291,12 +292,16 @@ class RiskManager:
         self._last_spy_price = current_spy
 
     def check_pre_trade(
-        self, 
+        self,
         target_weights: Dict[str, float], 
-        baskets_returns: pd.DataFrame,
+        baskets_returns: pd.DataFrame | pd.Series,
         timestamp: pd.Timestamp,
         current_equity: float = 1.0
     ) -> RiskCheckResult:
+        """Institutional Check: Pre-trade validation of intended portfolio weights."""
+        # Hard Schema Enforcement
+        baskets_returns = ensure_dataframe(baskets_returns)
+        
         if self.state == RiskDecision.FREEZE:
             return RiskCheckResult(ok=False, decision=RiskDecision.REJECT, violations=["Risk State: FREEZE"])
 
@@ -495,14 +500,20 @@ class RiskManager:
                 primary_reason="EMERGENCY_KILL"
             )
 
-        returns = prices.pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
+        # Hard Schema Enforcement
+        prices = ensure_dataframe(prices, required_columns=None)
+        volumes = ensure_dataframe(volumes, required_columns=None)
+        
+        # Calculate returns using the first (or only) column if it's a 1D dataframe
+        col = prices.columns[0]
+        returns = prices[col].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
         realized_vol = returns.std() * np.sqrt(252) if len(returns) > 10 else self.target_vol_limit
         realized_vol = max(realized_vol, 0.05) 
 
         raw_vol_scale = self.target_vol_limit / realized_vol
         vol_scaler = np.clip(raw_vol_scale, 0.3, 1.2)
         
-        adv = volumes.mean() if not volumes.empty else 0.0
+        adv = float(volumes.mean().iloc[0]) if not volumes.empty else 0.0
         liq_scalar = 1.0
         
         equity_nav = 1.0 
@@ -529,10 +540,10 @@ class RiskManager:
             applied_scaler *= rec_scalar
             violations.append(f"RECOVERY Level {self.recovery_level} (scaler {rec_scalar:.2f})")
             
-        current_price = prices.iloc[-1] if not prices.empty else 0.0
+        current_price = float(prices.iloc[-1, 0]) if not prices.empty else 0.0
         adv_dollars = adv * current_price
         
-        if adv_dollars > 0 and abs(conviction.iloc[-1]) > (adv_dollars * 0.10):
+        if adv_dollars > 0 and abs(float(conviction.iloc[-1])) > (adv_dollars * 0.10):
              liq_scalar = 0.8
              applied_scaler *= liq_scalar
              violations.append(f"Liquidity Haircut (ADV ${adv_dollars:,.0f})")

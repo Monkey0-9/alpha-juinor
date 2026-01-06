@@ -53,9 +53,10 @@ class InstitutionalAllocator:
                 mu = returns[tk].mean() * 252
                 var = returns[tk].var() * 252
                 if var > 1e-6:
-                    # Signal-adjusted Kelly
+                    # Signal-adjusted Kelly (Standard: mu/var)
+                    # Institutional: Use a half-Kelly (0.5x) or fractional Kelly for stability
                     f_star = (mu / var) * (sig - 0.5) * 2.0
-                    kelly_weights[tk] = f_star
+                    kelly_weights[tk] = np.clip(f_star * 0.5, -0.2, 0.2) # Hard cap kelly at 20%
                 else:
                     kelly_weights[tk] = 0.0
             else:
@@ -78,11 +79,13 @@ class InstitutionalAllocator:
             
         inv_vols = {k: 1.0/v for k, v in vols.items()}
         total_inv_vol = sum(inv_vols.values())
-        return {k: v / (total_inv_vol + 1e-9) for k, v in inv_vols.items()}
+        
+        # Risk Parity: weight_i = (1/vol_i) / sum(1/vol_j)
+        return {k: v / (total_inv_vol + 1e-12) for k, v in inv_vols.items()}
 
     def allocate(
         self, 
-        signals: Dict[str, float], 
+        signals: Union[Dict[str, float], pd.Series, pd.DataFrame], 
         prices: Dict[str, pd.Series], # History for risk 
         volumes: Dict[str, pd.Series], # History for liquidity
         current_portfolio, 
@@ -97,6 +100,12 @@ class InstitutionalAllocator:
         3. Diff against Current Portfolio -> Position Deltas
         4. Generate Orders
         """
+        # Institutional Robustness: Convert signals to dict if needed
+        if isinstance(signals, pd.DataFrame):
+            signals = signals.iloc[-1].to_dict()
+        elif isinstance(signals, pd.Series):
+            signals = signals.to_dict()
+            
         # 0. INSTITUTIONAL: Buy/Sell Decision Layer (Hysteresis & Trend)
         current_positions = getattr(current_portfolio, "positions", {})
         processed_signals = {}

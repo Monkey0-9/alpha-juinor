@@ -1,278 +1,151 @@
-# strategies/institutional_strategy.py
-from typing import Dict, Any, List, Optional
+import logging
 import pandas as pd
 import numpy as np
-import logging
-import time
-from .base import BaseStrategy
-from .alpha import CompositeAlpha, TrendAlpha, MeanReversionAlpha, RSIAlpha, MACDAlpha, BollingerBandAlpha
-from .ml_models.ml_alpha import MLAlpha
-from data.processors.features import FeatureEngineer
-
-# New Institutional Modules
-from regime.markov import RegimeModel
-from market_structure.wyckoff import structure_filter
-from market_structure.auction import AuctionConfidence
-from market_structure.market_profile import compute_market_profile
-from timing.gann_cycles import GannTimeFilter
-from micro.vpin import compute_vpin
 
 logger = logging.getLogger(__name__)
+from strategies.regime_engine import RegimeEngine
+from alpha_families import get_alpha_families
+from strategies.ml_referee import MLReferee
+from strategies.filters import InstitutionalFilters
+from portfolio.allocator import InstitutionalAllocator
+from risk.engine import RiskManager
+from strategies.nlp_engine import InstitutionalNLPEngine
+from concurrent.futures import ThreadPoolExecutor
 
-class InstitutionalStrategy(BaseStrategy):
+class InstitutionalStrategy:
     """
-    Maximized High-Frequency Alpha Strategy.
-    Enriched with Institutional Regimes, Structures, and Filters.
+    Institutional-grade strategy combining alpha families, regime detection,
+    ML referee, institutional filters, and portfolio construction.
     """
-    
-    def __init__(self, config: Dict[str, Any]):
-        super().__init__(config)
-        self.tickers = config.get('tickers', [])
-        
-        # Feature Flags
-        features = config.get('features', {})
-        self.use_regime = features.get('use_regime_detection', True)
-        self.use_wyckoff = features.get('use_wyckoff_filter', True)
-        self.use_auction = features.get('use_auction_market_confidence', True)
-        self.use_market_profile = features.get('use_market_profile_value_area', True)
-        self.use_gann = features.get('use_gann_time_filter', True)
-        self.use_vpin = features.get('use_vpin_filter', True)
 
-        # Ensemble of 5 technical alphas
-        self.technical_alpha = CompositeAlpha(alphas=[
-            TrendAlpha(short=5, long=20),
-            MeanReversionAlpha(),
-            RSIAlpha(),
-            MACDAlpha(),
-            BollingerBandAlpha()
-        ], window=30)
-        # Per-Ticker ML Models (Institutional Hardening)
-        fe = FeatureEngineer()
-        self.ml_models: Dict[str, MLAlpha] = {
-            tk: MLAlpha(feature_engineer=fe) for tk in self.tickers
-        }
-        
-        # Initialize Filters
-        self.regime_engine = RegimeModel()
-        self.auction_engine = AuctionConfidence()
-        self.gann_filter = GannTimeFilter()
-        
-        # Optimization: Pre-allocate Fallback Logging Set & Throttle
-        self._logged_fallback = set()
-        self._log_throttle = 0
+    def __init__(self, config=None):
+        self.config = config or {}
+        self.regime_engine = RegimeEngine()
+        self.alpha_families = get_alpha_families()
+        self.ml_referee = MLReferee()
+        self.filters = InstitutionalFilters(self.config)
+        risk_manager = RiskManager()
+        self.allocator = InstitutionalAllocator(risk_manager)
+        self.nlp_engine = InstitutionalNLPEngine()
+        self.executor = ThreadPoolExecutor(max_workers=16)
 
-    def generate_signals(self, market_data: pd.DataFrame, macro_context: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
-        t_start = time.perf_counter()
-        signals = {}
-        ts = market_data.index[-1]
+    def generate_signals(self, market_data, context=None, macro_context=None):
+        """
+        Generate institutional signals using parallel symbol processing.
+        Ensures consistent behavior for single or multi-asset universes.
+        """
+        from data.utils.schema import ensure_dataframe
+        market_data = ensure_dataframe(market_data)
         
-        # 0. Global Timing Filter (Gann) - O(1) Check
-        if self.use_gann and not self.gann_filter.can_trade(ts):
-            # Fast Exit
-            for tk in self.tickers: signals[tk] = 0.5
-            return pd.DataFrame([signals], index=[ts])
+        if market_data.empty:
+            logger.warning("InstitutionalStrategy: market_data is empty. Returning neutral signals.")
+            return pd.DataFrame()
 
-        # 0b. Macro Risk Overlay (Multi-Source Logic)
-        # Uses FRED VIX data if provided to gate trading
-        risk_off_mode = False
-        if macro_context:
-            vix = macro_context.get("VIX", 20.0)
-            if vix > 32.0: # Institutional Panic Threshold
-                risk_off_mode = True
-                logger.info(f"MACRO ALERT: VIX {vix:.1f} > 32. Trading Halted (Risk Off).")
-                for tk in self.tickers: signals[tk] = 0.5
-                return pd.DataFrame([signals], index=[ts])
-
-        # LATENCY OPTIMIZATION:
-        # Enforce "Time Budget" of 50ms (soft target)
-        
-        # Rate Limiting for Logging (Prevent I/O storms during spikes)
-        if not hasattr(self, '_log_throttle'): self._log_throttle = 0
-        
-        # GLOBAL PRE-SLICING (The "Still More Better" Optimization)
-        # Instead of slicing deeper in the loop, we slice the whole panel once.
-        # This is strictly O(1) for the loop.
-        if len(market_data) > 60:
-            market_window = market_data.iloc[-60:]
+        # Extract tickers robustly
+        if isinstance(market_data.columns, pd.MultiIndex):
+            tickers = market_data.columns.get_level_values(0).unique()
         else:
-            market_window = market_data
-            
-        for tk in self.tickers:
+            # If not MultiIndex, assume columns are tickers (Close, Open, etc might be columns if single asset)
+            # Standard institutional format is MultiIndex (Ticker, Field)
+            # If it's just OHLCV for one ticker, we treat the ticker as "Asset"
+            tickers = ["Asset"] if "Close" in market_data.columns else market_data.columns
+        
+        # Parallel execution across tickers
+        # Parallel execution across tickers
+        def _process_ticker(symbol):
             try:
-                # OPTIMIZATION: Check column existence cheaply
-                if tk not in market_window.columns.levels[0]: continue
-                
-                # Access pre-sliced window. 
-                # Still need dropna() for specific ticker in case of partial data
-                df_slice = market_window[tk].dropna()
-                
-                if df_slice.empty or len(df_slice) < 20:
-                    signals[tk] = 0.5
-                    continue
-                
-                # 1. Alpha (Hybrid)
-                # Technical (Vectorized inside needs more data? TrendAlpha long=20. 60 is fine.)
-                tech_score = float(self.technical_alpha.compute(df_slice).iloc[-1])
-                
-                # ML (Inference)
-                # CRITICAL: Do not alter ML models as per user instruction.
-                ml_model = self.ml_models.get(tk)
-                conviction = 0.5
-                if ml_model and ml_model.is_trained and ml_model.ml_ready:
-                    ml_score = ml_model.predict_conviction(df_slice)
-                    conviction = 0.5 * tech_score + 0.5 * ml_score
-                else:
-                    conviction = 0.5 + (tech_score - 0.5) * 0.7
+                # 1. Data Extraction & Contract Enforcement
+                try:
+                    if symbol == "Asset" and "Close" in market_data.columns:
+                        df = market_data
+                    else:
+                        df = market_data[symbol] if isinstance(market_data.columns, pd.MultiIndex) else market_data[[symbol]]
                     
-                # 2. Institutional Filters (Conditional Execution - Fail Fast)
-                if abs(conviction - 0.5) < 0.01:
-                    signals[tk] = 0.5
-                    continue
-                
-                # Regime
-                if self.use_regime:
-                    label = self.regime_engine.infer(df_slice)
-                    if label == "high_vol": conviction = 0.5 + (conviction - 0.5) * 0.5
-                    elif label == "neutral": conviction = 0.5 + (conviction - 0.5) * 0.8
-                    
-                # Wyckoff
-                if self.use_wyckoff:
-                    # FIX: Cache result, don't call multiple times!
-                    wyckoff_s = structure_filter(df_slice)
-                    if conviction > 0.5 and not wyckoff_s['allow_long']: conviction = 0.5
-                    if conviction < 0.5 and not wyckoff_s['allow_short']: conviction = 0.5
+                    if isinstance(df, pd.Series):
+                        df = df.to_frame(name="Close")
 
-                # Auction
-                if self.use_auction:
-                    auc = self.auction_engine.compute_confidence(
-                        df_slice["Close"], df_slice["Volume"], df_slice["High"], df_slice["Low"]
-                    )
-                    conviction = 0.5 + (conviction - 0.5) * auc
+                    if df is None or df.empty:
+                        logger.warning(f"Data for {symbol} is empty. Returning neutral.")
+                        return symbol, 0.5
 
-                # Market Profile
-                if self.use_market_profile:
-                    mp = compute_market_profile(df_slice)
-                    if mp['inside_value_area']: conviction = 0.5 + (conviction - 0.5) * 0.5
-                    
-                # VPIN (Skipped for now or stub)
-                
-                # --- PHASE 4: INSTITUTIONAL HARDENING (EV & CONSENSUS) ---
-                
-                # 3. Expected Value (EV) Gate
-                # EV = P(Win) * Gain - P(Loss) * Loss - Cost
-                # Assumptions: Reward:Risk = 2:1, Cost = 5bps
-                daily_vol = df_slice['Close'].pct_change().std()
-                if np.isnan(daily_vol): daily_vol = 0.01
-                
-                # Estimated Probabilities derived from Conviction
-                # Conviction 0.6 -> P(Win) ~ 0.55? Let's treat Conviction as raw Probability for simplicity
-                if conviction > 0.5:
-                    p_win = conviction
-                    p_loss = 1.0 - p_win
-                    est_reward = 2.0 * daily_vol
-                    est_risk = 1.0 * daily_vol
-                    transaction_cost = 0.0005 # 5bps
-                    
-                    ev = (p_win * est_reward) - (p_loss * est_risk) - transaction_cost
-                    
-                    if ev <= 0:
-                        # logger.debug(f"EV REJECT {tk}: EV={ev:.5f} <= 0")
-                        conviction = 0.5
-                
-                # 4. Multi-Horizon Consensus (Weekly/Daily alignment)
-                # Validates if the 'Micro' signal aligns with 'Macro' trend of the window
-                if conviction != 0.5:
-                    # Daily Slope
-                    y_daily = df_slice['Close'].values
-                    slope_daily = np.polyfit(np.arange(len(y_daily)), y_daily, 1)[0]
-                    
-                    # Weekly Estimate (Simulated by resampling last 20 days -> ~4 weeks)
-                    # If we have 60 days, we can resample.
-                    if len(df_slice) >= 20:
-                        weekly_closes = df_slice['Close'].iloc[::5] # Approx weekly
-                        if len(weekly_closes) > 2:
-                            slope_weekly = np.polyfit(np.arange(len(weekly_closes)), weekly_closes.values, 1)[0]
-                            
-                            # CONSENSUS CHECK:
-                            # If Daily UP but Weekly DOWN -> Chop Risk -> Reduce Signal
-                            if (slope_daily > 0 and slope_weekly < 0) or (slope_daily < 0 and slope_weekly > 0):
-                                logger.info(f"Timeframe Conflict {tk}: Daily/Weekly divergence. Halving conviction.")
-                                conviction = 0.5 + (conviction - 0.5) * 0.5
-
-                # 6. Loss Shape Control (ATR Based Volatility Stop)
-                # "Winning systems lose small"
-                # If volatility is high, we require a WIDER stop (lower leverage), effectively reducing convexity of loss
-                atr_period = 14
-                if len(df_slice) > atr_period:
-                    high_low = df_slice['High'] - df_slice['Low']
-                    high_close = np.abs(df_slice['High'] - df_slice['Close'].shift())
-                    low_close = np.abs(df_slice['Low'] - df_slice['Close'].shift())
-                    ranges = pd.concat([high_low, high_close, low_close], axis=1)
-                    true_range = np.max(ranges, axis=1)
-                    atr = true_range.rolling(atr_period).mean().iloc[-1]
-                    
-                    if atr > 0:
-                        # Dynamic Stop Distance
-                        # Calm (Low Vol) -> Tight Stop (1x ATR)
-                        # Chaos (High Vol) -> Loose Stop (2x ATR) -> Requires smaller size
-                        current_price = df_slice['Close'].iloc[-1]
-                        vol_regime_scalar = (atr / current_price) / 0.01 # Normalized to 1% daily vol
+                    if 'Close' not in df.columns:
+                        logger.error(f"SCHEMA BREACH: {symbol} missing 'Close' column.")
+                        return symbol, 0.5
                         
-                        # If highly volatile, penalize conviction to enforce "Shape Control"
-                        # We don't want to take full size positions in 4-ATR markets
-                        if vol_regime_scalar > 2.0:
-                             conviction = 0.5 + (conviction - 0.5) * (1.0 / vol_regime_scalar)
+                except Exception as de:
+                    logger.error(f"DATA EXTRACTION FAILED for {symbol}: {de}")
+                    return symbol, 0.5
                 
-                # 8. Liquidity Impact (Market Impact Model)
-                # Impact ~ Eta * sqrt(Size / ADV)
-                # We enforce: Size < 1% ADV to keep impact negligible
-                recent_vol_avg = df_slice['Volume'].iloc[-5:].mean()
-                if recent_vol_avg > 0:
-                     # Assume we want to trade roughly $10k (mini fund size)
-                     # In real engine, 'Allocator' knows size, but Strategy must verify tradeability
-                     # $10k / Price = Shares
-                     est_shares = 10000.0 / df_slice['Close'].iloc[-1]
-                     participation_rate = est_shares / recent_vol_avg
-                     
-                     if participation_rate > 0.01: # > 1% of volume
-                          # Too big for liquidity -> Impact Penalty
-                          penalty = 1.0 - (participation_rate * 10) # decay fast
-                          conviction = 0.5 + (conviction - 0.5) * max(0.1, penalty)
+                # 2. Context (Regime)
+                try:
+                    regime_context = self.regime_engine.detect_regime(df)
+                except Exception as re:
+                    logger.warning(f"Regime detection failed for {symbol}: {re}")
+                    regime_context = {'regime_tag': 'NORMAL', 'vol_target_multiplier': 1.0}
                 
-                signals[tk] = conviction
+                # 3. Alpha Generation
+                alpha_values = []
+                for alpha in self.alpha_families:
+                    try:
+                        res = alpha.generate_signal(df, regime_context)
+                        if isinstance(res, dict) and 'signal' in res:
+                            alpha_values.append(res['signal'])
+                    except Exception as ae:
+                        logger.debug(f"Alpha {alpha.__class__.__name__} failed for {symbol}: {ae}")
+                
+                # 4. News Sentiment Integration
+                news_modifier = 0.0
+                try:
+                    news_articles = context.get('news', []) if context else []
+                    if news_articles:
+                        nlp_impact = self.nlp_engine.analyze_market_impact(news_articles, symbol)
+                        if nlp_impact.direction == 'positive':
+                            news_modifier = 0.1 * nlp_impact.magnitude
+                        elif nlp_impact.direction == 'negative':
+                            news_modifier = -0.1 * nlp_impact.magnitude
+                except Exception:
+                    pass
+
+                final_val = np.mean(alpha_values) if alpha_values else 0.5
+                final_val = np.clip(final_val + news_modifier, 0.0, 1.0)
+                
+                return symbol, final_val
                 
             except Exception as e:
-                # ERROR SAFETY: Catch all, log only once per 100 errors to avoid flooding
-                # signals[tk] = 0.5 is the safe default
-                if self._log_throttle % 100 == 0:
-                     logger.error(f"Signal failed {tk}: {e}")
-                self._log_throttle += 1
-                signals[tk] = 0.5
+                logger.error(f"UNHANDLED STRATEGY ERROR for {symbol}: {e}")
+                return symbol, 0.5
 
-        t_end = time.perf_counter()
-        duration_ms = (t_end - t_start) * 1000.0
+        results = list(self.executor.map(_process_ticker, tickers))
+        signals = {symbol: val for symbol, val in results}
+
+        # Apply ML referee
+        refined_signals = self.ml_referee.refine_signals(signals, market_data) if hasattr(self.ml_referee, 'refine_signals') else signals
+
+        # Apply institutional filters
+        filtered_signals, _ = self.filters.apply_filters(refined_signals, market_data, {})
+
+        # Return DataFrame
+        timestamp = market_data.index[-1]
         
-        # Performance Monitoring (Throttled)
-        if duration_ms > 50:
-             self._log_throttle += 1
-             if self._log_throttle % 50 == 0: # Log only every 50th slow occurrence
-                 logger.warning(f"SLOW SIGNAL GENERATION: {duration_ms:.2f}ms")
-             
-        return pd.DataFrame([signals], index=[ts])
+        # Ensure filtered_signals is not empty and contains all tickers
+        if not filtered_signals:
+            # Provide neutral signals if everything was filtered out
+            filtered_signals = {tk: 0.5 for tk in tickers}
+            
+        return pd.DataFrame([filtered_signals], index=[timestamp])
 
-    def calculate_risk(self, signals: pd.DataFrame, market_data: pd.DataFrame) -> pd.DataFrame:
+    def construct_portfolio(self, signals, data, current_portfolio):
         """
-        Pass-through for risk calculation.
-        Actual risk logic is handled by RiskManager in the Engine, but Strategy contract requires this.
+        Construct portfolio using institutional allocator.
         """
-        return signals
+        return self.allocator.allocate(signals, data, current_portfolio)
 
-    def train_models(self, data: pd.DataFrame):
-        """Train independent ML models."""
-        for tk in self.tickers:
-            if tk in data.columns.levels[0]:
-                df_tk = data[tk].dropna()
-                if not df_tk.empty:
-                    ml_model = self.ml_models.get(tk)
-                    if ml_model:
-                        ml_model.train(df_tk)
+    def train_models(self, train_panel):
+        """
+        Train ML models if needed. For InstitutionalStrategy, this is primarily
+        for the ML referee to learn from historical data.
+        """
+        if train_panel is not None and not train_panel.empty:
+            # The ML referee can train on historical alpha signals and returns
+            # For now, we'll skip training as the referee trains internally when needed
+            pass

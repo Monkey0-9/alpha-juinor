@@ -43,3 +43,7 @@ class MockBroker:
             
             results.append({"status": "filled", "order_id": order.id})
         return results
+    def cancel_all_orders(self) -> bool:
+        """Cancel all simulated open orders (Mock implementation)."""
+        logger.info("MockBroker: Cancelled all open orders.")
+        return True
