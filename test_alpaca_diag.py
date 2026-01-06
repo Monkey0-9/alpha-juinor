@@ -35,7 +35,7 @@ params = {
     "timeframe": "1Day"
 }
 print(f"\nTesting Crypto {ticker}...")
-r = requests.get(url, headers=headers, params=params)
+r = requests.get(url, headers=headers, params=params, timeout=30)
 print(f"Status: {r.status_code}")
 if r.status_code != 200:
     print(f"Error: {r.text}")

@@ -174,7 +174,7 @@ class InstitutionalNLPEngine:
 
         # Create article object
         article = NewsArticle(
-            article_id=article_data.get('id', hashlib.md5(article_data.get('title', '').encode()).hexdigest()[:16]),
+            article_id=article_data.get('id', hashlib.md5(article_data.get('title', '').encode(), usedforsecurity=False).hexdigest()[:16]),
             title=article_data.get('title', ''),
             content=article_data.get('content', ''),
             source=article_data.get('source', ''),

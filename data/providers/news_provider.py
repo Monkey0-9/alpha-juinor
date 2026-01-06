@@ -101,7 +101,7 @@ class NewsDataProvider(DataProvider):
                 'sort': 'relevance'
             }
 
-            response = self.session.get(f"{self.news_api}/news", params=params)
+            response = self.session.get(f"{self.news_api}/news", params=params, timeout=30)
 
             if response.status_code == 200:
                 data = response.json()
@@ -124,7 +124,7 @@ class NewsDataProvider(DataProvider):
                 'limit': limit
             }
 
-            response = requests.get(self.alpha_vantage_news, params=params)
+            response = requests.get(self.alpha_vantage_news, params=params, timeout=30)
 
             if response.status_code == 200:
                 data = response.json()

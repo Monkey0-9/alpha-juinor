@@ -58,7 +58,7 @@ class AlertDeduplicator:
     def _get_alert_key(self, category: str, message: str) -> str:
         """Generate unique alert key."""
         key_str = f"{category}:{message}"
-        return hashlib.md5(key_str.encode()).hexdigest()[:16]
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()[:16]
     
     def should_send(self, category: str, message: str, cooldown: Optional[timedelta] = None) -> bool:
         """

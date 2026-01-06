@@ -1,5 +1,19 @@
 [
   {
+    "run_id": "run_20260105T140057Z_7285933f",
+    "timestamp": "2026-01-05T14:01:00.724979Z",
+    "strategy": "unknown",
+    "tickers": [],
+    "git_hash": "f2be7e089f31fddf9470c911c21a3a39d32ee14e",
+    "metrics": {
+      "final_equity": 1020038.6130703134,
+      "total_return": 0.01995766404935706,
+      "sharpe": 252.49045274201168,
+      "max_drawdown": 0.0
+    },
+    "path": "output\\backtests\\run_20260105T140057Z_7285933f"
+  },
+  {
     "run_id": "run_20260104T072022Z_f8404959",
     "timestamp": "2026-01-04T07:22:56.068702Z",
     "strategy": "unknown",

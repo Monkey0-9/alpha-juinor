@@ -7,7 +7,6 @@ Eliminates duplicate downloads and reduces latency.
 import os
 import json
 import hashlib
-import pickle
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Any
@@ -43,11 +42,11 @@ class MarketDataCache:
     def _get_cache_key(self, ticker: str, start_date: str, end_date: str, data_type: str = "ohlcv") -> str:
         """Generate deterministic cache key."""
         key_str = f"{ticker}_{start_date}_{end_date}_{data_type}"
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
     
     def _get_cache_path(self, cache_key: str) -> Path:
         """Get file path for cache entry."""
-        return self.cache_dir / f"{cache_key}.pkl"
+        return self.cache_dir / f"{cache_key}.json"
     
     def _get_metadata_path(self, cache_key: str) -> Path:
         """Get metadata file path."""
@@ -96,8 +95,7 @@ class MarketDataCache:
                 return None
             
             # Load data
-            with open(cache_path, 'rb') as f:
-                df = pickle.load(f)
+            df = pd.read_json(cache_path, orient='split')
             
             self.stats["hits"] += 1
             logger.debug(f"Cache hit: {ticker} ({start_date} to {end_date})")
@@ -195,7 +193,7 @@ class MarketDataCache:
             **self.stats,
             "total_requests": total_requests,
             "hit_rate": hit_rate,
-            "cache_size_mb": sum(f.stat().st_size for f in self.cache_dir.glob("*.pkl")) / (1024 * 1024)
+            "cache_size_mb": sum(f.stat().st_size for f in self.cache_dir.glob("*.json")) / (1024 * 1024)
         }
 
 
