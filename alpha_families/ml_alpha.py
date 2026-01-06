@@ -44,10 +44,7 @@ class MLAlpha(BaseAlpha):
             prediction_horizon: Days ahead to predict
             feature_lookback: Days of history for features
         """
-        super().__init__(
-            name="MLAlpha",
-            description="Machine learning ensemble for alpha signal generation"
-        )
+        super().__init__()
 
         self.model_path = Path(model_path) if model_path else Path("models/ml_alpha")
         self.model_path.mkdir(parents=True, exist_ok=True)

@@ -43,10 +43,7 @@ class SentimentAlpha(BaseAlpha):
             sentiment_decay_hours: Hours over which sentiment decays
             min_confidence_threshold: Minimum confidence for signal generation
         """
-        super().__init__(
-            name="SentimentAlpha",
-            description="NLP-based sentiment analysis for alpha signals"
-        )
+        super().__init__()
 
         self.news_weight = news_weight
         self.social_weight = social_weight

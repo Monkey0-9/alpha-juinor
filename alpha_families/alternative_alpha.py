@@ -41,10 +41,7 @@ class AlternativeAlpha(BaseAlpha):
             search_weight: Weight for search trends
             sentiment_decay_days: Days over which sentiment decays
         """
-        super().__init__(
-            name="AlternativeAlpha",
-            description="Alternative data sources for alpha generation"
-        )
+        super().__init__()
 
         self.news_weight = news_weight
         self.social_weight = social_weight

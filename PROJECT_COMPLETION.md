@@ -31,3 +31,4 @@ The system is currently running in the background.
 ## 4. Final Handover
 The codebase is clean, tested, and optimized. No further code changes are required for operation.
 **The "Mini Quant Fund" is now a Professional Trading System.**
+gir 

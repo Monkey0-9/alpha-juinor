@@ -1,39 +1,73 @@
-# Institutional Quant Fund Implementation Plan
+# OPS Stability Fixes TODO
 
-## Phase 1: Runtime Fixes & Core Formulas
-- [x] Fix logger issues in main.py (already handled)
-- [ ] Implement transaction cost models in risk/engine.py
-- [ ] Verify Kelly, CVaR, HMM implementations
+## Primary Fixes (A-K)
 
-## Phase 2: Alpha Models Implementation
-- [ ] Create Sentiment Alpha (NLP-based)
-- [ ] Create Fundamental Alpha (earnings, value metrics)
-- [ ] Create Alternative Alpha (news, social media)
-- [ ] Create Statistical Alpha (GARCH, cointegration)
-- [ ] Create ML Alpha (ensemble models)
-- [ ] Update alpha_families/registry.py to include new models
-- [ ] Create strategies/composite_alpha.py for prioritized model registration
+### A. Fix SyntaxError in risk/engine.py
+- [ ] Locate unmatched `)` near line ~298
+- [ ] Correct function signature/parentheses
+- [ ] Run py_compile to verify
 
-## Phase 3: Testing Infrastructure
-- [ ] Add unit tests for new alpha models
-- [ ] Add integration tests for risk engine
-- [ ] Add tests for transaction costs
-- [ ] Add tests for composite alpha strategy
+### B. Resolve 'name 'logger' is not defined'
+- [ ] Add `import logging; logger = logging.getLogger(__name__)` to every module that logs
+- [ ] Add central logging config in main.py
+- [ ] Replace bare logger references with module-level logger
 
-## Phase 4: CI/CD Pipeline
-- [ ] Create .github/workflows/ci.yml
-- [ ] Add GitHub Actions for testing and linting
+### C. RoutingProvider.get_latest_price missing
+- [ ] Create data/routing_provider.py or add to main.py's RoutingProvider
+- [ ] Implement get_latest_price(self, symbol, timestamp=None)
+- [ ] Delegate to provider-specific method or fallback to cached last close price
+- [ ] Raise NoPriceAvailable exception if all fail
+- [ ] Update callers to catch exceptions and use safe fallback
 
-## Phase 5: Monitoring & Alerting
-- [ ] Enhance monitoring/alerts.py with metrics
-- [ ] Add institutional_alerts.py enhancements
-- [ ] Add Prometheus/Grafana integration points
+### D. Network & external provider resiliency
+- [ ] Add requests.Session() with Retry adapter (3 retries, exponential backoff)
+- [ ] Set timeouts (e.g., timeout=5)
+- [ ] Catch RequestException, SSLError, gaierror
+- [ ] Mark provider as disabled on persistent failure
+- [ ] Continue pipeline with remaining sources
 
-## Phase 6: Documentation & PR
-- [ ] Update README.md with architecture and run instructions
-- [ ] Create feature branch
-- [ ] Run local tests and smoke tests
-- [ ] Create PR with all changes
+### E. Fix deprecated pandas fillna(method=...) and pct_change usage
+- [ ] Replace df.fillna(method='ffill') / .fillna(method='bfill') with df.ffill() / df.bfill()
+- [ ] Replace equity_curve.pct_change().fillna(0) with proper handling
+- [ ] Run codebase to ensure no FutureWarning
 
-## Current Status
-Starting implementation...
+### F. Vol estimation fallback spam
+- [ ] Add MIN_HISTORY_BARS constant
+- [ ] If history length < MIN, return FALLBACK_VOL
+- [ ] Log fallback once per run per symbol (use set or LRU cache)
+
+### G. Empty equity / NaN metrics protections
+- [ ] Check for equity_curve.empty or all-NaN before computing metrics
+- [ ] Set Final Equity = starting_nav, Annualized Return = 0.0, Sharpe = None, Max Drawdown = 0.0%
+- [ ] Log WARNING with helpful message
+- [ ] Avoid nan outputs in final artifacts
+
+### H. MarketListener anomaly cross-check robustness
+- [ ] Ensure cross-check uses at least two independent providers/time windows
+- [ ] Add configurable thresholds in configs/golden_config.yaml
+- [ ] Unit tests for glitch simulation
+- [ ] Mark anomalies as "INCONCLUSIVE" instead of "FAILED cross-check" if missing provider responses
+
+### I. Add basic CI
+- [ ] Add .github/workflows/ci.yml
+- [ ] Run on PR: python 3.10/3.11, install requirements, pytest -q, flake8
+
+### J. Secrets & logging hygiene
+- [ ] Remove any API keys from code
+- [ ] Replace with os.environ['API_KEY']
+- [ ] Add .env.example
+- [ ] Ensure logs don't print raw API keys/secrets
+
+### K. Observability & guardrails
+- [ ] Add monitoring/health.py or extend monitoring.alerts
+- [ ] Expose provider health, last successful data timestamp, suppressed exceptions count
+- [ ] Add CIRCUIT_BREAKER_THRESHOLD in config
+- [ ] Pause trading loop and escalate if > X anomalies in Y minutes
+
+## Implementation Steps
+1. Create branch: fix/ops-stability-pp-20260106
+2. Implement fixes A-K in atomic commits
+3. Add unit tests for behavioral changes
+4. Run pytest -q, flake8 .
+5. Test python main.py startup
+6. Open PR with checklist
