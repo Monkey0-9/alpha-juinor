@@ -1,31 +1,39 @@
-# Institutional Quant Trading System Fixes
+# Institutional Quant Fund Implementation Plan
 
-## 1. Fix InstitutionalStrategy.generate_signals Return Type
-- **File**: strategies/institutional_strategy.py
-- **Function**: generate_signals
-- **Problem**: Returns dict instead of DataFrame, causing .iloc[-1] to fail in main.py
-- **Fix**: Aggregate alpha signals per ticker, return single-row DataFrame
+## Phase 1: Runtime Fixes & Core Formulas
+- [x] Fix logger issues in main.py (already handled)
+- [ ] Implement transaction cost models in risk/engine.py
+- [ ] Verify Kelly, CVaR, HMM implementations
 
-## 2. Add Schema Enforcement in Data Router
-- **File**: data/collectors/data_router.py
-- **Function**: get_price_history
-- **Problem**: No validation that returned data is DataFrame with required columns
-- **Fix**: Add assertions for DataFrame type and column presence
+## Phase 2: Alpha Models Implementation
+- [ ] Create Sentiment Alpha (NLP-based)
+- [ ] Create Fundamental Alpha (earnings, value metrics)
+- [ ] Create Alternative Alpha (news, social media)
+- [ ] Create Statistical Alpha (GARCH, cointegration)
+- [ ] Create ML Alpha (ensemble models)
+- [ ] Update alpha_families/registry.py to include new models
+- [ ] Create strategies/composite_alpha.py for prioritized model registration
 
-## 3. Fix Dotenv Parsing and Environment Validation
-- **File**: main.py
-- **Function**: run_production_pipeline
-- **Problem**: load_dotenv() may not parse correctly, no validation of env vars
-- **Fix**: Validate critical env vars at startup, fail fast if missing
+## Phase 3: Testing Infrastructure
+- [ ] Add unit tests for new alpha models
+- [ ] Add integration tests for risk engine
+- [ ] Add tests for transaction costs
+- [ ] Add tests for composite alpha strategy
 
-## 4. Add Graceful Failure in Live Engine
-- **File**: engine/live_engine.py
-- **Function**: run_once
-- **Problem**: One asset failure crashes full rebalance
-- **Fix**: Wrap per-asset logic in try-except, log errors, continue
+## Phase 4: CI/CD Pipeline
+- [ ] Create .github/workflows/ci.yml
+- [ ] Add GitHub Actions for testing and linting
 
-## 5. Ensure Single-Row DataFrame Handling in Allocator
-- **File**: portfolio/allocator.py
-- **Function**: allocate
-- **Problem**: Potential Series vs DataFrame issues in signal processing
-- **Fix**: Add type checks and conversions for signals input
+## Phase 5: Monitoring & Alerting
+- [ ] Enhance monitoring/alerts.py with metrics
+- [ ] Add institutional_alerts.py enhancements
+- [ ] Add Prometheus/Grafana integration points
+
+## Phase 6: Documentation & PR
+- [ ] Update README.md with architecture and run instructions
+- [ ] Create feature branch
+- [ ] Run local tests and smoke tests
+- [ ] Create PR with all changes
+
+## Current Status
+Starting implementation...

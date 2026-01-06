@@ -10,6 +10,8 @@ from risk.factor_exposure import FactorExposureEngine
 from risk.tail_risk import compute_tail_risk_metrics
 from risk.cvar import compute_cvar
 from risk.covariance import robust_covariance
+from risk.market_impact_models import TransactionCostModel
+from risk.sizing import KellySizer
 from data.utils.schema import ensure_dataframe
 
 from regime.markov import RegimeModel
@@ -84,6 +86,15 @@ class RiskManager:
         # Flags
         self.use_cvar_gate = use_cvar
         self.use_evt_gate = use_evt
+
+        # Transaction cost model
+        self.transaction_cost_model = TransactionCostModel()
+
+        # Kelly criterion
+        self.kelly_model = KellySizer(target_vol=self.target_vol_limit)
+
+        # HMM regime model
+        self.hmm_model = RegimeModel()
 
         # Stateful Risk Management
         self.state = RiskDecision.ALLOW
