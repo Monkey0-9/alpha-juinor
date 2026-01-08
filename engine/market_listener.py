@@ -104,15 +104,19 @@ class MarketListener:
         pct_change = (current_price - last_price) / last_price
         
         # 1. Anomaly Detection Logic (Institutional Requirement 3.1)
-        # Any move > 5% requires cross-check. Moves > 30% are treated as FLASH_CRASH.
+        # Any move > anomaly_threshold requires cross-check. Moves > flash_crash_threshold are treated as FLASH_CRASH.
         abs_move = abs(pct_change)
-        
-        if abs_move > 0.05:
+
+        if abs_move > self.anomaly_threshold:
             # Mandate secondary confirmation for significant moves
-            if self.router.cross_check_quote(ticker, current_price):
-                if pct_change < -0.30:
+            cross_check_result = self.router.cross_check_quote(ticker, current_price)
+            if cross_check_result == True:
+                if pct_change < -self.flash_crash_threshold:
                     return f"FLASH_CRASH: {ticker} dropped {pct_change:.2%} (VERIFIED)"
                 return f"VOLATILITY_SPIKE: {ticker} moved {pct_change:.2%} (VERIFIED)"
+            elif cross_check_result == "INCONCLUSIVE":
+                logger.warning(f"ANOMALY INCONCLUSIVE: {ticker} moved {pct_change:.2%} - insufficient cross-check data.")
+                return f"VOLATILITY_SPIKE: {ticker} moved {pct_change:.2%} (INCONCLUSIVE)"
             else:
                 # If unverified, we treat it as a glitch if it's extreme (>50%)
                 if abs_move > 0.50:

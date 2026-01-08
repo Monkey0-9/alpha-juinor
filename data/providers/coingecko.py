@@ -183,10 +183,8 @@ class CoinGeckoDataProvider(DataProvider):
                 'vs_currency': 'usd',
                 'days': days
             }
-            resp = requests.get(url, params=params, timeout=10)
-            if resp.status_code != 200:
-                logger.warning(f"CoinGecko API Error: {resp.text}")
-                return pd.DataFrame()
+            resp = self.session.get(url, params=params, timeout=5)
+            resp.raise_for_status()
 
             data = resp.json()
             if not data:
@@ -220,6 +218,9 @@ class CoinGeckoDataProvider(DataProvider):
 
             return df
 
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"CoinGecko network error for {ticker}: {e}")
+            return pd.DataFrame()
         except Exception as e:
             logger.error(f"CoinGecko fetch failed for {ticker}: {e}")
             return pd.DataFrame()

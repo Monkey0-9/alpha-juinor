@@ -101,7 +101,7 @@ class RegimeEngine:
         vix = macro_context.get('VIX', 20.0) if macro_context else 20.0
 
         # Trend strength
-        returns = data['Close'].pct_change().dropna()
+        returns = data['Close'].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
         trend_strength = abs(returns.rolling(20).mean()) / returns.rolling(20).std()
 
         if vix < 20 and trend_strength.iloc[-1] > 0.5:
@@ -113,7 +113,7 @@ class RegimeEngine:
 
     def _detect_vol_regime(self, data: pd.DataFrame) -> Dict[str, Any]:
         """Detect Volatility Expansion/Compression."""
-        returns = data['Close'].pct_change().dropna()
+        returns = data['Close'].pct_change(fill_method=None).dropna()
         short_vol = returns.tail(10).std() * np.sqrt(252)
         long_vol = returns.tail(60).std() * np.sqrt(252)
 
@@ -143,7 +143,7 @@ class RegimeEngine:
     def _detect_trend_regime(self, data: pd.DataFrame) -> Dict[str, Any]:
         """Detect Trend vs Mean-Reversion."""
         # Use Hurst exponent approximation
-        returns = data['Close'].pct_change().dropna()
+        returns = data['Close'].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
         if len(returns) < 100:
             return {'tag': RegimeTag.MEAN_REVERSION.value, 'confidence': 0.5}
 
