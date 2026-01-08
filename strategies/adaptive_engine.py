@@ -286,7 +286,7 @@ class InstitutionalAdaptiveEngine:
 
             # Calculate trend strength
             recent_data = market_data.tail(50)
-            returns = recent_data['Close'].pct_change().dropna()
+            returns = recent_data['Close'].pct_change(fill_method=None).dropna()
 
             # Linear regression for trend
             X = np.arange(len(recent_data)).reshape(-1, 1)
@@ -378,7 +378,7 @@ class InstitutionalAdaptiveEngine:
             if len(recent_data) < 20:
                 return {'sharpe_ratio': 0, 'max_drawdown': 0, 'win_rate': 0.5}
 
-            returns = recent_data['Close'].pct_change().dropna()
+            returns = recent_data['Close'].pct_change(fill_method=None).dropna()
 
             # Calculate performance metrics
             sharpe_ratio = returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0

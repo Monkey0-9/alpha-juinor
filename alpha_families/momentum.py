@@ -36,7 +36,7 @@ class MomentumAlpha(BaseAlpha):
         signal = self.normalize_signal(momentum * 2)  # Scale up for better signal strength
 
         # Calculate confidence based on volatility
-        returns = data['Close'].pct_change().dropna()
+        returns = data['Close'].pct_change(fill_method=None).dropna()
         volatility = returns.std()
         confidence = min(1.0, max(0.1, 1.0 - volatility))  # Higher confidence with lower volatility
 

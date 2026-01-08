@@ -82,7 +82,7 @@ class FundamentalAlpha(BaseAlpha):
         """
         # Placeholder: estimate EPS from price momentum and volatility
         # Real implementation would use actual earnings data
-        returns = data['Close'].pct_change()
+        returns = data['Close'].pct_change(fill_method=None)
         volatility = returns.rolling(60).std()
 
         # Estimate EPS growth from price action (simplified)

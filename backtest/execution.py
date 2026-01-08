@@ -281,19 +281,22 @@ class RealisticExecutionHandler:
 
         # Estimate vol: rolling std of pct_change
         try:
-            if price_history is None or len(price_history) < 5:
-                raise RuntimeError("insufficient price history")
-            ret = price_history.astype(float).pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
-            if len(ret) == 0:
-                raise RuntimeError("no returns")
-            roll_win = min(self.vol_lookback, max(2, len(ret)))
-            vol_raw = ret.rolling(roll_win).std().iloc[-1]
-            if np.isnan(vol_raw) or vol_raw <= 0:
-                raise RuntimeError("bad vol estimate")
-            vol = float(vol_raw) * np.sqrt(252)
+            if price_history is None or len(price_history) < MIN_HISTORY_BARS:
+                logger.warning("Insufficient price history (%d < %d), using fallback vol %s for %s",
+                             len(price_history) if price_history is not None else 0, MIN_HISTORY_BARS, FALLBACK_VOL, order.ticker)
+                vol = FALLBACK_VOL
+            else:
+                ret = price_history.astype(float).pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
+                if len(ret) == 0:
+                    raise RuntimeError("no returns")
+                roll_win = min(self.vol_lookback, max(2, len(ret)))
+                vol_raw = ret.rolling(roll_win).std().iloc[-1]
+                if np.isnan(vol_raw) or vol_raw <= 0:
+                    raise RuntimeError("bad vol estimate")
+                vol = float(vol_raw) * np.sqrt(252)
         except Exception as e:
-            # Fix #4: No silent fallbacks
-            raise ExecutionError(f"Volatility estimation failed: {e}")
+            logger.warning("Volatility estimation failed: %s, using fallback vol %s for %s", e, FALLBACK_VOL, order.ticker)
+            vol = FALLBACK_VOL
 
         # Estimate ADV
         try:
