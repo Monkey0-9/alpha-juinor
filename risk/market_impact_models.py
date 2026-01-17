@@ -37,6 +37,77 @@ class OptimalExecution:
     timing_risk: float
     execution_time: float
 
+class TransactionCostModel:
+    """
+    Transaction Cost Model for estimating trading costs.
+    Integrates with market impact models to provide comprehensive cost estimates.
+    """
+
+    def __init__(self):
+        self.market_impact_model = InstitutionalMarketImpactModels()
+        self.base_commission_rate = 0.0005  # 5 bps base commission
+        self.sec_fee_rate = 0.000022  # SEC fee
+        self.finasra_fee_rate = 0.000119  # FINRA fee
+        self.exchange_fee_rate = 0.000025  # Exchange fee
+
+    def estimate_total_cost(self, order_size: float, params: ImpactParameters) -> Dict[str, float]:
+        """
+        Estimate total transaction cost including commissions and market impact.
+        """
+        try:
+            # Calculate market impact
+            impact = self.market_impact_model.calculate_market_impact(order_size, params)
+
+            # Calculate commissions
+            commissions = self._calculate_commissions(order_size, params)
+
+            # Total cost
+            total_cost = impact['total_impact'] + commissions['total_commissions']
+
+            return {
+                'market_impact': impact['total_impact'],
+                'commissions': commissions['total_commissions'],
+                'total_cost': total_cost,
+                'cost_per_share': total_cost / abs(order_size) if order_size != 0 else 0,
+                'cost_bps': (total_cost / (params.market_cap * params.order_size_pct)) * 10000 if params.market_cap > 0 else 0
+            }
+
+        except Exception as e:
+            logger.error(f"Transaction cost estimation failed: {e}")
+            return self._get_default_cost(order_size, params)
+
+    def _calculate_commissions(self, order_size: float, params: ImpactParameters) -> Dict[str, float]:
+        """Calculate regulatory and exchange commissions."""
+        dollar_volume = abs(order_size) * params.market_cap * params.order_size_pct
+
+        commission = dollar_volume * self.base_commission_rate
+        sec_fee = dollar_volume * self.sec_fee_rate
+        finastra_fee = dollar_volume * self.finasra_fee_rate
+        exchange_fee = dollar_volume * self.exchange_fee_rate
+
+        total_commissions = commission + sec_fee + finastra_fee + exchange_fee
+
+        return {
+            'commission': commission,
+            'sec_fee': sec_fee,
+            'finastra_fee': finastra_fee,
+            'exchange_fee': exchange_fee,
+            'total_commissions': total_commissions
+        }
+
+    def _get_default_cost(self, order_size: float, params: ImpactParameters) -> Dict[str, float]:
+        """Fallback cost estimation."""
+        dollar_volume = abs(order_size) * params.market_cap * params.order_size_pct
+        default_cost = dollar_volume * 0.001  # 10 bps default
+
+        return {
+            'market_impact': default_cost * 0.7,
+            'commissions': default_cost * 0.3,
+            'total_cost': default_cost,
+            'cost_per_share': default_cost / abs(order_size) if order_size != 0 else 0,
+            'cost_bps': 10.0
+        }
+
 class InstitutionalMarketImpactModels:
     """
     INSTITUTIONAL-GRADE MARKET IMPACT MODELS

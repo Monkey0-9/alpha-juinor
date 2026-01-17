@@ -131,7 +131,7 @@ class InstitutionalFilters:
                 if ticker not in ticker_data.columns:
                     continue
 
-                returns = ticker_data[ticker]['Close'].pct_change().dropna()
+                returns = ticker_data[ticker]['Close'].pct_change(fill_method=None).dropna()
                 current_vol = returns.iloc[-20:].std()  # 20-day vol
 
                 if current_vol > self.volatility_cap:
@@ -161,7 +161,7 @@ class InstitutionalFilters:
             for ticker in active_signals.keys():
                 ticker_data = market_data[ticker] if isinstance(market_data.columns, pd.MultiIndex) else market_data
                 if ticker in ticker_data.columns:
-                    returns = ticker_data[ticker]['Close'].pct_change().dropna()
+                    returns = ticker_data[ticker]['Close'].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
                     returns_data[ticker] = returns
 
             if len(returns_data) >= 2:
@@ -250,7 +250,7 @@ class InstitutionalFilters:
             all_returns = []
             for col in market_data.columns.levels[0] if isinstance(market_data.columns, pd.MultiIndex) else market_data.columns:
                 if 'Close' in market_data[col].columns:
-                    returns = market_data[col]['Close'].pct_change().dropna()
+                    returns = market_data[col]['Close'].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
                     all_returns.extend(returns.values[-20:])  # Last 20 days
 
             return np.std(all_returns) if all_returns else 0.02
@@ -263,7 +263,7 @@ class InstitutionalFilters:
             returns_data = {}
             for col in market_data.columns.levels[0] if isinstance(market_data.columns, pd.MultiIndex) else market_data.columns:
                 if 'Close' in market_data[col].columns:
-                    returns = market_data[col]['Close'].pct_change().dropna()
+                    returns = market_data[col]['Close'].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
                     returns_data[col] = returns
 
             if len(returns_data) > 1:

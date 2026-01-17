@@ -141,8 +141,12 @@ def run_production_pipeline():
 
         def get_latest_price(self, ticker: str) -> Optional[float]:
             """Consistent interface for LiveEngine."""
-            return self.router.get_latest_price(ticker)
-        
+            try:
+                return self.router.get_latest_price(ticker)
+            except Exception as e:
+                logger.warning(f"Failed to get latest price for {ticker}: {e}")
+                return None
+
         def get_latest_quote(self, ticker: str) -> Optional[float]:
             """Alias for backward compatibility."""
             return self.get_latest_price(ticker)

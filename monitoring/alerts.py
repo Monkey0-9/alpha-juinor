@@ -5,8 +5,48 @@ import logging
 import asyncio
 from typing import Optional, Dict, Any
 from time import time
+from enum import Enum
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
+
+class AlertSeverity(Enum):
+    """Alert severity levels for institutional monitoring."""
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+class AlertCategory(Enum):
+    """Alert categories for better organization."""
+    RISK = "RISK"
+    PERFORMANCE = "PERFORMANCE"
+    SYSTEM = "SYSTEM"
+    MARKET_DATA = "MARKET_DATA"
+    TRADING = "TRADING"
+
+@dataclass
+class AlertMetrics:
+    """Metrics tracking for institutional monitoring."""
+    total_alerts: int = 0
+    alerts_by_severity: Dict[str, int] = field(default_factory=dict)
+    alerts_by_category: Dict[str, int] = field(default_factory=dict)
+    alerts_last_24h: int = 0
+    critical_alerts_last_24h: int = 0
+    average_response_time: float = 0.0
+    system_uptime: float = 0.0
+
+@dataclass
+class Alert:
+    """Structured alert with institutional metadata."""
+    message: str
+    severity: AlertSeverity
+    category: AlertCategory
+    timestamp: float = field(default_factory=time)
+    source: str = "quant-fund"
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    resolved: bool = False
+    resolved_at: Optional[float] = None
 
 class AlertManager:
     """
