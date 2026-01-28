@@ -4,45 +4,177 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mini-quant-fund"
-version = "0.1.0"
+version = "0.2.0"
 description = "Institutional-grade quantitative investment engine"
 authors = [{name = "Antigravity", email = "antigravity@deepmind.com"}]
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-    "pandas>=2.0.0",
+    # Core dependencies
+    "pandas>=2.0.0,<2.2.0",
     "numpy>=1.24.0",
-    "yfinance>=0.2.0",
-    "plotly>=5.14.0",
-    "scipy>=1.10.0",
-    "pyarrow>=12.0.0",  # Required for Parquet
+    "scipy>=1.11.0",
+    "scikit-learn>=1.3.0",
+
+    # Data providers
+    "yfinance>=0.2.28",
+    "requests>=2.32.3",
+    "urllib3>=2.2.2",
+    "ccxt>=4.1.0",
+
+    # Configuration & utilities
+    "python-dotenv>=1.0.0",
     "PyYAML>=6.0",
+    "pyarrow>=12.0.0",
     "psutil>=5.9.0",
+    "hvac>=1.2.0",
+
+    # Web & streaming
+    "websockets>=11.0",
+    "nest-asyncio>=1.5.0",
+
+    # Visualization & dashboards
+    "streamlit>=1.25.0",
+    "plotly>=5.15.0",
+
+    # Database (PostgreSQL + SQLAlchemy for production)
+    "sqlalchemy>=2.0.0",
+    "psycopg2-binary>=2.9.9",
+
+    # ML & NLP
+    "tensorflow>=2.13.0",
+    "nltk>=3.8.0",
+    "textblob>=0.17.0",
+    "spacy>=3.7.0",
+
+    # Quantum (optional)
+    "qiskit>=0.44.0",
+    "qiskit-aer>=0.12.0",
 ]
 
 [project.optional-dependencies]
+# Development dependencies
 dev = [
     "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
     "black>=23.0.0",
     "flake8>=6.0.0",
     "isort>=5.12.0",
+    "pre-commit>=3.0.0",
+    "detect-secrets>=1.4.0",
+]
+
+# Production dependencies (PostgreSQL, TimescaleDB, etc.)
+prod = [
+    "psycopg2-binary>=2.9.9",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.12.0",
+]
+
+# Streaming dependencies (Kafka, etc.)
+streaming = [
+    "confluent-kafka>=2.3.0",
+    "avro-python3>=1.10.2",
+]
+
+# Monitoring dependencies
+monitoring = [
+    "prometheus-client>=0.17.0",
+    "grafana-client>=1.0.0",
+]
+
+# All production dependencies
+all = [
+    "psycopg2-binary>=2.9.9",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.12.0",
+    "confluent-kafka>=2.3.0",
+    "avro-python3>=1.10.2",
+    "prometheus-client>=0.17.0",
 ]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra -q"
+addopts = "-ra -q --tb=short"
 filterwarnings = [
     "error::FutureWarning",
+    "ignore::DeprecationWarning",
 ]
 testpaths = [
     "tests",
 ]
 python_files = "test_*.py *test.py"
+python_classes = "Test*"
+python_functions = "test_*"
 
 [tool.black]
 line-length = 88
 target-version = ['py39']
+skip-string-normalization = false
 
 [tool.isort]
 profile = "black"
 line_length = 88
+force_single_line = false
+
+[tool.coverage.run]
+source = ["mini_quant_fund"]
+omit = ["tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+
+[tool.cspell]
+# Custom dictionary for project-specific terms and technical package names
+words = [
+    # Python package names
+    "setuptools",
+    "numpy",
+    "scipy",
+    "scikit",
+    "yfinance",
+    "urllib",
+    "ccxt",
+    "pyarrow",
+    "psutil",
+    "asyncio",
+    "streamlit",
+    "plotly",
+    "sqlalchemy",
+    "psycopg",
+    "nltk",
+    "textblob",
+    "spacy",
+    "qiskit",
+    "pytest",
+    "isort",
+
+    # Python-specific configuration terms
+    "minversion",   # pytest configuration
+    "addopts",      # pytest configuration
+    "filterwarnings",  # pytest configuration
+    "testpaths",    # pytest configuration
+
+    # Project-specific terms
+    "dotenv",       # Python dotenv library
+    "PRECHECK",     # Governance precheck constant
+    "precheck",     # Governance precheck constant (lowercase)
+    "signum",       # Signal value (Latin)
+    "OHLCV",        # Open-High-Low-Close-Volume data format
+    "lookback",     # Lookback period for market data
+    "Lookback",     # Lookback period (capitalized)
+    "Pylance",      # VSCode Python language server
+    "Praveen",      # Author name
+]
+ignorePaths = [
+    "*.log",
+    "*.txt",
+    "**/tests/**",
+    "**/runtime/**",
+    "**/data/**",
+]

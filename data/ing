@@ -1,0 +1,305 @@
+"""
+Schema Registry for Kafka Topic Schemas.
+
+This module provides Avro schema management for streaming market data
+with schema versioning and compatibility checking.
+"""
+
+import os
+import json
+import logging
+from typing import Any, Dict, List, Optional
+from pathlib import Path
+from dataclasses import dataclass
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
+# Schema directory
+SCHEMAS_DIR = Path(__file__).parent / "schemas"
+
+
+@dataclass
+class SchemaInfo:
+    """Schema metadata."""
+    name: str
+    version: int
+    schema: Dict[str, Any]
+    created_at: datetime
+    compatibility: str = "BACKWARD"
+
+
+class SchemaRegistry:
+    """
+    Schema registry for managing Avro schemas.
+
+    Features:
+    - Schema versioning
+    - Compatibility checking
+    - Schema storage and retrieval
+    """
+
+    # Default schemas
+    DEFAULT_SCHEMAS = {
+        "quote": {
+            "type": "record",
+            "name": "Quote",
+            "namespace": "mini_quant.market",
+            "fields": [
+                {"name": "symbol", "type": "string"},
+                {"name": "bid", "type": "double"},
+                {"name": "ask", "type": "double"},
+                {"name": "bid_size", "type": "long", "default": 0},
+                {"name": "ask_size", "type": "long", "default": 0},
+                {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"},
+                {"name": "source", "type": "string"},
+                {"name": "exchange", "type": "string", "default": ""}
+            ]
+        },
+        "trade": {
+            "type": "record",
+            "name": "Trade",
+            "namespace": "mini_quant.market",
+            "fields": [
+                {"name": "symbol", "type": "string"},
+                {"name": "price", "type": "double"},
+                {"name": "quantity", "type": "long"},
+                {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"},
+                {"name": "side", "type": "string", "default": "unknown"},
+                {"name": "source", "type": "string"},
+                {"name": "exchange", "type": "string", "default": ""},
+                {"name": "conditions", "type": "string", "default": ""}
+            ]
+        },
+        "bar": {
+            "type": "record",
+            "name": "Bar",
+            "namespace": "mini_quant.market",
+            "fields": [
+                {"name": "symbol", "type": "string"},
+                {"name": "open", "type": "double"},
+                {"name": "high", "type": "double"},
+                {"name": "low", "type": "double"},
+                {"name": "close", "type": "double"},
+                {"name": "volume", "type": "long"},
+                {"name": "start_time", "type": "long", "logicalType": "timestamp-millis"},
+                {"name": "end_time", "type": "long", "logicalType": "timestamp-millis"},
+                {"name": "trades", "type": "long", "default": 0},
+                {"name": "source", "type": "string"},
+                {"name": "interval", "type": "string", "default": "1d"}
+            ]
+        },
+        "fundamental": {
+            "type": "record",
+            "name": "Fundamental",
+            "namespace": "mini_quant.fundamental",
+            "fields": [
+                {"name": "symbol", "type": "string"},
+                {"name": "report_date", "type": "string"},
+                {"name": "fiscal_quarter", "type": "string"},
+                {"name": "revenue", "type": ["null", "double"], "default": None},
+                {"name": "eps", "type": ["null", "double"], "default": None},
+                {"name": "pe_ratio", "type": ["null", "double"], "default": None},
+                {"name": "market_cap", "type": ["null", "long"], "default": None},
+                {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"},
+                {"name": "source", "type": "string"}
+            ]
+        },
+        "news": {
+            "type": "record",
+            "name": "News",
+            "namespace": "mini_quant.news",
+            "fields": [
+                {"name": "id", "type": "string"},
+                {"name": "title", "type": "string"},
+                {"name": "content", "type": "string"},
+                {"name": "symbols", "type": {"type": "array", "items": "string"}},
+                {"name": "sentiment_score", "type": "double", "default": 0.0},
+                {"name": "sentiment_label", "type": "string", "default": "neutral"},
+                {"name": "published_at", "type": "long", "logicalType": "timestamp-millis"},
+                {"name": "source", "type": "string"},
+                {"name": "url", "type": "string", "default": ""}
+            ]
+        },
+        "order": {
+            "type": "record",
+            "name": "Order",
+            "namespace": "mini_quant.execution",
+            "fields": [
+                {"name": "order_id", "type": "string"},
+                {"name": "symbol", "type": "string"},
+                {"name": "side", "type": "string"},
+                {"name": "quantity", "type": "double"},
+                {"name": "order_type", "type": "string"},
+                {"name": "price", "type": ["null", "double"], "default": None},
+                {"name": "status", "type": "string"},
+                {"name": "created_at", "type": "long", "logicalType": "timestamp-millis"},
+                {"name": "updated_at", "type": "long", "logicalType": "timestamp-millis"},
+                {"name": "broker", "type": "string"}
+            ]
+        },
+        "fill": {
+            "type": "record",
+            "name": "Fill",
+            "namespace": "mini_quant.execution",
+            "fields": [
+                {"name": "fill_id", "type": "string"},
+                {"name": "order_id", "type": "string"},
+                {"name": "symbol", "type": "string"},
+                {"name": "side", "type": "string"},
+                {"name": "quantity", "type": "double"},
+                {"name": "price", "type": "double"},
+                {"name": "commission", "type": "double", "default": 0.0},
+                {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"},
+                {"name": "exchange", "type": "string", "default": ""}
+            ]
+        }
+    }
+
+    def __init__(self, schema_dir: Optional[Path] = None):
+        """Initialize schema registry."""
+        self.schema_dir = schema_dir or SCHEMAS_DIR
+        self.schemas: Dict[str, SchemaInfo] = {}
+        self._load_schemas()
+
+    def _load_schemas(self):
+        """Load schemas from directory."""
+        # Load default schemas
+        for name, schema in self.DEFAULT_SCHEMAS.items():
+            self._register_schema(name, schema)
+
+        # Load additional schemas from files
+        if self.schema_dir.exists():
+            for schema_file in self.schema_dir.glob("*.json"):
+                try:
+                    with open(schema_file) as f:
+                        schema = json.load(f)
+                        name = schema_file.stem
+                        if name not in self.schemas:
+                            self._register_schema(name, schema)
+                except Exception as e:
+                    logger.warning(f"Failed to load schema {schema_file}: {e}")
+
+    def _register_schema(self, name: str, schema: Dict[str, Any],
+                         compatibility: str = "BACKWARD"):
+        """Register a schema."""
+        version = len([s for s in self.schemas.values() if s.name == name]) + 1
+
+        info = SchemaInfo(
+            name=name,
+            version=version,
+            schema=schema,
+            created_at=datetime.utcnow(),
+            compatibility=compatibility
+        )
+
+        self.schemas[name] = info
+        logger.info(f"Registered schema: {name} v{version}")
+
+    def get_schema(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get the latest version of a schema."""
+        if name in self.schemas:
+            return self.schemas[name].schema
+        return None
+
+    def get_schema_version(self, name: str) -> int:
+        """Get the version of a schema."""
+        if name in self.schemas:
+            return self.schemas[name].version
+        return 0
+
+    def get_all_schemas(self) -> Dict[str, Dict[str, Any]]:
+        """Get all registered schemas."""
+        return {
+            name: {
+                "name": info.name,
+                "version": info.version,
+                "schema": info.schema,
+                "compatibility": info.compatibility
+            }
+            for name, info in self.schemas.items()
+        }
+
+    def validate_record(self, name: str, record: Dict[str, Any]) -> bool:
+        """Validate a record against its schema."""
+        schema = self.get_schema(name)
+        if not schema:
+            logger.error(f"Schema not found: {name}")
+            return False
+
+        # Basic validation - check required fields
+        required_fields = [f["name"] for f in schema.get("fields", [])
+                          if f.get("default") is None and "default" not in f]
+
+        for field in required_fields:
+            if field not in record:
+                logger.error(f"Missing required field: {field}")
+                return False
+
+        # Type checking
+        for field in schema.get("fields", []):
+            field_name = field["name"]
+            if field_name in record and record[field_name] is not None:
+                expected_type = field["type"]
+                actual_value = record[field_name]
+
+                if isinstance(expected_type, list):
+                    # Union type - check if value matches any option
+                    valid = any(
+                        self._check_type(actual_value, t)
+                        for t in expected_type
+                        if t != "null"
+                    )
+                else:
+                    valid = self._check_type(actual_value, expected_type)
+
+                if not valid:
+                    logger.error(
+                        f"Type mismatch for field {field_name}: "
+                        f"expected {expected_type}, got {type(actual_value)}"
+                    )
+                    return False
+
+        return True
+
+    def _check_type(self, value: Any, expected_type: str) -> bool:
+        """Check if value matches expected type."""
+        type_map = {
+            "string": str,
+            "int": int,
+            "long": int,
+            "double": float,
+            "float": float,
+            "boolean": bool,
+        }
+
+        if expected_type in type_map:
+            return isinstance(value, type_map[expected_type])
+
+        return True  # Complex types not checked
+
+    def serialize_record(self, name: str, record: Dict[str, Any]) -> bytes:
+        """Serialize a record to Avro bytes."""
+        import json
+
+        schema = self.get_schema(name)
+        if not schema:
+            raise ValueError(f"Schema not found: {name}")
+
+        # Simple JSON serialization (would use avro-python3 for production)
+        return json.dumps(record).encode('utf-8')
+
+    def deserialize_record(self, name: str, data: bytes) -> Dict[str, Any]:
+        """Deserialize Avro bytes to a record."""
+        import json
+
+        schema = self.get_schema(name)
+        if not schema:
+            raise ValueError(f"Schema not found: {name}")
+
+        return json.loads(data.decode('utf-8'))
+
+
+def get_schema_registry() -> SchemaRegistry:
+    """Get schema registry singleton."""
+    return SchemaRegistry()

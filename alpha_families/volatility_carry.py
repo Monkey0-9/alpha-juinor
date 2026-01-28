@@ -20,7 +20,7 @@ class VolatilityCarry(BaseAlpha):
         self.vol_lookback = vol_lookback
         self.carry_threshold = carry_threshold
 
-    def generate_signal(self, data: pd.DataFrame, regime_context: Dict[str, Any] = None) -> Dict[str, Any]:
+    def generate_signal(self, data: pd.DataFrame, regime_context: Dict[str, Any] = None, **kwargs) -> Dict[str, Any]:
         """
         Generate volatility carry signal.
 
@@ -35,7 +35,7 @@ class VolatilityCarry(BaseAlpha):
             return {'signal': 0.0, 'confidence': 0.0, 'weights': {}}
 
         # Calculate realized volatility
-        returns = data['Close'].pct_change().dropna()
+        returns = data['Close'].pct_change(fill_method=None).dropna()
         realized_vol = returns.rolling(self.vol_lookback).std() * np.sqrt(252)
 
         # Implied vol proxy (assume VIX or similar, use realized as proxy)

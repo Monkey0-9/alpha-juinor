@@ -4,8 +4,6 @@ import pandas as pd
 import numpy as np
 import logging
 from .failure_injector import FailureInjector
-from main import run_production_pipeline
-from data.providers.yahoo import YahooDataProvider
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,7 +23,7 @@ class MockProvider:
             }, index=dates)
             for col in df.columns:
                 data[(tk, col)] = df[col]
-        
+
         return pd.DataFrame(data)
 
 def test_api_timeout_handling():
@@ -33,7 +31,7 @@ def test_api_timeout_handling():
     base_provider = MockProvider()
     chaos = FailureInjector(base_provider)
     chaos.configure({"api_timeouts": 1.0}) # 100% chance of delay
-    
+
     logger.info("Starting API Timeout Test...")
     try:
         # We don't run full pipeline here as it takes too long
@@ -52,7 +50,7 @@ def test_missing_data_resilience():
     base_provider = MockProvider()
     chaos = FailureInjector(base_provider)
     chaos.configure({"missing_bars": 1.0}) # 100% chance of dropping rows
-    
+
     logger.info("Starting Data Gap Test...")
     data = chaos.fetch_ohlcv(["AAPL"], "2023-01-01", "2023-04-01")
     assert len(data) < 100 # Should have dropped some
@@ -63,7 +61,7 @@ def test_price_gap_resilience():
     base_provider = MockProvider()
     chaos = FailureInjector(base_provider)
     chaos.configure({"price_gaps": 1.0}) # Force a gap
-    
+
     logger.info("Starting Price Gap Test...")
     data = chaos.fetch_ohlcv(["AAPL"], "2023-01-01", "2023-01-10")
     # Gaps shouldn't cause nan/inf in high-level math

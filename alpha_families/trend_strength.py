@@ -22,7 +22,7 @@ class TrendStrength(BaseAlpha):
         self.macd_slow = macd_slow
         self.macd_signal = macd_signal
 
-    def generate_signal(self, data: pd.DataFrame, regime_context: Dict[str, Any] = None) -> Dict[str, Any]:
+    def generate_signal(self, data: pd.DataFrame, regime_context: Dict[str, Any] = None, **kwargs) -> Dict[str, Any]:
         """
         Generate trend strength signal.
 

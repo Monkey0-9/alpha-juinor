@@ -93,17 +93,30 @@ class InstitutionalFilters:
                 continue
 
             try:
-                ticker_data = market_data[ticker] if isinstance(market_data.columns, pd.MultiIndex) else market_data
-                if ticker not in ticker_data.columns:
+                # Robust extraction: handle MultiIndex or flat DataFrame
+                if isinstance(market_data.columns, pd.MultiIndex):
+                    ticker_data = market_data[ticker]
+                else:
+                    ticker_data = market_data[[ticker]] if ticker in market_data.columns else None
+
+                if ticker_data is None or ticker_data.empty:
                     continue
 
-                recent_volume = ticker_data[ticker]['Volume'].iloc[-5:].mean()
-                current_price = ticker_data[ticker]['Close'].iloc[-1]
+                # Get Volume and Price safely
+                if 'Volume' in ticker_data.columns:
+                    recent_volume = ticker_data['Volume'].iloc[-5:].mean()
+                else:
+                    recent_volume = 1e9  # Assume infinite liquidity if unknown
+
+                if 'Close' in ticker_data.columns:
+                    current_price = ticker_data['Close'].iloc[-1]
+                else:
+                    current_price = ticker_data.iloc[-1, 0]
 
                 # Estimate trade size impact
                 est_trade_value = 100000  # Assume $100k trade
-                est_shares = est_trade_value / current_price
-                participation_rate = est_shares / recent_volume if recent_volume > 0 else 1.0
+                est_shares = est_trade_value / current_price if current_price > 0 else 0
+                participation_rate = est_shares / recent_volume if recent_volume > 0 else 0
 
                 if participation_rate > self.liquidity_threshold:
                     # Reduce signal strength
@@ -127,11 +140,21 @@ class InstitutionalFilters:
                 continue
 
             try:
-                ticker_data = market_data[ticker] if isinstance(market_data.columns, pd.MultiIndex) else market_data
-                if ticker not in ticker_data.columns:
+                if isinstance(market_data.columns, pd.MultiIndex):
+                    ticker_data = market_data[ticker]
+                else:
+                    ticker_data = market_data[[ticker]] if ticker in market_data.columns else None
+
+                if ticker_data is None or ticker_data.empty:
                     continue
 
-                returns = ticker_data[ticker]['Close'].pct_change(fill_method=None).dropna()
+                # Get returns safely
+                col = 'Close' if 'Close' in ticker_data.columns else ticker_data.columns[0]
+                returns = ticker_data[col].pct_change(fill_method=None).dropna()
+
+                if len(returns) < 2:
+                    continue
+
                 current_vol = returns.iloc[-20:].std()  # 20-day vol
 
                 if current_vol > self.volatility_cap:
@@ -159,9 +182,14 @@ class InstitutionalFilters:
             # Calculate correlations
             returns_data = {}
             for ticker in active_signals.keys():
-                ticker_data = market_data[ticker] if isinstance(market_data.columns, pd.MultiIndex) else market_data
-                if ticker in ticker_data.columns:
-                    returns = ticker_data[ticker]['Close'].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
+                if isinstance(market_data.columns, pd.MultiIndex):
+                    ticker_data = market_data[ticker]
+                else:
+                    ticker_data = market_data[[ticker]] if ticker in market_data.columns else None
+
+                if ticker_data is not None and not ticker_data.empty:
+                    col = 'Close' if 'Close' in ticker_data.columns else ticker_data.columns[0]
+                    returns = ticker_data[col].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
                     returns_data[ticker] = returns
 
             if len(returns_data) >= 2:
@@ -248,10 +276,16 @@ class InstitutionalFilters:
         """Calculate overall market volatility."""
         try:
             all_returns = []
-            for col in market_data.columns.levels[0] if isinstance(market_data.columns, pd.MultiIndex) else market_data.columns:
-                if 'Close' in market_data[col].columns:
-                    returns = market_data[col]['Close'].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
-                    all_returns.extend(returns.values[-20:])  # Last 20 days
+            tickers = market_data.columns.levels[0] if isinstance(market_data.columns, pd.MultiIndex) else market_data.columns
+            for ticker in tickers:
+                if isinstance(market_data.columns, pd.MultiIndex):
+                    ticker_data = market_data[ticker]
+                else:
+                    ticker_data = market_data[[ticker]]
+
+                col = 'Close' if 'Close' in ticker_data.columns else ticker_data.columns[0]
+                returns = ticker_data[col].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
+                all_returns.extend(returns.values[-20:])  # Last 20 days
 
             return np.std(all_returns) if all_returns else 0.02
         except:

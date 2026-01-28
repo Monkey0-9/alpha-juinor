@@ -1,0 +1,43 @@
+# Provider Configuration
+# Defines data provider tiers, quotas, and priorities
+
+providers:
+  # Primary Tier: Paid, reliable providers
+  polygon:
+    tier: primary
+    monthly_limit: 50000
+    priority: 1
+    description: "Polygon.io - High quality market data"
+
+  alpha_vantage:
+    tier: primary
+    monthly_limit: 25000
+    priority: 2
+    description: "Alpha Vantage - Fundamental and technical data"
+
+  # Secondary Tier: Free but reliable
+  stooq:
+    tier: secondary
+    monthly_limit: 100000  # No hard limit, but rate-limited
+    priority: 3
+    description: "Stooq - Free historical data, no API key required"
+
+  # Fallback Tier: Use only when others fail
+  yahoo:
+    tier: fallback
+    monthly_limit: 200000  # Generous limit for fallback
+    priority: 4
+    description: "Yahoo Finance - Fallback provider only"
+
+# Provider selection strategy
+selection:
+  strategy: "bandit"  # Use multi-armed bandit
+  exploration_factor: 2.0  # UCB1 exploration parameter
+  min_confidence_threshold: 0.5  # Reject if provider confidence < 0.5
+  min_quality_threshold: 0.6  # Reject if data quality < 0.6
+
+# Quota management
+quotas:
+  daily_cap_divisor: 30  # daily_cap = ceil(monthly_limit / 30)
+  enable_dynamic_spreading: true  # Spread requests across month
+  alert_threshold: 0.8  # Alert when 80% of quota used

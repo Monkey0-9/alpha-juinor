@@ -19,7 +19,7 @@ class MomentumTS(BaseAlpha):
         super().__init__()
         self.horizons = horizons
 
-    def generate_signal(self, data: pd.DataFrame, regime_context: Dict[str, Any] = None) -> Dict[str, Any]:
+    def generate_signal(self, data: pd.DataFrame, regime_context: Dict[str, Any] = None, **kwargs) -> Dict[str, Any]:
         """
         Generate momentum signal.
 
@@ -36,7 +36,7 @@ class MomentumTS(BaseAlpha):
         # Calculate momentum for each horizon
         momentum_signals = {}
         for h in self.horizons:
-            returns = data['Close'].pct_change(h).iloc[-1]
+            returns = data['Close'].pct_change(h, fill_method=None).iloc[-1]
             momentum_signals[f'momentum_{h}d'] = returns
 
         # Ensemble: weighted average of horizons
@@ -45,19 +45,58 @@ class MomentumTS(BaseAlpha):
 
         # Confidence based on signal consistency
         signal_std = np.std(list(momentum_signals.values()))
-        confidence = max(0, 1.0 - signal_std)  # Higher confidence if signals agree
+        # Raw confidence from consistency
+        raw_confidence = max(0, 1.0 - signal_std)
 
-        # Regime adjustment: stronger in trend regimes
-        regime_multiplier = 1.0
-        if regime_context and regime_context.get('regime_tag') == 'TREND':
-            regime_multiplier = 1.5
-        elif regime_context and regime_context.get('regime_tag') == 'MEAN_REVERSION':
-            regime_multiplier = 0.5
+        # NORMALIZE USING HISTORY
+        # We need historical ensemble signals to normalize properly.
+        # Computing history on the fly for ensemble is expensive.
+        # Simplified approach: Use the single-series normalization on the *longest* horizon as a proxy,
+        # OR just normalize the current scalar assuming a distribution if we lack history.
+        # BETTER: Compute one primary horizon's rolling Z and use that.
 
-        final_signal = ensemble_signal * regime_multiplier
+        # Let's use longest horizon (20d) for normalization reference or re-compute ensemble history?
+        # Re-computing ensemble history is best.
+
+        # History of ensemble:
+        # We need to compute momentum for all horizons over history.
+        # Vectorized approach:
+        window_size = 252
+        closes = data['Close'].iloc[-(window_size+max(self.horizons)):]
+
+        hist_signals = []
+        for h in self.horizons:
+             # Rolling pct change
+             ret_h = closes.pct_change(h)
+             # Fill na?
+             ret_h = ret_h.fillna(0)
+             hist_signals.append(ret_h.values)
+
+        # Average across horizons (axis 0)
+        ensemble_history = np.mean(hist_signals, axis=0)
+        # Trim to valid window
+        valid_ensemble_history = ensemble_history[max(self.horizons):]
+        ensemble_series = pd.Series(valid_ensemble_history)
+
+        current_val = ensemble_signal
+
+        from alpha_families.normalization import AlphaNormalizer
+        norm = AlphaNormalizer()
+
+        z, conf = norm.normalize_signal(current_val, ensemble_series, data_confidence=1.0)
+
+        # Combine with signal consistency confidence
+        final_conf = conf * raw_confidence
+
+        # Construct
+        vol = data['Close'].pct_change().std() * np.sqrt(252)
+        dist = norm.construct_distribution(z, final_conf, vol)
 
         return {
-            'signal': np.clip(final_signal, -1.0, 1.0),
-            'confidence': confidence,
+            'mu': dist['mu'],
+            'sigma': dist['sigma'],
+            'confidence': dist['confidence'],
+            'p_loss': dist['p_loss'],
+            'cvar_95': dist['cvar_95'],
             'weights': momentum_signals
         }

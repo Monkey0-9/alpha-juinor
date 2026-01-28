@@ -36,8 +36,8 @@ data/raw/*
 !data/raw/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
+data/cache/*
 *.parquet
-*.csv
 
 # Editors
 .vscode/
@@ -53,3 +53,31 @@ htmlcov/
 output/backtests/*
 !output/backtests/.gitkeep
 !output/backtests/manifest.json
+
+# Runtime data (never commit)
+runtime/
+logs/
+*.db
+*.sqlite
+*.bak
+output/*.json
+output/*.csv
+
+
+# Temporary outputs
+*_fail.txt
+*_status.txt
+*_output.txt
+*_error.log
+*.log
+*.txt
+*.jsonl
+*.csv
+!configs/*.json
+!configs/*.yaml
+!configs/*.jsonl
+!requirements.txt
+!pyproject.toml
+!alembic.ini
+!supervisord.conf
+

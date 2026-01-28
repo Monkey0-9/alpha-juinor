@@ -1,0 +1,211 @@
+"""
+monitor/grafana/dashboard.json
+P2-2: Grafana Dashboard for Mini Quant Fund
+"""{
+    "dashboard": {
+        "title": "Mini Quant Fund - Production Monitor",
+        "tags": [
+            "trading",
+            "ml",
+            "quant"
+        ],
+        "timezone": "browser",
+        "panels": [
+            {
+                "id": 1,
+                "title": "System State",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "system_state",
+                        "legendFormat": "State"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "mappings": [
+                            {
+                                "value": 0,
+                                "text": "OK",
+                                "color": "green"
+                            },
+                            {
+                                "value": 1,
+                                "text": "DEGRADED",
+                                "color": "yellow"
+                            },
+                            {
+                                "value": 2,
+                                "text": "HALTED",
+                                "color": "red"
+                            }
+                        ]
+                    }
+                },
+                "gridPos": {
+                    "x": 0,
+                    "y": 0,
+                    "w": 6,
+                    "h": 4
+                }
+            },
+            {
+                "id": 2,
+                "title": "Uptime",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "heartbeat_uptime_seconds",
+                        "legendFormat": "Uptime"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "s"
+                    }
+                },
+                "gridPos": {
+                    "x": 6,
+                    "y": 0,
+                    "w": 6,
+                    "h": 4
+                }
+            },
+            {
+                "id": 3,
+                "title": "Active Symbols",
+                "type": "gauge",
+                "targets": [
+                    {
+                        "expr": "symbols_active",
+                        "legendFormat": "Symbols"
+                    }
+                ],
+                "gridPos": {
+                    "x": 12,
+                    "y": 0,
+                    "w": 6,
+                    "h": 4
+                }
+            },
+            {
+                "id": 4,
+                "title": "ML State",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "ml_state",
+                        "legendFormat": "ML State"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "mappings": [
+                            {
+                                "value": 0,
+                                "text": "OK",
+                                "color": "green"
+                            },
+                            {
+                                "value": 1,
+                                "text": "DEGRADED",
+                                "color": "yellow"
+                            },
+                            {
+                                "value": 2,
+                                "text": "DISABLED",
+                                "color": "red"
+                            }
+                        ]
+                    }
+                },
+                "gridPos": {
+                    "x": 18,
+                    "y": 0,
+                    "w": 6,
+                    "h": 4
+                }
+            },
+            {
+                "id": 5,
+                "title": "Model Errors Rate",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(model_errors_total[5m])",
+                        "legendFormat": "Errors/sec"
+                    }
+                ],
+                "gridPos": {
+                    "x": 0,
+                    "y": 4,
+                    "w": 12,
+                    "h": 6
+                }
+            },
+            {
+                "id": 6,
+                "title": "ARIMA Fallbacks Rate",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(arima_fallbacks_total[5m])",
+                        "legendFormat": "Fallbacks/sec"
+                    }
+                ],
+                "gridPos": {
+                    "x": 12,
+                    "y": 4,
+                    "w": 12,
+                    "h": 6
+                }
+            },
+            {
+                "id": 7,
+                "title": "Inference Latency P50/P95",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "histogram_quantile(0.50, rate(inference_latency_seconds_bucket[5m]))",
+                        "legendFormat": "P50"
+                    },
+                    {
+                        "expr": "histogram_quantile(0.95, rate(inference_latency_seconds_bucket[5m]))",
+                        "legendFormat": "P95"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "s"
+                    }
+                },
+                "gridPos": {
+                    "x": 0,
+                    "y": 10,
+                    "w": 12,
+                    "h": 6
+                }
+            },
+            {
+                "id": 8,
+                "title": "Active Positions",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "positions_active",
+                        "legendFormat": "Positions"
+                    }
+                ],
+                "gridPos": {
+                    "x": 12,
+                    "y": 10,
+                    "w": 12,
+                    "h": 6
+                }
+            }
+        ],
+        "refresh": "5s",
+        "schemaVersion": 27,
+        "version": 1
+    }
+}

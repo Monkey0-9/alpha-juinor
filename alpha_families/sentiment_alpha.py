@@ -90,7 +90,8 @@ class SentimentAlpha(BaseAlpha):
 
     def generate_signal(self,
                        market_data: pd.DataFrame,
-                       regime_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                       regime_context: Optional[Dict[str, Any]] = None,
+                       **kwargs) -> Dict[str, Any]:
         """
         Generate sentiment-based alpha signal.
 
@@ -187,7 +188,11 @@ class SentimentAlpha(BaseAlpha):
         sentiment = base_sentiment + news_noise
 
         # Apply time decay
-        hours_old = (pd.Timestamp.now() - current_time).total_seconds() / 3600
+        if hasattr(current_time, 'tz') and current_time.tz:
+            now = pd.Timestamp.now(tz=current_time.tz)
+        else:
+            now = pd.Timestamp.now()
+        hours_old = (now - current_time).total_seconds() / 3600
         decay_factor = np.exp(-hours_old / self.sentiment_decay_hours)
 
         return np.clip(sentiment * decay_factor, -1.0, 1.0)

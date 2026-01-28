@@ -1,0 +1,28 @@
+# CODEOWNERS
+# Code ownership for critical areas
+# Requires approval from owners before merge
+
+# ML & Alpha Strategies
+/alpha_families/ @ml-team-lead @quant-lead
+/features/ @ml-team-lead
+/models/ @ml-team-lead
+/scripts/train_ml_alpha.py @ml-team-lead
+
+# Governance & Risk
+/data/governance/ @risk-team-lead @compliance
+/configs/ @ops-lead @risk-team-lead
+
+# Database & Infrastructure
+/database/ @backend-lead @ops-lead
+/docker-compose*.yml @ops-lead
+
+# Execution & Trading
+/execution/ @execution-lead
+
+# CI/CD & Deployment
+/.github/workflows/ @ops-lead @devops
+/deploy.sh @ops-lead
+
+# Documentation
+/RUNBOOKS/ @ops-lead @ml-team-lead
+/docs/ @all-teams

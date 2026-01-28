@@ -1,30 +1,55 @@
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+from typing import List
 
-def compute_cvar(returns: pd.Series, alpha: float = 0.95) -> float:
+def calculate_portfolio_cvar(returns: pd.Series, confidence_level: float = 0.95) -> float:
     """
-    Return CVaR (negative = loss). If insufficient data -> return 0.0 (neutral).
-    Formula: CVaR_α = returns[returns <= VaR_α].mean()
+    Computes Conditional Value at Risk (Expected Shortfall) at confidence level.
+    Returns positive float representing loss.
     """
-    try:
-        # PANDAS HYGIENE: Explicitly handle infs/nans
-        clean_rets = returns.replace([np.inf, -np.inf], np.nan).dropna()
-        if len(clean_rets) < 20: # Minimal samples
-            return 0.0
-            
-        # VaR cutoff
-        var_cutoff = np.percentile(clean_rets, 100 * (1 - alpha))
-        
-        # Tail losses
-        tail_losses = clean_rets[clean_rets <= var_cutoff]
-        if tail_losses.empty:
-            return 0.0
-            
-        cvar = tail_losses.mean()
-        
-        # Return negative float (e.g., -0.05 for 5% loss)
-        return float(cvar)
-        
-    except Exception:
+    if returns.empty or len(returns) < 20:
         return 0.0
+
+    # Invert returns to losses
+    losses = -returns.dropna()
+
+    # Sort
+    sorted_losses = np.sort(losses)
+
+    # Calculate VaR index
+    index = int((1 - confidence_level) * len(sorted_losses))
+    if index >= len(sorted_losses):
+        index = len(sorted_losses) - 1
+
+    var = sorted_losses[index]
+
+    cutoff_index = int(len(sorted_losses) * confidence_level)
+    tail_losses = sorted_losses[cutoff_index:]
+
+    if len(tail_losses) == 0:
+        return var
+
+    cvar = tail_losses.mean()
+    return cvar
+
+# Alias as compute_cvar for compatibility with risk/engine.py
+compute_cvar = calculate_portfolio_cvar
+
+class CVaRGate:
+    def __init__(self, limit: float = 0.05):
+        self.limit = limit
+
+    def check_portfolio(self, current_returns: pd.Series, new_position_return: pd.Series = None) -> bool:
+        """
+        Returns False if CVaR > Limit.
+        """
+        if new_position_return is not None:
+             # Simulation of adding position? (Requires complex portfolio modeling)
+             # For now, just check total series
+             combined = current_returns # Placeholder
+             cvar = calculate_portfolio_cvar(combined)
+        else:
+             cvar = calculate_portfolio_cvar(current_returns)
+
+        return cvar <= self.limit

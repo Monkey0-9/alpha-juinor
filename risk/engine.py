@@ -13,8 +13,13 @@ from risk.covariance import robust_covariance
 from risk.market_impact_models import TransactionCostModel
 from risk.sizing import KellySizer
 from data.utils.schema import ensure_dataframe
+from risk.sector_mapping import SECTOR_MAP
+from risk.sector_hedger import SectorHedger
+from risk.beta_neutralizer import BetaNeutralizer
+from risk.dynamic_stop_loss import DynamicStopLoss
 
 from regime.markov import RegimeModel
+from governance.institutional_specification import CVaRConfig
 
 logger = logging.getLogger(__name__)
 
@@ -66,23 +71,31 @@ class RiskManager:
         self,
         max_leverage: float = 1.0,
         target_vol_limit: float = 0.15,
-        var_limit: float = 0.04, 
+        var_limit: float = 0.04,
         cvar_limit: float = 0.06,
         max_drawdown_limit: float = 0.18,
         bootstrap_days: int = 60,
         initial_capital: float = 100000.0,
         use_cvar: bool = True,
-        use_evt: bool = True
+        use_evt: bool = True,
+        cvar_config: Optional[CVaRConfig] = None
     ):
         self.initial_capital = float(initial_capital)
         self.kill_switch_trigger = 0.25 # Hard stop if 25% of initial capital is lost
         self.max_leverage = float(max_leverage)
         self.target_vol_limit = float(target_vol_limit)
         self.var_limit = float(var_limit)
-        self.cvar_limit = float(cvar_limit)
+
+        # Priority: Config > Argument
+        self.cvar_config = cvar_config
+        if self.cvar_config:
+            self.cvar_limit = self.cvar_config.portfolio_limit
+        else:
+            self.cvar_limit = float(cvar_limit)
+
         self.max_drawdown_limit = float(max_drawdown_limit)
         self.bootstrap_days = bootstrap_days
-        
+
         # Flags
         self.use_cvar_gate = use_cvar
         self.use_evt_gate = use_evt
@@ -100,29 +113,29 @@ class RiskManager:
         self.state = RiskDecision.ALLOW
         self.cooldown_days = 20
         self.cooldown_counter = 0
-        
+
         # Recovery tracking
         self.recovery_level = 0 # Phase 1 to 5 (20% steps)
         self._current_realized_vol = 0.0
-        
+
         self._max_equity = -1.0
         self._last_logged_cooldown = -1
-        
+
         # Hysteresis tracking
         self._last_scale_factor = 1.0
-        
+
         # Market Regime
         self.regime = RiskRegime.BULL_QUIET
         self.is_risk_on = True
         self._spy_ma200 = 0.0
         self._last_spy_price = 0.0
         self._vol_history: List[float] = [] # Track rolling realized vol for percentile
-        
+
         # Factor Risk
         self.pca = StatisticalRiskModel(n_components=3)
         self.factor_engine = FactorExposureEngine(self.pca)
         self.factor_limit = 0.50 # Max exposure to any single factor
-        
+
         # Advanced Institutional Models (Phase 4)
         self.markov_model = RegimeModel()
 
@@ -135,26 +148,35 @@ class RiskManager:
             "Inflation Shock": -0.05
         }
         self.stress_limit = 0.25 # Max allowable loss under extreme scenario
-        
+
         # AUTO-SELL Configuration (Institutional)
         self.emergency_liquidation_enabled = True
         self.manual_emergency_flag = False
         self.never_sell_assets = []
         self.manual_approval_on_sell = False
-        
+
         # Sector & Correlation Risk (Requirement F)
-        self.sector_map: Dict[str, str] = {}
+        self.sector_map = SECTOR_MAP
         self.sector_limit = 0.15 # 15% NAV per sector
         self.correlation_shock_threshold = 0.70 # Max average pairwise correlation
-        
+
+        # Phase D: Hedging Agents
+        self.sector_hedger = SectorHedger(sector_limit=self.sector_limit)
+        self.beta_neutralizer = BetaNeutralizer()
+        self.stop_loss = DynamicStopLoss()
+
         # Attribution & Diagnosis
         self.last_dd = 0.0
         self.last_var = 0.0
         self.last_cvar = 0.0
-        
+
         # Tiered Alerting (User Request)
         self.manual_approval_threshold = 0.15  # Require approval if DD > 15%
         self.high_risk_threshold = 0.08        # Alert but auto-handle if DD > 8%
+
+        # CVaR Breach Persistence Tracking (Objective 6)
+        self.cvar_breach_count = 0
+        self.cvar_breach_threshold = 3 # 3 consecutive breaches triggers KILL_SWITCH
 
     def check_capital_preservation(self, current_equity: float, vix_level: float = 20.0) -> Tuple[bool, float]:
         """
@@ -162,24 +184,24 @@ class RiskManager:
         Triggers if:
         1. VIX > 30 (Extreme Fear)
         2. Drawdown > 15% (Approaching Max Limit)
-        
+
         Returns: (is_active, scalar_factor)
         """
         is_active = False
         scalar = 1.0
-        
+
         # Check VIX
         if vix_level > 30.0:
             is_active = True
             scalar = 0.5
-            
+
         # Check Drawdown
         if self._max_equity > 0:
             dd = (self._max_equity - current_equity) / self._max_equity
             if dd > 0.15:
                 is_active = True
                 scalar = min(scalar, 0.5)
-                
+
         return is_active, scalar
 
     def compute_var(self, returns: pd.Series, confidence: float = 0.95, use_parametric: bool = True) -> float:
@@ -188,40 +210,40 @@ class RiskManager:
         Returns positive float representing loss percentage.
         """
         try:
-             if returns.empty or len(returns) < 20: 
+             if returns.empty or len(returns) < 20:
                  return 0.0
-             
+
              clean_rets = returns.dropna()
              if clean_rets.empty: return 0.0
-             
+
              # Historical VaR (baseline)
              hist_cutoff = np.percentile(clean_rets, 100 * (1 - confidence))
              hist_var = -hist_cutoff if hist_cutoff < 0 else 0.0
-             
+
              if not use_parametric or len(clean_rets) < 50:
                  return hist_var
-             
+
              # Parametric VaR with Gaussian assumption + shrinkage
              # For single series, just use std; for portfolio use covariance
              mu = clean_rets.mean()
              sigma = clean_rets.std()
-             
+
              # Z-score for confidence level (95% -> 1.645)
              from scipy import stats
              z_score = stats.norm.ppf(1 - confidence)
              parametric_var = -(mu + z_score * sigma)  # Negative of lower tail
              parametric_var = max(0.0, parametric_var)
-             
+
              # Hybrid: average of historical and parametric
              hybrid_var = 0.6 * hist_var + 0.4 * parametric_var
-             
+
              return hybrid_var
         except Exception as e:
              logger.error(f"VaR calc failed: {e}")
              return 0.0
 
     def calculate_stress_loss(self, target_weights: Union[Dict, pd.Series]) -> Dict[str, float]:
-        portfolio_beta = 1.0 
+        portfolio_beta = 1.0
         losses = {}
         if isinstance(target_weights, dict):
              weights_iter = target_weights.values()
@@ -236,49 +258,49 @@ class RiskManager:
     def update_regime(self, spy_history: pd.Series):
         if spy_history.empty or len(spy_history) < 200:
             self.regime = RiskRegime.UNCERTAIN
-            self.is_risk_on = True 
+            self.is_risk_on = True
             return
 
         ma200 = spy_history.rolling(200).mean().iloc[-1]
         current_spy = spy_history.iloc[-1]
-        
+
         # PANDAS HYGIENE
         returns = spy_history.pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
-        
+
         if len(returns) < 21:
             current_vol = 0.01
         else:
             current_vol = returns.tail(21).std() * np.sqrt(252)
-            
+
         self._vol_history.append(current_vol)
         if len(self._vol_history) > 500:
             self._vol_history.pop(0)
-            
+
         if len(self._vol_history) > 50:
             vol_percentile = pd.Series(self._vol_history).rank(pct=True).iloc[-1]
         else:
-            vol_percentile = 0.5 
-            
+            vol_percentile = 0.5
+
         is_uptrend = current_spy > ma200
-        is_high_vol = vol_percentile > 0.80 
-        
+        is_high_vol = vol_percentile > 0.80
+
         if is_uptrend and not is_high_vol:
             self.regime = RiskRegime.BULL_QUIET
             self.is_risk_on = True
         elif is_uptrend and is_high_vol:
             self.regime = RiskRegime.BULL_VOLATILE
-            self.is_risk_on = True 
+            self.is_risk_on = True
         elif not is_uptrend and not is_high_vol:
              self.regime = RiskRegime.BEAR_QUIET
-             self.is_risk_on = False 
+             self.is_risk_on = False
         else:
              self.regime = RiskRegime.BEAR_CRISIS
-             self.is_risk_on = False 
-             
+             self.is_risk_on = False
+
         # PHASE 4: MARKOV REGIME UPDATE
         regime_probs = self.markov_model.update(returns)
         panic_prob = regime_probs.get("panic_prob", 0.0)
-        
+
         # Determine Regime based on Markov Probabilities
         if panic_prob > 0.30:
             self.regime = RiskRegime.BEAR_CRISIS
@@ -290,7 +312,7 @@ class RiskManager:
         elif regime_probs.get("bull_prob", 0.0) > 0.50:
              self.regime = RiskRegime.BULL_QUIET
              self.is_risk_on = True
-             
+
         # Fallback to Volatility logic if Markov is uncertain
         else:
              if is_high_vol:
@@ -298,13 +320,13 @@ class RiskManager:
              else:
                  self.regime = RiskRegime.BULL_QUIET
              self.is_risk_on = True
-             
+
         self._spy_ma200 = ma200
         self._last_spy_price = current_spy
 
     def check_pre_trade(
         self,
-        target_weights: Dict[str, float], 
+        target_weights: Dict[str, float],
         baskets_returns: pd.DataFrame | pd.Series,
         timestamp: pd.Timestamp,
         current_equity: float = 1.0
@@ -312,7 +334,7 @@ class RiskManager:
         """Institutional Check: Pre-trade validation of intended portfolio weights."""
         # Hard Schema Enforcement
         baskets_returns = ensure_dataframe(baskets_returns)
-        
+
         if self.state == RiskDecision.FREEZE:
             return RiskCheckResult(ok=False, decision=RiskDecision.REJECT, violations=["Risk State: FREEZE"])
 
@@ -320,15 +342,15 @@ class RiskManager:
 
         if current_equity > self._max_equity:
             self._max_equity = current_equity
-            
+
         dd = (self._max_equity - current_equity) / self._max_equity if self._max_equity > 0 else 0.0
-        
+
         dd_scalar = 1.0
         dd_violation = None
         if dd > self.max_drawdown_limit:
              return RiskCheckResult(
-                 ok=False, 
-                 decision=RiskDecision.REJECT, 
+                 ok=False,
+                 decision=RiskDecision.REJECT,
                  violations=[f"Drawdown {dd:.1%} > {self.max_drawdown_limit:.1%} Limit"]
              )
         # 7. Drawdown Adaptation (Exponential Decay)
@@ -349,7 +371,7 @@ class RiskManager:
                       self.recovery_level += 1
                  if self.recovery_level >= 5:
                       self.state = RiskDecision.ALLOW
-            
+
             recovery_scalar = self.recovery_level * 0.20
             if recovery_scalar < 1.0:
                  dd_violation = f"RECOVERY PHASE {self.recovery_level} (Cap {recovery_scalar:.0%})"
@@ -358,8 +380,8 @@ class RiskManager:
         max_stress_loss = max(stress_losses.values()) if stress_losses else 0.0
         if max_stress_loss > self.stress_limit:
             return RiskCheckResult(
-                ok=False, 
-                decision=RiskDecision.REJECT, 
+                ok=False,
+                decision=RiskDecision.REJECT,
                 violations=[f"Stress Loss {max_stress_loss:.1%} > {self.stress_limit:.1%} Limit"]
             )
 
@@ -381,7 +403,7 @@ class RiskManager:
             portfolio_returns = baskets_returns[w_vector.index].dot(w_vector)
 
         current_var = self.compute_var(portfolio_returns)
-        
+
         # New CVaR / Tail Risk (Updated with EVT)
         raw_scale = 1.0
         if self.use_cvar_gate or self.use_evt_gate:
@@ -390,7 +412,7 @@ class RiskManager:
             current_cvar = tail_metrics['cvar']
             ev_score = tail_metrics['evtrisk_score']
             tail_idx = tail_metrics['tail_index']
-            
+
             if tail_idx > 0.3: # Critical Fat Tail Warning
                  violations.append(f"EVT Alert: Fat Tail (xi={tail_idx:.2f})")
                  raw_scale *= 0.5
@@ -399,7 +421,7 @@ class RiskManager:
             ev_score = 0.0
 
         if dd_violation: violations.append(dd_violation)
-        
+
         if self.use_evt_gate and ev_score > 0.4: # Low tolerance for fat tails
              tail_scalar = 1.0 - ev_score
              violations.append(f"Fat Tail Detect (Scalar {tail_scalar:.2f})")
@@ -419,21 +441,36 @@ class RiskManager:
             raw_scale = min(raw_scale, self.var_limit / (current_var + 1e-9))
 
         if self.use_cvar_gate and current_cvar > self.cvar_limit:
-            violations.append(f"CVaR {current_cvar:.2%} > {self.cvar_limit:.2%}")
-            raw_scale = min(raw_scale, self.cvar_limit / (current_cvar + 1e-9))
+            self.cvar_breach_count += 1
+            violations.append(f"CVaR BREACH {self.cvar_breach_count}/{self.cvar_breach_threshold}: {current_cvar:.2%} > {self.cvar_limit:.2%}")
+
+            if self.cvar_breach_count >= self.cvar_breach_threshold:
+                logger.critical(f"CVaR KILL-SWITCH TRIGGERED: {self.cvar_breach_count} consecutive breaches. FREEZING.")
+                self.state = RiskDecision.FREEZE
+                return RiskCheckResult(ok=False, decision=RiskDecision.REJECT, violations=["CVaR_KILL_SWITCH_ACTIVE"])
+
+            # Use strict scaling from config if available
+            if self.cvar_config and self.cvar_config.scale_on_breach:
+                raw_scale = min(raw_scale, self.cvar_limit / (current_cvar + 1e-9))
+                if self.cvar_config.min_scale_factor > 0:
+                     raw_scale = max(raw_scale, self.cvar_config.min_scale_factor)
+            else:
+                 raw_scale = min(raw_scale, self.cvar_limit / (current_cvar + 1e-9))
+        else:
+            self.cvar_breach_count = 0 # Reset on clean check
 
         if not baskets_returns.empty and len(baskets_returns.columns) > 5:
              corr_matrix = baskets_returns[list(valid_weights.keys())].corr()
              avg_corr = corr_matrix.values[np.triu_indices(len(corr_matrix), k=1)].mean()
              if avg_corr > self.correlation_shock_threshold:
                   violations.append(f"Correlation Shock: {avg_corr:.2f} > {self.correlation_shock_threshold}")
-                  regime_scalar = min(regime_scalar, 0.60) 
+                  regime_scalar = min(regime_scalar, 0.60)
 
         sector_usage = {}
         for tk, weight in target_weights.items():
              sector = self.sector_map.get(tk, "Unknown")
              sector_usage[sector] = sector_usage.get(sector, 0.0) + abs(weight)
-        
+
         for sector, expo in sector_usage.items():
              if expo > self.sector_limit:
                   violations.append(f"Sector Cap: {sector} {expo:.1%} > {self.sector_limit:.1%}")
@@ -445,7 +482,7 @@ class RiskManager:
             applied_scale = self._last_scale_factor
         else:
             applied_scale = final_scale
-        
+
         self._last_scale_factor = applied_scale
 
         if violations or applied_scale < 0.98:
@@ -455,20 +492,20 @@ class RiskManager:
                 scale_factor=applied_scale,
                 violations=violations
             )
-        
+
         return RiskCheckResult(ok=True, decision=RiskDecision.ALLOW, scale_factor=1.0)
 
     def check_circuit_breaker(self, current_equity: float, realized_returns: pd.Series) -> RiskDecision:
         """
         Graded circuit breaker with 3 tiers instead of binary freeze.
-        
+
         Tier 1: VaR slightly high -> SCALE (existing behavior)
         Tier 2: VaR > 1.5x limit OR vol > 2x target -> Defensive (25% sizing)
         Tier 3: Drawdown > limit AND high vol -> FREEZE
         """
         if current_equity > self._max_equity:
             self._max_equity = current_equity
-        
+
         drawdown = (self._max_equity - current_equity) / (self._max_equity + 1e-9) if self._max_equity > 0 else 0.0
         self._current_realized_vol = realized_returns.std() * np.sqrt(252) if len(realized_returns) > 10 else 0.0
 
@@ -505,7 +542,7 @@ class RiskManager:
     def enforce_limits(self, conviction: pd.Series, prices: pd.Series, volumes: pd.Series) -> RiskSignalResult:
         if self.state == RiskDecision.FREEZE:
             return RiskSignalResult(
-                adjusted_conviction=pd.Series([0.0], index=conviction.index), 
+                adjusted_conviction=pd.Series([0.0], index=conviction.index),
                 estimated_leverage=0.0,
                 violations=["Risk State: FREEZE"],
                 primary_reason="EMERGENCY_KILL"
@@ -514,20 +551,20 @@ class RiskManager:
         # Hard Schema Enforcement
         prices = ensure_dataframe(prices, required_columns=None)
         volumes = ensure_dataframe(volumes, required_columns=None)
-        
+
         # Calculate returns using the first (or only) column if it's a 1D dataframe
         col = prices.columns[0]
         returns = prices[col].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
         realized_vol = returns.std() * np.sqrt(252) if len(returns) > 10 else self.target_vol_limit
-        realized_vol = max(realized_vol, 0.05) 
+        realized_vol = max(realized_vol, 0.05)
 
         raw_vol_scale = self.target_vol_limit / realized_vol
         vol_scaler = np.clip(raw_vol_scale, 0.3, 1.2)
-        
+
         adv = float(volumes.mean().iloc[0]) if not volumes.empty else 0.0
         liq_scalar = 1.0
-        
-        equity_nav = 1.0 
+
+        equity_nav = 1.0
         dd = (self._max_equity - equity_nav) / self._max_equity if self._max_equity > 0 else 0.0
         dd_scalar = 1.0
         violations = []
@@ -537,41 +574,44 @@ class RiskManager:
 
         regime_scalar = 1.0
         if not self.is_risk_on:
-             regime_scalar = 0.50 
+             regime_scalar = 0.50
              violations.append(f"Regime: Risk-Off ({self.regime.value}) -> 0.5x")
-             
+
         if self.regime == RiskRegime.BEAR_CRISIS:
              regime_scalar = 0.0
              violations.append("Regime: CRISIS -> BLOCK")
-            
+
         applied_scaler = vol_scaler * dd_scalar * liq_scalar * regime_scalar
-        
+
         if self.state == RiskDecision.RECOVERY:
             rec_scalar = (self.recovery_level * 0.20)
             applied_scaler *= rec_scalar
             violations.append(f"RECOVERY Level {self.recovery_level} (scaler {rec_scalar:.2f})")
-            
+
         current_price = float(prices.iloc[-1, 0]) if not prices.empty else 0.0
         adv_dollars = adv * current_price
-        
-        if adv_dollars > 0 and abs(float(conviction.iloc[-1])) > (adv_dollars * 0.10):
-             liq_scalar = 0.8
+
+        if adv_dollars > 0:
+             # Safer scalar conversion
+             val = float(conviction.iloc[-1]) if hasattr(conviction, 'iloc') else float(conviction)
+             if abs(val) > (adv_dollars * 0.10):
+                 liq_scalar = 0.8
              applied_scaler *= liq_scalar
              violations.append(f"Liquidity Haircut (ADV ${adv_dollars:,.0f})")
 
         adjusted_conviction = conviction * applied_scaler
-        
+
         reason = "REBALANCE"
         if self.state == RiskDecision.FREEZE: reason = "EMERGENCY_KILL"
         elif self.regime == RiskRegime.BEAR_CRISIS: reason = "REGIME_SHIFT"
-        elif dd_scalar < 0.99: reason = "RISK_BREACH" 
+        elif dd_scalar < 0.99: reason = "RISK_BREACH"
         elif liq_scalar < 0.99: reason = "LIQUIDITY_SAFETY"
         elif vol_scaler < 0.99: reason = "RISK_BREACH"
         elif self.state == RiskDecision.RECOVERY: reason = "RISK_BREACH"
         elif regime_scalar < 0.99: reason = "REGIME_SHIFT"
 
         est_lev = float(adjusted_conviction.iloc[-1]) if not adjusted_conviction.empty else 0.0
-        
+
         if applied_scaler < 0.98:
             violations.append(f"Total Risk Scalar: {applied_scaler:.2f}")
 
@@ -583,29 +623,29 @@ class RiskManager:
         )
 
     def explain_diagnostics(self, current_equity: float, current_sharpe: float = 0.0) -> str:
-        
+
         dd = (self._max_equity - current_equity) / (self._max_equity + 1e-9) if self._max_equity > 0 else 0.0
-        
+
         lines = []
         lines.append(f"🔍 **DIAGNOSIS: PORTFOLIO STRESS**")
-        
+
         # 9. Strategy Decay (Stability Ratio)
         # Stability = Sharpe_Realized / Sharpe_Target (0.05 daily ~ 0.8 annual? let's assume target is 1.5)
         # If Rolling Sharpe drops significantly, strategy might be decaying
         if current_sharpe < 0.5: # Annualized < 0.5 is poor
              lines.append("⚠️ **Strategy Decay**: Realized Sharpe is low. Alpha may be fading.")
-        
+
         if self.regime in [RiskRegime.BEAR_CRISIS, RiskRegime.BEAR_QUIET]:
             lines.append("📉 **Root Cause**: Adverse Market Regime (Bearish).")
         elif dd > 0.05:
             lines.append("💸 **Root Cause**: Drawdown Recovery.")
-        
+
         if not self.is_risk_on:
             lines.append("- **Condition**: Risk-Off detected.")
-        
+
         if self.state == RiskDecision.FREEZE:
             lines.append("- **Condition**: EMERGENCY FREEZE active.")
-            
+
         if self._current_realized_vol > self.target_vol_limit:
             lines.append(f"- **Volatility Spike**: Current Vol {self._current_realized_vol:.1%} > Target {self.target_vol_limit:.1%}.")
 
@@ -616,7 +656,7 @@ class RiskManager:
 
         if dd > 0.10:
             lines.append("\n⚠️ **Why Less Return?** System in 'Stall' mode.")
-        
+
         return "\n".join(lines)
 
     def get_risk_tier(self, current_equity: float) -> str:
@@ -626,7 +666,7 @@ class RiskManager:
         if dd > self.high_risk_threshold or not self.is_risk_on or self._current_realized_vol > self.target_vol_limit * 2:
             return "HIGH"
         return "NORMAL"
-    
+
     def should_require_approval(self, current_equity: float) -> bool:
         return self.get_risk_tier(current_equity) == "EXTREME"
 
@@ -636,8 +676,8 @@ class RiskManager:
             if self.cooldown_counter <= 0:
                 logger.info("Risk Cooldown COMPLETE. Entering Gradual RECOVERY Phase.")
                 self.state = RiskDecision.RECOVERY
-                self.recovery_level = 1 
-                self._max_equity = -1.0 
+                self.recovery_level = 1
+                self._max_equity = -1.0
             else:
                 if self.cooldown_counter % 5 == 0 and self.cooldown_counter != self._last_logged_cooldown:
                     logger.info(f"Risk Cooldown: {self.cooldown_counter} days remaining.")

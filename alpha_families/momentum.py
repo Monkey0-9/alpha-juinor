@@ -8,7 +8,7 @@ class MomentumAlpha(BaseAlpha):
     def __init__(self):
         super().__init__()
 
-    def generate_signal(self, data: pd.DataFrame, regime_context: Dict[str, Any] = None) -> Dict[str, Any]:
+    def generate_signal(self, data: pd.DataFrame, regime_context: Dict[str, Any] = None, **kwargs) -> Dict[str, Any]:
         """
         Generate momentum-based alpha signal.
 

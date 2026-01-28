@@ -5,7 +5,7 @@ Provides common interface and utilities for all alpha families.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import pandas as pd
 
 
@@ -20,13 +20,17 @@ class BaseAlpha(ABC):
         self.name = self.__class__.__name__
 
     @abstractmethod
-    def generate_signal(self, data: pd.DataFrame, regime_context: Dict[str, Any] = None) -> Dict[str, Any]:
+    def generate_signal(self,
+                        data: pd.DataFrame,
+                        regime_context: Dict[str, Any] = None,
+                        features: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Generate alpha signal.
 
         Args:
             data: OHLCV data
             regime_context: Current market regime info
+            features: Optional pre-computed features from FeatureStore
 
         Returns:
             Dict with signal, confidence, and metadata

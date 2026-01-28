@@ -42,7 +42,7 @@ class RegimeEngine:
         if isinstance(market_data, pd.Series):
             market_data = market_data.to_frame(name="Close")
         # -----------------------------
-        
+
         # Extract market data (assume SPY as proxy for broad market)
         if isinstance(market_data.columns, pd.MultiIndex) and 'SPY' in market_data.columns.get_level_values(0):
             data = market_data['SPY'].dropna()
@@ -101,21 +101,29 @@ class RegimeEngine:
         vix = macro_context.get('VIX', 20.0) if macro_context else 20.0
 
         # Trend strength
-        returns = data['Close'].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
-        trend_strength = abs(returns.rolling(20).mean()) / returns.rolling(20).std()
+        # Trend strength
+        col = 'Close' if 'Close' in data.columns else data.columns[0]
+        returns = data[col].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
 
-        if vix < 20 and trend_strength.iloc[-1] > 0.5:
+        if len(returns) < 20:
+             return {'tag': RegimeTag.RISK_OFF.value, 'confidence': 0.5}
+
+        trend_strength = abs(returns.rolling(20).mean()) / returns.rolling(20).std()
+        ts_last = trend_strength.iloc[-1] if not trend_strength.empty else 0.0
+
+        if vix < 20 and ts_last > 0.5:
             return {'tag': RegimeTag.RISK_ON.value, 'confidence': 0.8}
-        elif vix > 30 or trend_strength.iloc[-1] < 0.2:
+        elif vix > 30 or ts_last < 0.2:
             return {'tag': RegimeTag.RISK_OFF.value, 'confidence': 0.9}
         else:
             return {'tag': RegimeTag.RISK_ON.value, 'confidence': 0.5}
 
     def _detect_vol_regime(self, data: pd.DataFrame) -> Dict[str, Any]:
         """Detect Volatility Expansion/Compression."""
-        returns = data['Close'].pct_change(fill_method=None).dropna()
-        short_vol = returns.tail(10).std() * np.sqrt(252)
-        long_vol = returns.tail(60).std() * np.sqrt(252)
+        col = 'Close' if 'Close' in data.columns else data.columns[0]
+        returns = data[col].pct_change(fill_method=None).dropna()
+        short_vol = returns.tail(10).std() * np.sqrt(252) if len(returns) >= 10 else 0.02
+        long_vol = returns.tail(60).std() * np.sqrt(252) if len(returns) >= 60 else 0.02
 
         if long_vol == 0:
             ratio = 1.0
@@ -130,10 +138,13 @@ class RegimeEngine:
     def _detect_liquidity_regime(self, data: pd.DataFrame) -> Dict[str, Any]:
         """Detect Liquidity Stress/Abundance."""
         # Use volume relative to moving average
+        if 'Volume' not in data.columns:
+            return {'tag': RegimeTag.LIQUIDITY_ABUNDANCE.value, 'confidence': 0.5}
+
         volume_ma = data['Volume'].rolling(20).mean()
         volume_ratio = data['Volume'] / volume_ma
 
-        avg_ratio = volume_ratio.tail(5).mean()
+        avg_ratio = volume_ratio.tail(5).mean() if not volume_ratio.empty else 1.0
 
         if avg_ratio < self.liquidity_threshold:
             return {'tag': RegimeTag.LIQUIDITY_STRESS.value, 'confidence': 1.0 - avg_ratio}
@@ -148,9 +159,14 @@ class RegimeEngine:
             return {'tag': RegimeTag.MEAN_REVERSION.value, 'confidence': 0.5}
 
         # Simple trend strength measure
-        ma_short = data['Close'].rolling(10).mean()
-        ma_long = data['Close'].rolling(50).mean()
-        trend_strength = abs(ma_short - ma_long).iloc[-1] / data['Close'].iloc[-1]
+        col = 'Close' if 'Close' in data.columns else data.columns[0]
+        ma_short = data[col].rolling(10).mean()
+        ma_long = data[col].rolling(50).mean()
+
+        if ma_long.empty or pd.isna(ma_long.iloc[-1]):
+             return {'tag': RegimeTag.MEAN_REVERSION.value, 'confidence': 0.5}
+
+        trend_strength = abs(ma_short - ma_long).iloc[-1] / data[col].iloc[-1]
 
         if trend_strength > self.trend_threshold:
             return {'tag': RegimeTag.TREND.value, 'confidence': trend_strength}

@@ -1,0 +1,149 @@
+{
+  "version": "2.0.0",
+  "frozen_at": "2026-01-28T02:00:00Z",
+  "description": "ML v1 feature schema - aligned with feature_contract_ml_v1.json (28 features)",
+  "features": [
+    {
+      "name": "ret_1d",
+      "type": "float",
+      "description": "1-day percentage return"
+    },
+    {
+      "name": "ret_5d",
+      "type": "float",
+      "description": "5-day percentage return"
+    },
+    {
+      "name": "ret_10d",
+      "type": "float",
+      "description": "10-day percentage return"
+    },
+    {
+      "name": "ret_20d",
+      "type": "float",
+      "description": "20-day percentage return"
+    },
+    {
+      "name": "vol_5d",
+      "type": "float",
+      "description": "5-day volatility (annualized)"
+    },
+    {
+      "name": "vol_20d",
+      "type": "float",
+      "description": "20-day volatility (annualized)"
+    },
+    {
+      "name": "vol_60d",
+      "type": "float",
+      "description": "60-day volatility (annualized)"
+    },
+    {
+      "name": "rsi_14",
+      "type": "float",
+      "description": "14-day RSI"
+    },
+    {
+      "name": "macd",
+      "type": "float",
+      "description": "MACD line"
+    },
+    {
+      "name": "macd_signal",
+      "type": "float",
+      "description": "MACD signal line"
+    },
+    {
+      "name": "atr_14",
+      "type": "float",
+      "description": "14-day Average True Range"
+    },
+    {
+      "name": "momentum_10",
+      "type": "float",
+      "description": "10-day momentum"
+    },
+    {
+      "name": "momentum_20",
+      "type": "float",
+      "description": "20-day momentum"
+    },
+    {
+      "name": "zscore_5",
+      "type": "float",
+      "description": "5-day price z-score"
+    },
+    {
+      "name": "zscore_20",
+      "type": "float",
+      "description": "20-day price z-score"
+    },
+    {
+      "name": "cross_rank_sector",
+      "type": "float",
+      "description": "Cross-sectional sector rank (placeholder)"
+    },
+    {
+      "name": "beta_60",
+      "type": "float",
+      "description": "60-day rolling beta estimate"
+    },
+    {
+      "name": "turnover_20d",
+      "type": "float",
+      "description": "20-day volume turnover ratio"
+    },
+    {
+      "name": "skew_60",
+      "type": "float",
+      "description": "60-day return skewness"
+    },
+    {
+      "name": "kurt_60",
+      "type": "float",
+      "description": "60-day return kurtosis"
+    },
+    {
+      "name": "adjclose_ratio",
+      "type": "float",
+      "description": "Close to 20-day SMA ratio"
+    },
+    {
+      "name": "ema_12",
+      "type": "float",
+      "description": "12-day EMA"
+    },
+    {
+      "name": "ema_26",
+      "type": "float",
+      "description": "26-day EMA"
+    },
+    {
+      "name": "sma_50",
+      "type": "float",
+      "description": "50-day SMA"
+    },
+    {
+      "name": "sma_200",
+      "type": "float",
+      "description": "200-day SMA"
+    },
+    {
+      "name": "volatility_ratio",
+      "type": "float",
+      "description": "Short/long-term volatility ratio"
+    },
+    {
+      "name": "regime_flag",
+      "type": "float",
+      "description": "Regime indicator (1=above SMA200, 0=below)"
+    },
+    {
+      "name": "liq_score",
+      "type": "float",
+      "description": "Liquidity score (volume percentile)"
+    }
+  ],
+  "enforce_completeness": true,
+  "n_features": 28
+}

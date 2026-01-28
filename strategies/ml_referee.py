@@ -87,19 +87,66 @@ class MLReferee:
             'high_confidence_count': np.sum(confidences > 0.7)
         }
 
-    def refine_signals(self, signals: Dict[str, float], market_data: pd.DataFrame) -> Dict[str, float]:
+    def refine_signals(self,
+                       signals: Dict[str, float],
+                       market_data: pd.DataFrame,
+                       agent_results: Dict[str, Dict[str, Any]] = None) -> Dict[str, float]:
         """
-        Refine signals using ML model (placeholder for now).
-
-        Args:
-            signals: Raw signals {ticker: signal}
-            market_data: Market data
-
-        Returns:
-            Refined signals
+        Refine signals with Disagreement Penalty and Opportunity Cost Hurdle.
         """
-        # Placeholder: return signals unchanged
-        return signals
+        refined = {}
+        hurdle = 0.55 # Standardizing signals to [0,1], hurdle 0.55 or 0.45
+
+        for symbol, raw_signal in signals.items():
+            # 1. Disagreement Penalty (Classical vs Classical)
+            # Institutional rule: If agents disagree on direction (buy vs sell), penalize conviction.
+            if agent_results and symbol in agent_results:
+                symbol_agents = agent_results[symbol]
+                mus = [a.get('mu', 0.5) for a in symbol_agents.values() if isinstance(a, dict) and a.get('ok')]
+
+                if mus:
+                    directions = [np.sign(m - 0.5) for m in mus if abs(m - 0.5) > 0.01]
+                    if len(set(directions)) > 1:
+                        # DISAGREEMENT DETECTED
+                        penalty = 0.5 # 50% reduction in net signal alpha
+                        alpha = raw_signal - 0.5
+                        raw_signal = 0.5 + (alpha * penalty)
+
+            # 1B. ML Shadow Disagreement Penalty (User Request FIX 4)
+            # Formula: mu_final = mu_base * exp(-beta * var(mu_models))
+            # Here we treat 'mu_models' as [Classical_Mu, ML_Shadow_Mu]
+            # Since ML might not be fully trained, we only apply if is_trained
+            if self.is_trained:
+                 # Generate Shadow Signal
+                 # Need features for this symbol. For now, strict separation means we might not have them easily here
+                 # without passing them. But let's assume raw_signal approximates consensus.
+                 # Let's assume ML signal is 0.5 (Neutral) if we can't infer, or we need to pass features to refine_signals.
+                 ml_shadow_mu = 0.5 # Placeholder until features passed
+
+                 # Calculate Variance between Classical (raw_signal) and ML
+                 # var([a, b]) = ((a-mean)^2 + (b-mean)^2) / 2 = (a-b)^2 / 4
+                 model_variance = ((raw_signal - ml_shadow_mu) ** 2) / 4.0
+                 beta = 10.0 # Sensitivity parameter
+                 shadow_decay = np.exp(-beta * model_variance)
+
+                 # Apply decay to alpha component
+                 alpha_base = raw_signal - 0.5
+                 raw_signal = 0.5 + (alpha_base * shadow_decay)
+
+                 # Log disagreement if significant
+                 if shadow_decay < 0.9:
+                     pass # logger.info(f"ML_SHADOW_PENALTY: {symbol} decay={shadow_decay:.2f} (Classical={raw_signal:.2f}, ML={ml_shadow_mu:.2f})")
+
+            # 2. Opportunity Cost Hurdle
+            # Reject if the signal is not sufficiently strong to overcome trading costs
+            alpha_abs = abs(raw_signal - 0.5)
+            if alpha_abs < 0.05: # Hurdle: 5% alpha from neutral
+                refined[symbol] = 0.5
+                # logger.info(f"PM_OPPORTUNITY_COST_REJECT: {symbol} signal {raw_signal:.4f} below hurdle")
+            else:
+                refined[symbol] = raw_signal
+
+        return refined
 
     def get_explainability(self) -> Dict[str, Any]:
         """

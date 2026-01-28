@@ -1,0 +1,20 @@
+{
+    "timestamp": "2026-01-21T12:09:30.676775",
+    "system_status": "OPERATIONAL",
+    "governance": {
+        "ACTIVE": 1,
+        "DEGRADED": 3
+    },
+    "data_quality": {
+        "avg_active_quality": 0.8,
+        "min_active_quality": 0.8,
+        "max_active_quality": 0.8
+    },
+    "ml_status": {
+        "total_models": 0,
+        "directory": "models/ml_alpha"
+    },
+    "risk_metrics": {
+        "total_vetoes": 0
+    }
+}

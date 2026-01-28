@@ -19,31 +19,33 @@ class MarketListener:
     def __init__(self, data_router, tickers: List[str]):
         self.router = data_router
         self.tickers = tickers
-        
+
         # State
         self.last_prices: Dict[str, float] = {}
         self.last_poll_time: Dict[str, float] = {}
         self.volatility_window: Dict[str, List[float]] = {t: [] for t in tickers}
-        
+
         # Configuration (Adaptive Intervals)
         self.crypto_interval = 10.0  # Poll crypto every 10s (Binance is robust)
         self.equity_interval = 60.0  # Poll equities every 60s (Yahoo rate limits)
-        
+
         # Thresholds
         self.crash_threshold = 0.03  # 3% drop since last check
         self.vol_spike_threshold = 0.02 # 2% move in short window
+        self.anomaly_threshold = 0.05   # 5% move triggers cross-check
+        self.flash_crash_threshold = 0.10 # 10% move is a crash
         self.tick_counter = 0 # For visual heartbeat
-        
+
         # Performance: True Async concurrency (no thread pool needed)
         # self.executor = ThreadPoolExecutor(...) -> Removed in favor of asyncio.create_task
-        
+
     async def tick_async(self) -> List[str]:
         """
         Main heartbeat method (Optimized for Speed via asyncio).
         Parallelizes polling and analysis using native async tasks.
         """
         now = time.time()
-        
+
         # 1. Identity tasks due for polling
         tickers_to_poll = []
         for ticker in self.tickers:
@@ -52,7 +54,7 @@ class MarketListener:
             last_t = self.last_poll_time.get(ticker, 0)
             if now - last_t >= interval:
                 tickers_to_poll.append(ticker)
-        
+
         if not tickers_to_poll:
             return []
 
@@ -64,14 +66,14 @@ class MarketListener:
         # 3. Parallel Execution via asyncio.gather
         tasks = [self._poll_and_analyze_async(ticker) for ticker in tickers_to_poll]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         events = []
         for ticker, result in zip(tickers_to_poll, results):
             if isinstance(result, Exception):
                 logger.debug(f"Listener Parallel Poll Failed {ticker}: {result}")
             elif result:
                 events.append(result)
-                
+
         return events
 
     async def _poll_and_analyze_async(self, ticker: str) -> Optional[str]:
@@ -79,10 +81,10 @@ class MarketListener:
         try:
             price = await self.router.get_latest_price_async(ticker)
             self.last_poll_time[ticker] = time.time()
-            
+
             if price is None:
                 return None
-                
+
             event = self._analyze_tick(ticker, price)
             self.last_prices[ticker] = price
             return event
@@ -97,12 +99,12 @@ class MarketListener:
         """Detects anomalies between last price and current price."""
         if ticker not in self.last_prices:
             return None
-            
+
         last_price = self.last_prices[ticker]
         if last_price <= 0: return None
-        
+
         pct_change = (current_price - last_price) / last_price
-        
+
         # 1. Anomaly Detection Logic (Institutional Requirement 3.1)
         # Any move > anomaly_threshold requires cross-check. Moves > flash_crash_threshold are treated as FLASH_CRASH.
         abs_move = abs(pct_change)
@@ -125,9 +127,9 @@ class MarketListener:
                 else:
                     logger.warning(f"Unverified move detected for {ticker} ({pct_change:.2%}). Cross-check failed.")
                     return None
-            
+
         # 2. Normal Volatility/Breakout
         if abs_move > self.vol_spike_threshold:
             return f"VOLATILITY_SPIKE: {ticker} moved {pct_change:.2%}"
-            
+
         return None

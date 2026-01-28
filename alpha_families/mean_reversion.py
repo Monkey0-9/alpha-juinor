@@ -23,7 +23,7 @@ class MeanReversionAlpha(BaseAlpha):
         self.bb_std = bb_std
         self.z_threshold = z_threshold
 
-    def generate_signal(self, data: pd.DataFrame, regime_context: Dict[str, Any] = None) -> Dict[str, Any]:
+    def generate_signal(self, data: pd.DataFrame, regime_context: Dict[str, Any] = None, **kwargs) -> Dict[str, Any]:
         """
         Generate mean reversion signal.
 
@@ -57,7 +57,7 @@ class MeanReversionAlpha(BaseAlpha):
 
         # Confidence based on signal agreement and volatility
         signal_agreement = 1.0 - np.std([rsi_signal.iloc[-1], bb_signal.iloc[-1], z_signal.iloc[-1]])
-        volatility = close.pct_change().rolling(20).std().iloc[-1]
+        volatility = close.pct_change(fill_method=None).rolling(20).std().iloc[-1]
         confidence = signal_agreement * (1.0 - min(volatility * 10, 1.0))  # Lower confidence in high vol
 
         # Regime adjustment: stronger in mean-reversion regimes

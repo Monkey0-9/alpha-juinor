@@ -1,0 +1,108 @@
+{
+  "project": "mini_quant_fund",
+  "vision": "Institutional-grade autonomous trading architecture",
+  "epics": [
+    {
+      "id": "EPIC-001",
+      "title": "Data Foundation & Quality Intelligence",
+      "description": "Establish a bulletproof data ingestion pipeline with multi-provider failover and data quality scoring.",
+      "acceptance_criteria": [
+        "Transactional ingestion into SQL DB",
+        "Data quality score < 0.6 triggers sizer reduction",
+        "Multi-provider bandit for optimal selection"
+      ]
+    },
+    {
+      "id": "EPIC-002",
+      "title": "Agentic Alpha Generation",
+      "description": "Implement a framework for distributional alpha agents (mu, sigma, confidence).",
+      "acceptance_criteria": [
+        "All agents adhere to unified AgentOutput contract",
+        "Baseline agents (Momentum, Mean-Rev, Tail-Risk) functional",
+        "Deterministic evaluation across symbols"
+      ]
+    },
+    {
+      "id": "EPIC-003",
+      "title": "PM Brain & Aggregate Logic",
+      "description": "Meta-brain for disagreement-aware aggregation and Kelly sizing.",
+      "acceptance_criteria": [
+        "Weighted aggregation with MAD z-score penalty",
+        "Deterministic decision path: EXECUTE/HOLD/REJECT",
+        "Comprehensive decision audit trail (JSONL)"
+      ]
+    },
+    {
+      "id": "EPIC-004",
+      "title": "Institutional Allocation & Execution",
+      "description": "Execution-aware sizing and order management.",
+      "acceptance_criteria": [
+        "Allocator accepts metadata for risk-aware decisions",
+        "Market impact modeling for sizing adjustments",
+        "Test coverage for deterministic reproducibility"
+      ]
+    }
+  ],
+  "tickets": [
+    {
+      "id": "MQF-1",
+      "title": "Implement SQLAlchemy DB Schema & Alembic",
+      "description": "Create models for price_history, corporate_actions, and decisions as per Tier-1 spec.",
+      "complexity": 3
+    },
+    {
+      "id": "MQF-2",
+      "title": "Baseline Data Providers (YFinance/AlphaVantage)",
+      "description": "Implement ProviderAdapter with pluggable logic and retry/fallback.",
+      "complexity": 5
+    },
+    {
+      "id": "MQF-3",
+      "title": "Data Quality Scorer & Validation Runner",
+      "description": "Implement rules for zero-prices, gaps, and 6-sigma volume spikes.",
+      "complexity": 5
+    },
+    {
+      "id": "MQF-4",
+      "title": "Alpha Agent Interface & Momentum Skeleton",
+      "description": "Define AgentOutput and implement LightGBM momentum wrapper skeleton.",
+      "complexity": 4
+    },
+    {
+      "id": "MQF-5",
+      "title": "PM Brain Aggregation Formula",
+      "description": "Implement weighted mu aggregation with sigma-based disagreement penalty.",
+      "complexity": 5
+    },
+    {
+      "id": "MQF-6",
+      "title": "Kelly Sizer with Disagreement Tuning",
+      "description": "Implement fractional Kelly sizing f = gamma * mu / sigma^2.",
+      "complexity": 3
+    },
+    {
+      "id": "MQF-7",
+      "title": "InstitutionalAllocator API Patch",
+      "description": "Ensure allocate() handles **metadata and returns List[Order].",
+      "complexity": 2
+    },
+    {
+      "id": "MQF-8",
+      "title": "Execution Engine Market Impact Model",
+      "description": "Add regression-based impact stub to sizing logic.",
+      "complexity": 4
+    },
+    {
+      "id": "MQF-9",
+      "title": "CLI Integration & Run-Once Mode",
+      "description": "Connect all layers in main.py for a single test cycle.",
+      "complexity": 5
+    },
+    {
+      "id": "MQF-10",
+      "title": "Simulated Backtesting Framework",
+      "description": "Implement simulator.py for walk-forward validation with slippage.",
+      "complexity": 6
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "model_id": "TGT_ml_v1",
+  "version": "1.0",
+  "features": [
+    "ret_1d",
+    "ret_5d",
+    "ret_10d",
+    "ret_20d",
+    "vol_5d",
+    "vol_20d",
+    "vol_60d",
+    "rsi_14",
+    "macd",
+    "macd_signal",
+    "atr_14",
+    "momentum_10",
+    "momentum_20",
+    "zscore_5",
+    "zscore_20",
+    "cross_rank_sector",
+    "beta_60",
+    "turnover_20d",
+    "skew_60",
+    "kurt_60",
+    "adjclose_ratio",
+    "ema_12",
+    "ema_26",
+    "sma_50",
+    "sma_200",
+    "volatility_ratio",
+    "regime_flag",
+    "liq_score"
+  ],
+  "n_features": 28,
+  "trained_at": "2026-01-28T03:06:34.453331Z",
+  "scikit_version": "1.8.0",
+  "git_commit": "08a3bed",
+  "training_data_period": {
+    "start": "2020-01-23T00:00:00",
+    "end": "2026-01-22T00:00:00",
+    "n_samples": 1508
+  },
+  "symbol": "TGT",
+  "model_type": "GradientBoostingRegressor",
+  "params": {
+    "model_type": "gbr",
+    "n_estimators": 200,
+    "max_depth": 3,
+    "learning_rate": 0.1
+  },
+  "contract_name": "ml_v1"
+}

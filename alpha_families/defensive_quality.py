@@ -21,7 +21,7 @@ class DefensiveQuality(BaseAlpha):
         self.vol_lookback = vol_lookback
         self.quality_threshold = quality_threshold
 
-    def generate_signal(self, data: pd.DataFrame, regime_context: Dict[str, Any] = None) -> Dict[str, Any]:
+    def generate_signal(self, data: pd.DataFrame, regime_context: Dict[str, Any] = None, **kwargs) -> Dict[str, Any]:
         """
         Generate defensive quality signal.
 
@@ -36,7 +36,7 @@ class DefensiveQuality(BaseAlpha):
             return {'signal': 0.0, 'confidence': 0.0, 'weights': {}}
 
         # Calculate volatility (lower is better for defensive)
-        returns = data['Close'].pct_change().dropna()
+        returns = data['Close'].pct_change(fill_method=None).dropna()
         volatility = returns.rolling(self.vol_lookback).std() * np.sqrt(252)
 
         # Estimate dividend yield proxy (using volume/price stability)

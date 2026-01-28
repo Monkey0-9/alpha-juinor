@@ -39,6 +39,12 @@ if not logger.handlers:
 logger.setLevel(logging.INFO)
 
 # -------------------------
+# Constants
+# -------------------------
+MIN_HISTORY_BARS = 20
+FALLBACK_VOL = 0.02
+
+# -------------------------
 # Exceptions
 # -------------------------
 class ExecutionError(Exception):
@@ -340,7 +346,7 @@ class RealisticExecutionHandler:
         # Validate bar (BarData attributes are inherently typed, but we check for finite values)
         if not np.isfinite([bar.open, bar.high, bar.low, bar.close, bar.volume]).all():
              raise ExecutionError(f"Bar contains non-finite values for ticker {bar.ticker}")
-             
+
         # INSTITUTIONAL FIX: No fills on zero volume
         if bar.volume <= 0:
             logger.debug("Skipping fill for %s: Zero volume bar", order.id)
@@ -368,11 +374,11 @@ class RealisticExecutionHandler:
         # Estimate vol and adv
         price_history = pd.to_numeric(price_history, errors='coerce').astype(float)
         volume_history = pd.to_numeric(volume_history, errors='coerce').astype(float)
-        
+
         if price_history.empty or volume_history.empty:
             logger.warning(f"Aborting fill for {order.ticker}: Empty history arrays.")
             return None
-            
+
         vol, adv = self._estimate_vol_and_adv(price_history, volume_history)
 
         # If adv fallback (None), use bar_volume conservatively but log
@@ -421,10 +427,10 @@ class RealisticExecutionHandler:
         # - fill_price adjusts by sign*impact, then adds half-spread, then clipped to bar high/low
         expected_price = float(close_price)
         side = np.sign(fill_qty)
-        
+
         # 1. Start with midpoint + impact
         raw_fill_price = expected_price * (1.0 + side * market_impact)
-        
+
         # 2. Add half-spread cost (crossing the spread)
         half_spread = expected_price * (self.bid_ask_spread_pct / 2.0)
         raw_fill_price += side * half_spread

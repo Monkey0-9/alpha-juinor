@@ -1,0 +1,32 @@
+{
+  "AAPL": {
+    "provider": "yahoo",
+    "quality": 1.0,
+    "status": "SUCCESS",
+    "rows": 1254
+  },
+  "MSFT": {
+    "provider": "yahoo",
+    "quality": 1.0,
+    "status": "SUCCESS",
+    "rows": 1254
+  },
+  "GOOGL": {
+    "provider": "yahoo",
+    "quality": 1.0,
+    "status": "SUCCESS",
+    "rows": 1254
+  },
+  "BTC-USD": {
+    "provider": "yahoo",
+    "quality": 1.0,
+    "status": "SUCCESS",
+    "rows": 1825
+  },
+  "EURUSD=X": {
+    "provider": "yahoo",
+    "quality": 1.0,
+    "status": "SUCCESS",
+    "rows": 1268
+  }
+}

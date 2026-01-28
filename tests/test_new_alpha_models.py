@@ -177,8 +177,8 @@ class TestAlternativeAlpha:
     def test_initialization(self):
         """Test alpha initialization."""
         alpha = AlternativeAlpha()
-        assert alpha.sentiment_lookback == 30
-        assert alpha.momentum_window == 10
+        assert alpha.sentiment_decay_days == 7
+        assert alpha.social_weight == 0.3
 
     def test_generate_signal(self, sample_data):
         """Test signal generation."""
@@ -190,14 +190,13 @@ class TestAlternativeAlpha:
         assert 'confidence' in result
         assert 'metadata' in result
 
-    def test_alternative_features(self, sample_data):
-        """Test alternative feature calculation."""
+    def test_sentiment_lookup(self, sample_data):
+        """Test sentiment proxy lookup."""
         alpha = AlternativeAlpha()
-        features = alpha._calculate_alternative_features(sample_data)
-
-        assert isinstance(features, dict)
-        assert 'sentiment_proxy' in features
-        assert 'social_volume_proxy' in features
+        # Mock what was previously _calculate_alternative_features
+        sentiment = alpha._get_news_sentiment(sample_data.index[-1])
+        assert isinstance(sentiment, (float, np.float64))
+        assert -1.0 <= sentiment <= 1.0
 
 
 class TestMLAlpha:
@@ -225,17 +224,18 @@ class TestMLAlpha:
     def test_initialization(self):
         """Test alpha initialization."""
         alpha = MLAlpha()
-        assert alpha.lookback_periods == [5, 10, 20, 50]
-        assert alpha.feature_lookback == 60
+        assert alpha.prediction_horizon == 5
+        assert alpha.feature_lookback == 20
 
     def test_feature_engineering(self, sample_data):
         """Test feature engineering."""
         alpha = MLAlpha()
-        features = alpha._create_features(sample_data)
+        features = alpha._extract_features(sample_data)
 
         assert isinstance(features, pd.DataFrame)
         assert len(features) > 0
-        assert 'returns_5d' in features.columns
+        # Check for one of the momentum features
+        assert 'momentum_5' in features.columns
 
     def test_signal_generation(self, sample_data):
         """Test ML signal generation."""

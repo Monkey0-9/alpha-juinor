@@ -19,3 +19,11 @@ repos:
     rev: 6.0.0
     hooks:
     -   id: flake8
+-   repo: local
+    hooks:
+    -   id: institutional-governance
+        name: Institutional Governance Gating
+        entry: python scripts/pre_commit_governance.py
+        language: system
+        pass_filenames: false
+        always_run: true

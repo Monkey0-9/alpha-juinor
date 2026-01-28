@@ -30,7 +30,7 @@ class FundamentalAlpha(BaseAlpha):
         self.lookback_periods = [20, 60, 120]  # Multiple timeframes for robustness
         self.value_threshold = 0.1  # Minimum value discrepancy for signal
 
-    def generate_signal(self, data: pd.DataFrame, regime_context: Dict[str, Any] = None) -> Dict[str, Any]:
+    def generate_signal(self, data: pd.DataFrame, regime_context: Dict[str, Any] = None, **kwargs) -> Dict[str, Any]:
         """
         Generate fundamental-based trading signal.
 
@@ -119,7 +119,12 @@ class FundamentalAlpha(BaseAlpha):
         In practice, would use actual earnings data.
         """
         # Placeholder: estimate earnings growth from revenue proxy (volume * price)
-        revenue_proxy = data['Close'] * data['Volume']
+        if 'Volume' in data.columns:
+            revenue_proxy = data['Close'] * data['Volume']
+        else:
+            # Fallback for missing volume
+            revenue_proxy = data['Close'] * data['Close'].rolling(20).std()
+
         earnings_growth = revenue_proxy.pct_change(60)  # Quarterly-like growth
 
         # Smooth and normalize
@@ -172,7 +177,7 @@ class FundamentalAlpha(BaseAlpha):
         # Confidence based on data availability and market conditions
         has_volume = 'Volume' in data.columns and data['Volume'].sum() > 0
         data_length = len(data)
-        price_stability = 1.0 - data['Close'].pct_change().std()
+        price_stability = 1.0 - data['Close'].pct_change(fill_method=None).std()
 
         confidence_factors = [
             1.0 if has_volume else 0.5,

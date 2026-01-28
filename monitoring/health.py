@@ -98,7 +98,99 @@ class HealthMonitor:
         logger.critical(f"CIRCUIT BREAKER TRIPPED: {len(self.anomaly_history)} anomalies in {self.anomaly_window_minutes} minutes")
         logger.critical("TRADING LOOP PAUSED - MANUAL INTERVENTION REQUIRED")
 
-        # TODO: Send escalation alerts, pause trading, etc.
+        # Escalation actions
+        self._send_escalation_alerts()
+        self._pause_trading()
+        self._create_diagnostic_report()
+
+    def _send_escalation_alerts(self):
+        """Send multi-channel escalation alerts."""
+        try:
+            # Create alert message
+            alert_msg = f"""
+            🚨 CIRCUIT BREAKER TRIGGERED 🚨
+
+            Timestamp: {datetime.now().isoformat()}
+            Anomalies: {len(self.anomaly_history)} in {self.anomaly_window_minutes} minutes
+            Threshold: {self.circuit_breaker_threshold}
+
+            Recent Anomalies:
+            {self._format_recent_anomalies()}
+
+            ACTION REQUIRED: Manual intervention needed
+            """
+
+            # Log to alert file
+            with open("runtime/CIRCUIT_BREAKER_ALERT.log", "a") as f:
+                f.write(f"\n{'='*80}\n")
+                f.write(alert_msg)
+                f.write(f"\n{'='*80}\n")
+
+            # TODO: In production, add:
+            # - Email notification (via SMTP or SendGrid)
+            # - SMS notification (via Twilio)
+            # - PagerDuty/OpsGenie integration
+            # - Slack/Discord webhook
+
+            logger.info("Escalation alerts sent successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to send escalation alerts: {e}")
+
+    def _pause_trading(self):
+        """Create kill switch file to pause trading."""
+        try:
+            import os
+            os.makedirs("runtime", exist_ok=True)
+
+            with open("runtime/KILL_SWITCH", "w") as f:
+                f.write(f"Circuit breaker triggered at {datetime.now().isoformat()}\n")
+                f.write(f"Anomalies: {len(self.anomaly_history)}\n")
+                f.write("Manual reset required\n")
+
+            logger.critical("KILL_SWITCH file created - trading paused")
+
+        except Exception as e:
+            logger.error(f"Failed to create KILL_SWITCH: {e}")
+
+    def _create_diagnostic_report(self):
+        """Create diagnostic report for troubleshooting."""
+        try:
+            report = {
+                'timestamp': datetime.now().isoformat(),
+                'circuit_breaker_tripped': self.circuit_breaker_tripped,
+                'anomalies': [
+                    {
+                        'time': a['timestamp'].isoformat(),
+                        'type': a['type'],
+                        'details': a['details']
+                    } for a in self.anomaly_history
+                ],
+                'provider_health': self.provider_health,
+                'suppressed_exceptions': dict(self.suppressed_exceptions)
+            }
+
+            import json
+            with open("runtime/circuit_breaker_diagnostic.json", "w") as f:
+                json.dump(report, f, indent=2)
+
+            logger.info("Diagnostic report created: runtime/circuit_breaker_diagnostic.json")
+
+        except Exception as e:
+            logger.error(f"Failed to create diagnostic report: {e}")
+
+    def _format_recent_anomalies(self) -> str:
+        """Format recent anomalies for alert message."""
+        if not self.anomaly_history:
+            return "None"
+
+        formatted = []
+        for anomaly in self.anomaly_history[-10:]:  # Last 10
+            formatted.append(
+                f"  - {anomaly['timestamp'].strftime('%H:%M:%S')}: "
+                f"{anomaly['type']} - {anomaly['details']}"
+            )
+        return "\n".join(formatted)
 
     def reset_circuit_breaker(self):
         """Reset the circuit breaker (manual intervention)."""

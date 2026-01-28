@@ -113,6 +113,7 @@ class InstitutionalNLPEngine:
     """
 
     def __init__(self, model_dir: str = "models/nlp", cache_dir: str = "data/cache/nlp"):
+        global NLP_AVAILABLE
         self.model_dir = Path(model_dir)
         self.cache_dir = Path(cache_dir)
         self.model_dir.mkdir(parents=True, exist_ok=True)
@@ -130,11 +131,17 @@ class InstitutionalNLPEngine:
         # Load spaCy model for NER
         try:
             self.nlp = spacy.load("en_core_web_sm")
-        except OSError:
-            logger.warning("spaCy model not found. Installing...")
-            import subprocess
-            subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=True)
-            self.nlp = spacy.load("en_core_web_sm")
+            logger.info("spaCy model loaded successfully")
+        except (OSError, MemoryError, Exception) as e:
+            logger.warning(f"Failed to load spaCy model: {e}")
+            logger.warning("NLP features will be running in degraded mode (No NER).")
+            self.nlp = None
+
+            # If we encountered a fatal memory error, we might want to disable NLP entirely
+            if isinstance(e, MemoryError) or "ArrayMemoryError" in str(e):
+                logger.error("Critical Memory Error in NLP initialization. Disabling NLP Engine.")
+                NLP_AVAILABLE = False
+                return
 
         # Topic modeling
         self.tfidf_vectorizer = TfidfVectorizer(
@@ -432,13 +439,18 @@ class InstitutionalNLPEngine:
 
     def _extract_entities(self, text: str) -> Dict[str, List[str]]:
         """Extract named entities using spaCy."""
-        doc = self.nlp(text)
+        if not self.nlp:
+            return {}
 
-        entities = defaultdict(list)
-        for ent in doc.ents:
-            entities[ent.label_].append(ent.text)
-
-        return dict(entities)
+        try:
+            doc = self.nlp(text)
+            entities = defaultdict(list)
+            for ent in doc.ents:
+                entities[ent.label_].append(ent.text)
+            return dict(entities)
+        except Exception as e:
+            logger.warning(f"NER extraction failed: {e}")
+            return {}
 
     def _extract_keywords(self, text: str, max_keywords: int = 10) -> List[str]:
         """Extract important keywords using TF-IDF and frequency analysis."""

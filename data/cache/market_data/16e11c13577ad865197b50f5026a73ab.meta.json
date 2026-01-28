@@ -3,7 +3,7 @@
   "start_date": "2023-03-28",
   "end_date": "2025-05-01",
   "data_type": "ohlcv",
-  "cached_at": "2026-01-06T21:04:40.007815",
-  "rows": 525,
+  "cached_at": "2026-01-19T20:55:25.058056",
+  "rows": 527,
   "ttl_hours": 24.0
 }

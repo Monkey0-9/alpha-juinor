@@ -1,313 +1,217 @@
-from typing import Dict, List, Optional, Union, Any
+from portfolio.capital_auction import CapitalAuctionEngine
+from contracts import AllocationRequest
+from typing import Dict, Any, Optional, List
 import pandas as pd
 import numpy as np
 import logging
-from dataclasses import dataclass
-from backtest.execution import Order, OrderType
 
-logger = logging.getLogger(__name__)
+# Institutional Infrastructure (Phase 8 Integration)
+from risk.cvar_gate import get_cvar_gate
+from regime.controller import get_regime_controller
 
-@dataclass
-class AllocationResult:
-    target_weights: Dict[str, float]
-    orders: List[Order]
-    meta: Dict[str, Any]
+logger = logging.getLogger("ALLOCATOR")
 
 class InstitutionalAllocator:
     """
-    Central Trade Decision Engine.
-    Converts: Alpha Signals -> Conviction -> Target Exposure -> Orders.
-    Enforces: Risk Budget, Volatility Targeting, Regime Scaling, Liquidity Limits.
+    Allocates capital using Fractional Kelly and Constraints.
+    Integrated with CapitalAuctionEngine for deterministic competition.
     """
-    
-    def __init__(self, risk_manager, max_leverage: float = 1.0, allow_short: bool = False, target_vol: float = 0.15):
+    def __init__(self, risk_manager=None, max_position_pct=0.10, gamma=0.5, max_leverage=1.0, hurdle_rate=0.02, **kwargs):
         self.risk_manager = risk_manager
+        self.max_pos = max_position_pct
+        self.gamma = gamma
         self.max_leverage = max_leverage
-        self.allow_short = allow_short
-        self.target_vol = target_vol
-        
-        # Institutional State Trackers
-        self.last_signals: Dict[str, float] = {}
-        self.entry_prices: Dict[str, float] = {}
-        self.entry_timestamps: Dict[str, pd.Timestamp] = {}
-        
-        # Configurable Thresholds
-        self.entry_threshold = 0.65
-        self.exit_threshold = 0.55
-        self.single_name_cap = 0.01  # 1% NAV
-        self.cooldown_period = pd.Timedelta(days=3)
-        self.stop_timestamps: Dict[str, pd.Timestamp] = {}
-        
-        # Bucket weights (Requirement C)
-        self.bucket_weights = {"Large": 0.50, "Mid": 0.30, "Small": 0.20}
-        self.bucket_thresholds = {"Large": 10e9, "Mid": 2e9}
-        
-    def _calculate_kelly_weights(self, signals: Dict[str, float], returns: Dict[str, pd.Series]) -> Dict[str, float]:
+        self.auction_engine = CapitalAuctionEngine(hurdle_rate=hurdle_rate, total_cap_limit=max_leverage, gamma=gamma)
+
+        # PM Brain Integration (High-Priority)
+        from portfolio.pm_brain import PMBrain
+        # FIX 5: Bandwidth Expansion (12-15 positions)
+        self.pm_brain = PMBrain(cvar_limit=-0.05, max_positions=15)
+
+        # Institutional Infrastructure Integration
+        self.cvar_gate = get_cvar_gate()
+        self.regime_controller = get_regime_controller()
+        logger.info("[ALLOCATOR] Institutional modules wired: CVaRGate, RegimeController")
+        logger.info("[ALLOCATOR] PM Brain initialized for capital competition")
+
+    def allocate(self, *args, **kwargs):
         """
-        Calculates weights using the Kelly Criterion: weight = mu / sigma^2.
+        Unified allocate method supporting:
+        1. Single: allocate(request: AllocationRequest) -> Dict
+        2. Batch: allocate(requests: List[AllocationRequest]) -> Dict[str, float]
+        3. Legacy: allocate(signals, prices, volumes, portfolio, ts, metadata, method) -> OrderList
         """
-        kelly_weights = {}
-        for tk, sig in signals.items():
-            if tk in returns and not returns[tk].empty:
-                # Annualized mean and variance
-                mu = returns[tk].mean() * 252
-                var = returns[tk].var() * 252
-                if var > 1e-6:
-                    # Signal-adjusted Kelly (Standard: mu/var)
-                    # Institutional: Use a half-Kelly (0.5x) or fractional Kelly for stability
-                    f_star = (mu / var) * (sig - 0.5) * 2.0
-                    kelly_weights[tk] = np.clip(f_star * 0.5, -0.2, 0.2) # Hard cap kelly at 20%
-                else:
-                    kelly_weights[tk] = 0.0
+        if len(args) == 1:
+            if isinstance(args[0], AllocationRequest):
+                return self._allocate_new(args[0])
+            elif isinstance(args[0], list) and all(isinstance(x, AllocationRequest) for x in args[0]):
+                return self.allocate_batch(args[0])
+            elif isinstance(args[0], pd.DataFrame):
+                # Convert DataFrame signals to requests
+                requests = self._signals_to_requests(args[0], kwargs.get('data'), kwargs.get('metadata', {}))
+                prices = kwargs.get('data') if kwargs.get('data') is not None else kwargs.get('prices')
+                return self.allocate_batch(requests, prices=prices)
+
+        return self._allocate_legacy(*args, **kwargs)
+
+    def allocate_batch(self, requests: List[AllocationRequest], prices: Optional[pd.DataFrame] = None) -> Dict[str, float]:
+        """
+        Runs the Capital Auction for multiple competing requests.
+        Optionally applies Hedging overlay if RiskManager supports it.
+        """
+        # FIX 6: Satellite Alpha Sleeve (Controlled Offensive)
+        # Split capital: 90% Core, 10% Satellite
+        SATELLITE_CAP_PCT = 0.10
+        CORE_CAP_PCT = 0.90
+
+        # Identify Satellite Candidates (Momentum/Breakout metadata)
+        # If no explicit metadata, use high-conviction heuristic (mu > top decile)
+        satellite_reqs = []
+        core_reqs = []
+
+        # Sort by signal strength (mu)
+        sorted_reqs = sorted(requests, key=lambda x: x.mu, reverse=True)
+
+        # Take top 2 as potential satellite if high conviction, else treat as core
+        # This is a simple heuristic since we lack explicit strategy tags on requests yet
+        for i, req in enumerate(sorted_reqs):
+            is_satellite = False
+            if i < 2 and req.confidence > 0.7: # Top 2 high conviction
+                 is_satellite = True
+
+            if is_satellite:
+                satellite_reqs.append(req)
             else:
-                kelly_weights[tk] = 0.0
-        return kelly_weights
+                core_reqs.append(req)
 
-    def _calculate_inverse_vol_weights(self, returns: Dict[str, pd.Series]) -> Dict[str, float]:
+        # Auction Core (90% Cap)
+        # We simulate this by scaling the resulting weights, or passing a cap to auction engine?
+        # Auction engine expects to allocate up to 'total_cap_limit'.
+        # We'll allocate fully then scale.
+
+        core_weights = self.auction_engine.auction_capital(core_reqs)
+        # Scale core to 90%
+        core_weights = {k: v * CORE_CAP_PCT for k, v in core_weights.items()}
+
+        # Satellite Allocation (Simple Equal Weight to survivors)
+        satellite_weights = {}
+        if satellite_reqs:
+            sat_per_share = SATELLITE_CAP_PCT / len(satellite_reqs)
+            for req in satellite_reqs:
+                satellite_weights[req.symbol] = sat_per_share
+
+        # Combine
+        weights = {**core_weights, **satellite_weights}
+
+        # Phase D: Hedging Overlay
+        if self.risk_manager and hasattr(self.risk_manager, 'sector_hedger') and weights:
+            # 1. Sector Hedge
+            sector_hedges = self.risk_manager.sector_hedger.calculate_hedge_overlay(weights)
+            for s, w in sector_hedges.items():
+                weights[s] = weights.get(s, 0.0) + w
+
+            # 2. Beta Hedge
+            if prices is not None:
+                beta_hedges = self.risk_manager.beta_neutralizer.calculate_beta_neutralization(weights, prices)
+                for s, w in beta_hedges.items():
+                    weights[s] = weights.get(s, 0.0) + w
+
+        return weights
+
+    def _allocate_new(self, request: AllocationRequest) -> Dict[str, Any]:
         """
-        Inverse Volatility weighting (Simple Risk Parity).
-        weight_i = (1/vol_i) / sum(1/vol_j)
+        Single request interface.
         """
-        vols = {}
-        for tk, ret in returns.items():
-            if not ret.empty:
-                vol = ret.std() * np.sqrt(252)
-                vols[tk] = max(vol, 0.01) # Floor vol at 1%
-        
-        if not vols:
-            return {}
-            
-        inv_vols = {k: 1.0/v for k, v in vols.items()}
-        total_inv_vol = sum(inv_vols.values())
-        
-        # Risk Parity: weight_i = (1/vol_i) / sum(1/vol_j)
-        return {k: v / (total_inv_vol + 1e-12) for k, v in inv_vols.items()}
+        # We can just wrap it in a list and use the auction engine for consistency
+        weights = self.allocate_batch([request])
+        weight = weights.get(request.symbol, 0.0)
 
-    def allocate(
-        self, 
-        signals: Union[Dict[str, float], pd.Series, pd.DataFrame], 
-        prices: Dict[str, pd.Series], # History for risk 
-        volumes: Dict[str, pd.Series], # History for liquidity
-        current_portfolio, 
-        timestamp: pd.Timestamp,
-        metadata: Optional[Dict[str, Dict]] = None,
-        method: str = "risk_parity"
-    ) -> AllocationResult:
+        return {
+            "symbol": request.symbol,
+            "quantity": weight,
+            "order_type": "MARKET",
+            "metadata": {
+                "mu": request.mu,
+                "sigma": request.sigma,
+                "confidence": request.confidence
+            }
+        }
+
+    def _signals_to_requests(self, signals: pd.DataFrame, data: Optional[pd.DataFrame], metadata: Dict) -> List[AllocationRequest]:
         """
-        Main allocation routine.
-        1. Normalize Signals -> Raw Weights
-        2. Apply Risk Constraints -> Risk-Adjusted Weights
-        3. Diff against Current Portfolio -> Position Deltas
-        4. Generate Orders
+        Heuristic: Convert basic signal DataFrame to AllocationRequest objects.
         """
-        # Institutional Robustness: Convert signals to dict if needed
-        if isinstance(signals, pd.DataFrame):
-            signals = signals.iloc[-1].to_dict()
-        elif isinstance(signals, pd.Series):
-            signals = signals.to_dict()
-            
-        # 0. INSTITUTIONAL: Buy/Sell Decision Layer (Hysteresis & Trend)
-        current_positions = getattr(current_portfolio, "positions", {})
-        processed_signals = {}
-        
-        for tk, sig in signals.items():
-            prev_sig = self.last_signals.get(tk, 0.5)
-            has_pos = abs(current_positions.get(tk, 0)) > 1e-6
-            
-            # A. Exit Logic (Hysteresis)
-            if has_pos and sig < self.exit_threshold:
-                # Conviction collapsed below buffer - Exit
-                processed_signals[tk] = 0.5 
-                continue
-                
-            # B. Entry Logic (Confirmation)
-            if not has_pos:
-                # Intelligent Re-entry: Check Cooldown
-                if tk in self.stop_timestamps:
-                    if (timestamp - self.stop_timestamps[tk]) < self.cooldown_period:
-                        processed_signals[tk] = 0.5
-                        continue
-                    else:
-                        self.stop_timestamps.pop(tk)
+        requests = []
+        if signals.empty:
+            return []
 
-                if sig < self.entry_threshold:
-                    # Signal not strong enough to overcome friction/entry barriers
-                    processed_signals[tk] = 0.5
-                    continue
-                # Trend confirmation: Buy only if conviction is rising or extremely high
-                if sig <= prev_sig and sig < 0.85: 
-                    processed_signals[tk] = 0.5
-                    continue
-            
-            processed_signals[tk] = sig
-            
-        # Update last signals for next delta calculation
-        self.last_signals = signals.copy()
-        signals = processed_signals # Re-route to filtered signals
-        
-        # INSTITUTIONAL: Explicit fill_method + immediate cleaning
-        returns_hist = {}
-        for tk, px in prices.items():
-            r = px.pct_change(fill_method=None)
-            r = r.replace([np.inf, -np.inf], np.nan).dropna()
-            returns_hist[tk] = pd.to_numeric(r, errors='coerce').astype(float)
-        
-        # 1. Bucketing & Vol-Scaled Risk Parity (Requirement G)
-        equity = getattr(current_portfolio, "total_equity", 100_000.0)
-        norm_weights = {}
-        buckets = {"Large": [], "Mid": [], "Small": []}
-        
-        # Partition Universe
-        for tk, sig in signals.items():
-            if sig == 0.5: continue # Neutral/Filtered
-            mcap = 0.0
-            if metadata and tk in metadata:
-                mcap = metadata[tk].get("market_cap", 0.0)
-            
-            if mcap >= self.bucket_thresholds["Large"]: b = "Large"
-            elif mcap >= self.bucket_thresholds["Mid"]: b = "Mid"
-            else: b = "Small"
-            buckets[b].append(tk)
+        idx_val = signals.index[-1]
+        if hasattr(idx_val, 'isoformat'):
+            timestamp = idx_val.isoformat()
+        else:
+            try:
+                timestamp = pd.to_datetime(idx_val).isoformat()
+            except:
+                timestamp = str(pd.Timestamp.utcnow())
 
-        # Calculate Weights per Bucket
-        for b_name, tickers in buckets.items():
-            if not tickers: continue
-            n_bucket = len(tickers)
-            b_weight = self.bucket_weights.get(b_name, 0.0)
-            
-            # Position Vol Target (Requirement G.1)
-            pos_vol_target = self.target_vol * b_weight / np.sqrt(n_bucket)
-            
-            for tk in tickers:
-                ret = returns_hist.get(tk, pd.Series())
-                vol = ret.std() * np.sqrt(252) if not ret.empty else 0.4 # Default 40%
-                vol = max(vol, 0.01)
-                
-                # Allocation Formula (Requirement G.2)
-                # target_w = (pos_vol_target / vol) * bucket_fraction
-                # We interpret bucket_fraction as already included in pos_vol_target logic
-                target_w = (pos_vol_target / vol) * (signals[tk] - 0.5) * 2.0
-                
-                # Hard Cap: 1% Single-Name (Requirement C)
-                target_w = np.clip(target_w, -self.single_name_cap, self.single_name_cap)
-                if not self.allow_short: target_w = max(0.0, target_w)
-                
-                norm_weights[tk] = target_w
+        # signals is expected to be a DataFrame where columns are tickers
+        for symbol in signals.columns:
+            try:
+                val = float(signals[symbol].iloc[-1])
+            except (ValueError, TypeError):
+                logger.warning(f"Allocator: Invalid signal value for {symbol}, defaulting to 0.5")
+                val = 0.5
 
-        # 2. Apply Per-Asset Risk Constraints
-        final_target_weights = {}
-        risk_meta = {}
-        reason_codes = {}
-        equity = getattr(current_portfolio, "total_equity", 100_000.0)
-        
-        for tk, raw_w in norm_weights.items():
-            intent_dollars = raw_w * equity
-            conv_s = pd.Series([intent_dollars], index=[timestamp]) 
-            px_hist = prices.get(tk, pd.Series())
-            vol_hist = volumes.get(tk, pd.Series())
-            
-            if self.risk_manager:
-                res = self.risk_manager.enforce_limits(conv_s, px_hist, vol_hist)
-                adj_dollars = res.adjusted_conviction.iloc[-1]
-                final_target_weights[tk] = adj_dollars / (equity + 1e-9)
-                risk_meta[tk] = res.violations
-                reason_codes[tk] = res.primary_reason
-            else:
-                final_target_weights[tk] = raw_w
-                reason_codes[tk] = "REBALANCE"
+            if np.isnan(val) or np.isinf(val):
+                logger.warning(f"Allocator: NaN signal for {symbol}, skipping/defaulting")
+                val = 0.5
 
-        # 3. Generate Orders (Diff Logic - THE AUTO-SELL ENGINE)
-        orders = []
-        current_positions = getattr(current_portfolio, "positions", {})
-        all_tickers = set(final_target_weights.keys()) | set(current_positions.keys())
-        
-        # Institutional Guards
-        never_sell = getattr(self.risk_manager, "never_sell_assets", [])
-        manual_sell = getattr(self.risk_manager, "manual_approval_on_sell", False)
+            # Mapping val (0.0 to 1.0) to mu (-0.05 to 0.05) assuming 0.5 is neutral
+            mu = (val - 0.5) * 0.1
 
-        for tk in all_tickers:
-            target_w = final_target_weights.get(tk, 0.0)
-            target_qty = 0
-            current_price = 0.0
-            
-            if tk in prices and not prices[tk].empty:
-                current_price = prices[tk].iloc[-1]
-                
-            if current_price > 0:
-                target_val = target_w * equity
-                # INSTITUTIONAL: Support fractional shares (round to 4 decimals for Alpaca)
-                target_qty = round(float(target_val / current_price), 4)
-                
-            current_qty = current_positions.get(tk, 0)
-            delta_qty = target_qty - current_qty
-            
-            # --- ADAPTIVE STOP LOSS & STAGNATION ---
-            reason = reason_codes.get(tk, "REBALANCE")
-            risk_metric = None
+            # Simple defaults for missing dimensions
+            sigma = 0.02 # 2% daily vol default
+            confidence = 0.5
+            if val > 0.8 or val < 0.2: confidence = 0.8 # Higher confidence on extremes
 
-            if current_qty > 0 and tk in self.entry_prices and current_price > 0:
-                entry_p = self.entry_prices[tk]
-                ret_since_entry = (current_price - entry_p) / entry_p
-                
-                # Volatility-Adjusted Trailing Stop
-                px_hist = prices.get(tk, pd.Series())
-                if len(px_hist) >= 10:
-                    vol = px_hist.pct_change(fill_method=None).std() * np.sqrt(252)
-                    stop_dist = max(0.05, vol * 0.4) # Minimum 5% stop, or 40% of annual vol
-                    if ret_since_entry < -stop_dist:
-                        logger.warning(f"ADAPTIVE STOP: {tk} dropped {ret_since_entry:.1%} below entry ${entry_p:.2f} (Stop: {stop_dist:.1%})")
-                        target_qty = 0
-                        delta_qty = target_qty - current_qty
-                        reason = "RISK_BREACH"
-                        risk_metric = f"Adaptive Stop ({stop_dist:.1%})"
-                        self.stop_timestamps[tk] = timestamp # Start Cooldown
-
-            if abs(delta_qty) < 1e-8:
-                continue
-
-            # --- AUTO-SELL ENGINE LOGIC ---
-            # Detect Signal Deterioration / Capital Rotation
-            if delta_qty < 0 and reason == "REBALANCE":
-                 # CAPITAL_ROTATION: If signals grew for OTHERS but shrank for this one
-                 sig = signals.get(tk, 0.5)
-                 if sig < 0.5: # Negative conviction
-                     reason = "SIGNAL_DECAY"
-                 else:
-                     reason = "CAPITAL_ROTATION"
-
-            # Check Safety Guards
-            if delta_qty < 0: # This is a SELL
-                if tk in never_sell:
-                    logger.warning(f"SELL VETO: {tk} is in never_sell_assets. Skipping liquidation.")
-                    continue
-                if manual_sell:
-                    logger.warning(f"MANUAL PROTECTION: SELL order for {tk} ({delta_qty}) requires approval. Skipping.")
-                    continue
-
-                # Set risk metric if reason is RISK_BREACH
-                if reason == "RISK_BREACH" and tk in risk_meta and not risk_metric:
-                    risk_metric = "; ".join(risk_meta[tk])
-
-            # Final Order Generation
-            orders.append(Order(
-                ticker=tk, 
-                quantity=delta_qty, 
-                order_type=OrderType.MARKET, 
+            requests.append(AllocationRequest(
+                symbol=symbol,
+                mu=mu,
+                sigma=sigma,
+                confidence=confidence,
+                liquidity=1000000.0,
+                regime="NORMAL",
                 timestamp=timestamp,
-                reason=reason,
-                risk_metric_triggered=risk_metric
+                metadata=metadata.get(symbol, {})
             ))
-            
-            # --- UPDATE TRACKING STATE ---
-            if target_qty > 0 and current_qty == 0:
-                self.entry_prices[tk] = current_price
-                self.entry_timestamps[tk] = timestamp
-            elif target_qty == 0:
-                self.entry_prices.pop(tk, None)
-                self.entry_timestamps.pop(tk, None)
+        return requests
 
-        return AllocationResult(
-            target_weights=final_target_weights,
-            orders=orders,
-            meta=risk_meta
-        )
+    def _allocate_legacy(self, signals, prices, volumes, portfolio, ts, metadata=None, method="risk_parity"):
+        """
+        Legacy interface for backward compatibility.
+        """
+        from dataclasses import dataclass
+        @dataclass
+        class OrderList:
+            orders: List[Any]
+
+            def __len__(self):
+                """Enable len() support for OrderList (Sized protocol)."""
+                return len(self.orders)
+
+        # Try to use signals as the modern batch if it's a DataFrame
+        if isinstance(signals, pd.DataFrame):
+            # Convert signals DataFrame to requests and run capital auction
+            # This ensures we get Dict[str, float] return type directly
+            requests = self._signals_to_requests(signals, prices, metadata or {})
+            weights = self.allocate_batch(requests, prices=prices)
+
+            # Simplified order conversion
+            orders = []
+            for symbol, w in weights.items():
+                if abs(w) > 0.0001:
+                    orders.append({"symbol": symbol, "quantity": w})
+            return OrderList(orders=orders)
+
+        return OrderList(orders=[])
+

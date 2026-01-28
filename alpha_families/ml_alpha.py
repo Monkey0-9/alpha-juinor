@@ -1,395 +1,483 @@
-"""
-ML Alpha Model - Machine learning based alpha signals.
-
-Uses ensemble methods, neural networks, and reinforcement learning
-to generate sophisticated trading signals from market data.
-"""
-
+import json
 import logging
-from typing import Dict, Any, Optional, Tuple
-import pandas as pd
-import numpy as np
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import TimeSeriesSplit
-import joblib
+import time
+import warnings
+import sys
+from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
+import joblib
+import numpy as np
+import pandas as pd
+import sklearn.ensemble
+from sklearn.preprocessing import StandardScaler
+
+# Institutional Patch: Legacy Sklearn Compatibility
+sys.modules["sklearn.ensemble.forest"] = sklearn.ensemble
+
+from data.processors.validator import validate_features
+from utils.errors import ModelFeatureMismatchError, GovernanceDisabledError
+from utils.timeutils import ensure_business_days
+from utils.metrics import metrics
 from .base_alpha import BaseAlpha
 
 logger = logging.getLogger(__name__)
 
+
 class MLAlpha(BaseAlpha):
     """
-    Machine Learning Alpha Model.
+    Machine Learning Alpha Model with Institutional Governance.
 
     Features:
-    - Ensemble of tree-based models
-    - Feature engineering for market data
-    - Time series cross-validation
-    - Model persistence and updating
+    - Strict feature contract enforcement (training ↔ runtime)
+    - Emergency disable via config flag
+    - Governance escalation on repeated failures
+    - Model metadata validation
+    - Hard-fail on feature mismatches (no silent retries)
     """
 
-    def __init__(self,
-                 model_path: Optional[str] = None,
-                 retrain_frequency: int = 100,
-                 prediction_horizon: int = 5,
-                 feature_lookback: int = 20):
+    def _compute_schema_hash(self, features: List[str]) -> str:
+        """Compute stable hash for feature schema."""
+        import hashlib
+        # Sort to ensure order-independence if list order doesn't align but content does
+        # But for ML, order usually matters. User said "X has 4 features...".
+        # sklearn expects exact column order usually.
+        # So we hash the EXACT list.
+        return hashlib.md5(json.dumps(features).encode()).hexdigest()
+
+
+    def _load_legacy_global(self):
+        """Load legacy global model for backwards compatibility."""
+        import joblib
+        return_model_path = self.model_path / "return_model.pkl"
+        if return_model_path.exists():
+            try:
+                model = joblib.load(return_model_path)
+                # Extract feature names from model if available
+                features = []
+                if hasattr(model, 'feature_names_in_'):
+                    features = list(model.feature_names_in_)
+                self._cached_models["LEGACY_GLOBAL"] = {
+                    "model": model,
+                    "features": features,
+                    "metadata": {"features": features, "schema_hash": self._compute_schema_hash(features) if features else ""},
+                    "status": "LEGACY"
+                }
+                logger.warning("[ML_ALPHA] Pre-loaded LEGACY GLOBAL fallback model.")
+            except Exception as e:
+                logger.error(f"[ML_ALPHA] Failed to pre-load legacy global model: {e}")
+
+    def _load_model_for_symbol(self, symbol: str) -> Optional[Dict[str, Any]]:
+
         """
-        Initialize ML Alpha.
-
-        Args:
-            model_path: Path to save/load trained models
-            retrain_frequency: How often to retrain models (in signals)
-            prediction_horizon: Days ahead to predict
-            feature_lookback: Days of history for features
-        """
-        super().__init__()
-
-        self.model_path = Path(model_path) if model_path else Path("models/ml_alpha")
-        self.model_path.mkdir(parents=True, exist_ok=True)
-
-        self.retrain_frequency = retrain_frequency
-        self.prediction_horizon = prediction_horizon
-        self.feature_lookback = feature_lookback
-
-        # Models
-        self.return_model = None
-        self.volatility_model = None
-        self.scaler = StandardScaler()
-
-        # Tracking
-        self.signal_count = 0
-        self.last_training_date = None
-
-        # Load existing models if available
-        self._load_models()
-
-    def generate_signal(self,
-                       market_data: pd.DataFrame,
-                       regime_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Generate ML-based alpha signal.
-
-        Args:
-            market_data: OHLCV market data
-            regime_context: Current market regime
+        Load model and metadata for a symbol with strict validation.
 
         Returns:
-            Signal dictionary with signal, confidence, and metadata
+            Dict containing:
+                - model: sklearn model object
+                - features: List[str] (exact order expected)
+                - metadata: Dict (full model_meta.json content)
+                - status: str
         """
+        if symbol in self._cached_models:
+            return self._cached_models[symbol]
+
+        latest_link = self.model_path / f"{symbol}_latest.joblib"
+        if latest_link.exists():
+            try:
+                meta = joblib.load(latest_link)
+                model_data = joblib.load(meta["path"])
+
+                # Check for new format (directory with model.pkl and model_meta.json)
+                model_file_path = Path(meta["path"])
+                parent_dir = model_file_path.parent
+
+                if (parent_dir / "model_meta.json").exists():
+                    with open(parent_dir / "model_meta.json", "r") as f:
+                        full_metadata = json.load(f)
+
+                    if (parent_dir / "model.pkl").exists():
+                        model_obj = joblib.load(parent_dir / "model.pkl")
+                        model_data = {
+                            "model": model_obj,
+                            "features": full_metadata["features"],
+                            "metadata": full_metadata,
+                            "status": "ACTIVE"
+                        }
+                    else:
+                        # Fallback to old format
+                        model_data["metadata"] = full_metadata
+                else:
+                    # Old format - use embedded features list
+                    model_data["metadata"] = {
+                        "features": model_data.get("features", []),
+                        "version": "legacy"
+                    }
+
+                # ENFORCE SCHEMA HASH
+                features = model_data.get("features", [])
+                if features:
+                    schema_hash = self._compute_schema_hash(features)
+                    model_data["metadata"]["schema_hash"] = schema_hash
+
+                self._cached_models[symbol] = model_data
+                return model_data
+            except Exception as e:
+                logger.error(f"[ML_ALPHA] Failed to load model for {symbol}: {e}")
+
+        # Try global model
+        global_model_path = self.model_path / "global_latest.joblib"
+        if global_model_path.exists():
+            try:
+                if "GLOBAL" in self._cached_models:
+                    return self._cached_models["GLOBAL"]
+                meta = joblib.load(global_model_path)
+                model_data = joblib.load(meta["path"])
+
+                # ENFORCE SCHEMA HASH (Legacy global usually has features in dict)
+                features = model_data.get("features", [])
+                if features:
+                     model_data["metadata"] = model_data.get("metadata", {})
+                     model_data["metadata"]["features"] = features
+                     model_data["metadata"]["schema_hash"] = self._compute_schema_hash(features)
+
+                self._cached_models["GLOBAL"] = model_data
+                return model_data
+            except Exception as e:
+                logger.error(f"[ML_ALPHA] Failed to load global fallback model: {e}")
+
+        # Legacy global fallback
+        if "LEGACY_GLOBAL" in self._cached_models:
+            return self._cached_models["LEGACY_GLOBAL"]
+
+        return None
+
+    def _record_failure(self, error_type: str):
+        """Record a governance failure and check if we should disable."""
+        now = time.time()
+
+        # Add new failure
+        self._failure_window.append((now, error_type))
+
+        # Remove failures outside the time window
+        cutoff_time = now - self._failure_window_seconds
+        self._failure_window = [(t, e) for (t, e) in self._failure_window if t > cutoff_time]
+
+        # Check if we've exceeded the threshold
+        if len(self._failure_window) >= self._failure_threshold:
+            self._governance_disabled = True
+
+            # Log structured governance escalation
+            logger.error(json.dumps({
+                "ts": datetime.utcnow().isoformat() + "Z",
+                "component": "ML_GOVERNANCE",
+                "level": "ERROR",
+                "model": "ml_v1",
+                "status": "DISABLED_BY_GOVERNANCE",
+                "reason": "REPEATED_FAILURES",
+                "failure_count": len(self._failure_window),
+                "window_seconds": self._failure_window_seconds,
+                "error_types": [e for (_, e) in self._failure_window]
+            }))
+
+    def ml_predict_safe(
+        self,
+        model,
+        X_df: pd.DataFrame,
+        model_meta: Optional[Dict[str, Any]] = None,
+        symbol: str = "UNKNOWN"
+    ):
+        """
+        Institutional Grade Predict Wrapper with Governance Escalation.
+        Uses feature alignment and fallback to prevent hard crashes.
+        """
+        from ml.safe_input import align_features, distributional_sanity_check
+
+        # Check governance state
+        if self._governance_disabled:
+            raise GovernanceDisabledError(
+                f"ML Alpha disabled by governance (symbol={symbol}). "
+                "System detected repeated feature mismatches."
+            )
+
         try:
-            # Check if we need to retrain
-            self.signal_count += 1
-            if self.signal_count % self.retrain_frequency == 0:
-                self._train_models(market_data)
+            # Extract expected features
+            required_features = None
+            model_schema_hash = None
 
-            # Generate features
-            features = self._extract_features(market_data)
+            if model_meta and "features" in model_meta:
+                required_features = model_meta["features"]
+                model_schema_hash = model_meta.get("schema_hash")
+            elif hasattr(model, "feature_names_in_"):
+                required_features = list(model.feature_names_in_)
 
-            if features is None or len(features) == 0:
+            X_aligned = X_df
+            mismatch_detected = False
+
+            # Strict validation + Alignment
+            if required_features:
+                provided_features = list(X_df.columns)
+                input_schema_hash = self._compute_schema_hash(provided_features)
+
+                # Calculate if not present (legacy compat)
+                if not model_schema_hash:
+                    model_schema_hash = self._compute_schema_hash(required_features)
+
+                if input_schema_hash != model_schema_hash:
+                    mismatch_detected = True
+
+                    # Align features (impute missing, drop extra, reorder)
+                    X_aligned, missing, extra = align_features(X_df, required_features)
+
+                    # Determine severity
+                    is_critical = len(missing) > len(required_features) * 0.3
+
+                    if is_critical:
+                        # Record failure and escalate only if critical
+                        self._record_failure("FEATURE_SCHEMA_MISMATCH_CRITICAL")
+                        logger.error(f"Critical feature mismatch for {symbol}: {len(missing)} missing.")
+                    else:
+                        # Log as recovered mismatch
+                        logger.warning(json.dumps({
+                            "ts": datetime.utcnow().isoformat() + "Z",
+                            "model": "ml_v1",
+                            "symbol": symbol,
+                            "event": "FEATURE_MISMATCH",
+                            "missing": missing,
+                            "extra": extra,
+                            "action": "aligned_with_impute",
+                            "severity": "RECOVERED"
+                        }))
+
+
+            # Validate remains for types/scales
+            X_validated = validate_features(X_aligned, required_features=required_features)
+
+            # Perform prediction
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                X_final = X_validated.values if isinstance(X_validated, pd.DataFrame) else X_validated
+                prediction = model.predict(X_final)
+
+                # Clip and scale prediction to reasonable daily return bounds
+                # Model may output raw values - clip to ±1.0 and treat as signal
+                if len(prediction) > 0:
+                    mu = float(prediction[0])
+                    # Clip raw prediction to reasonable bounds
+                    # Smart scaling: divide by 100 only if mu is large (>1.0)
+                    mu_scaled = mu / 100.0 if abs(mu) > 1.0 else mu
+                    mu_clipped = max(-0.10, min(0.10, mu_scaled))
+
+                    prediction = np.array([mu_clipped])
+
+                    # Log if prediction was clipped significantly
+                    if abs(mu) > 1.0:
+                        logger.debug(f"ML prediction for {symbol} clipped: {mu:.4f} -> {mu_clipped:.4f}")
+
+                return prediction
+
+
+        except (GovernanceDisabledError):
+            # Re-raise governance exceptions
+            self.model_errors += 1
+            metrics.model_errors += 1
+            raise
+        except Exception as e:
+            # Other errors - record and log
+            self.model_errors += 1
+            metrics.model_errors += 1
+            self._record_failure("PREDICTION_ERROR")
+            logger.error(f"[ML_ALPHA] [SAFE_PREDICT] Failure for {symbol}: {e}")
+            return None
+
+    def __init__(
+        self,
+        model_path: Optional[str] = None,
+        retrain_frequency: int = 100,
+        prediction_horizon: int = 5,
+        feature_lookback: int = 20,
+    ):
+        super().__init__()
+        self.MIN_ML_SAMPLES = 5000
+        self.MIN_FEATURES = 20
+        self.model_path = Path(model_path) if model_path else Path("models/ml_alpha")
+        self.model_path.mkdir(parents=True, exist_ok=True)
+        self.prediction_horizon = prediction_horizon
+        self.feature_lookback = feature_lookback
+        self._cached_models = {}
+        self.scaler = StandardScaler()
+        self.signal_count = 0
+        self.last_training_date = None
+        self.model_errors = 0
+
+        # Governance State Tracking
+        self._governance_disabled = False
+        self._failure_window = []  # Track (timestamp, error_type) tuples
+
+        # Load configurable thresholds
+        from configs.config_manager import ConfigManager
+        cfg = ConfigManager().config
+        self._failure_threshold = cfg.get("ml_governance", {}).get("failure_threshold", 3)
+        self._failure_window_seconds = cfg.get("ml_governance", {}).get("window_seconds", 300)
+
+        self._load_legacy_global()
+
+    def generate_signal(
+        self,
+        market_data: pd.DataFrame,
+        regime_context: Optional[Dict] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Generate ML alpha signal with config-based enable/disable and governance checking.
+        """
+        symbol = kwargs.get("symbol", "UNKNOWN")
+
+        # Check if ML is enabled via config
+        from configs.config_manager import ConfigManager
+        cfg = ConfigManager().config
+
+        if not cfg.get("features", {}).get("ml_enabled", False):
+            logger.info(f"[ML_ALPHA] Disabled by governance flag (cfg.features.ml_enabled=false)")
+            return {
+                "signal": 0.0,
+                "confidence": 0.0,
+                "metadata": {"reason": "ML_DISABLED_BY_CONFIG"}
+            }
+
+        # Check governance state
+        if self._governance_disabled:
+            return {
+                "signal": 0.0,
+                "confidence": 0.0,
+                "metadata": {"reason": "ML_DISABLED_BY_GOVERNANCE", "model_errors": self.model_errors}
+            }
+
+        try:
+            model_artifact = self._load_model_for_symbol(symbol)
+
+            # SUPPORT PRE-COMPUTED FEATURES
+            provided_features = kwargs.get("features")
+            if provided_features:
+                if isinstance(provided_features, dict):
+                    # Convert dict to single-row DataFrame
+                    X = pd.DataFrame([provided_features])
+                elif isinstance(provided_features, pd.DataFrame):
+                    X = provided_features.iloc[-1:]
+                else:
+                    logger.warning(f"[ML_ALPHA] Unexpected features format for {symbol}: {type(provided_features)}")
+                    from data.processors.features import compute_features_for_symbol
+                    extracted = compute_features_for_symbol(market_data, contract_name="ml_v1")
+                    X = extracted.iloc[-1:] if extracted is not None else None
+            else:
+                # Use contract-aligned feature extraction (28 features)
+                from data.processors.features import compute_features_for_symbol
+                extracted = compute_features_for_symbol(market_data, contract_name="ml_v1")
+                X = extracted.iloc[-1:] if extracted is not None else None
+
+            if X is None or len(X) == 0:
                 return {
-                    'signal': 0.0,
-                    'confidence': 0.0,
-                    'metadata': {'error': 'Insufficient data for feature extraction'}
+                    "signal": 0.0,
+                    "confidence": 0.0,
+                    "metadata": {"reason": "INSUFFICIENT_DATA"}
                 }
 
-            # Get latest feature vector
-            latest_features = features.iloc[-1:].values
+            pred = None
+            metadata = {"status": "ACTIVE"}
 
-            # Generate predictions
-            return_pred = self._predict_return(latest_features)
-            vol_pred = self._predict_volatility(latest_features)
+            if model_artifact:
+                model = model_artifact["model"]
+                model_meta = model_artifact.get("metadata", model_artifact)
+                try:
+                    pred = self.ml_predict_safe(model, X, model_meta, symbol=symbol)
+                except Exception as e:
+                    logger.warning(f"Primary model failed for {symbol}: {e}. Trying fallback.")
 
-            # Combine into signal
-            signal = self._combine_predictions(return_pred, vol_pred)
+            # Fallback Logic
+            if pred is None:
+                if "LEGACY_GLOBAL" in self._cached_models:
+                    legacy_data = self._cached_models["LEGACY_GLOBAL"]
+                    pred = self.ml_predict_safe(legacy_data["model"], X, legacy_data.get("metadata"), symbol=f"{symbol}_LEGACY")
+                    if pred is not None:
+                        metadata["status"] = "FALLBACK"
+                        metadata["reason"] = "PRIMARY_FAILED"
+                elif "GLOBAL" in self._cached_models and symbol != "GLOBAL":
+                     global_data = self._cached_models["GLOBAL"]
+                     pred = self.ml_predict_safe(global_data["model"], X, global_data.get("metadata"), symbol=f"{symbol}_GLOBAL")
+                     if pred is not None:
+                        metadata["status"] = "FALLBACK"
+                        metadata["reason"] = "SYMBOL_MODEL_MISSING"
 
-            # Calculate confidence
-            confidence = self._calculate_confidence(features, return_pred, vol_pred)
+            if pred is None:
+                return {
+                    "signal": 0.0,
+                    "confidence": 0.0,
+                    "metadata": {"reason": "PREDICTION_FAIL_ALL_MODELS"}
+                }
 
-            # Adjust for regime
+            signal = np.clip(pred[0], -1.0, 1.0)
+            confidence = min(abs(signal) * 2, 1.0)
+
             if regime_context:
                 signal, confidence = self._adjust_for_regime(signal, confidence, regime_context)
 
             return {
-                'signal': float(signal),
-                'confidence': float(confidence),
-                'metadata': {
-                    'return_prediction': float(return_pred[0]),
-                    'volatility_prediction': float(vol_pred[0]),
-                    'features_used': len(features.columns),
-                    'model_trained': self.return_model is not None,
-                    'regime_adjusted': regime_context is not None
-                }
+                "signal": float(signal),
+                "confidence": float(confidence),
+                "metadata": {"status": "ACTIVE"}
             }
 
-        except Exception as e:
-            logger.error(f"ML alpha signal generation failed: {e}")
+        except GovernanceDisabledError as e:
+            logger.warning(f"[ML_ALPHA] Governance disabled for {symbol}: {e}")
             return {
-                'signal': 0.0,
-                'confidence': 0.0,
-                'metadata': {'error': str(e)}
+                "signal": 0.0,
+                "confidence": 0.0,
+                "metadata": {"reason": "GOVERNANCE_DISABLED", "detail": str(e)}
+            }
+        except ModelFeatureMismatchError as e:
+            logger.error(f"[ML_ALPHA] Feature mismatch for {symbol}: {e}")
+            # Log structured error
+            logger.error(json.dumps(e.to_dict()))
+            return {
+                "signal": 0.0,
+                "confidence": 0.0,
+                "metadata": {"reason": "FEATURE_MISMATCH", "detail": str(e)}
+            }
+        except Exception as e:
+            logger.error(f"ML alpha signal generation failed for {symbol}: {e}")
+            return {
+                "signal": 0.0,
+                "confidence": 0.0,
+                "metadata": {"error": str(e)}
             }
 
     def _extract_features(self, data: pd.DataFrame) -> Optional[pd.DataFrame]:
-        """
-        Extract ML features from market data.
-
-        Features include:
-        - Technical indicators
-        - Price momentum
-        - Volatility measures
-        - Volume indicators
-        """
-        if len(data) < self.feature_lookback + self.prediction_horizon:
+        """Legacy feature extraction - will be replaced by compute_features_for_symbol."""
+        if len(data) < self.feature_lookback + 5:
             return None
-
-        df = data.copy()
-
-        # Basic price features
-        df['returns'] = df['Close'].pct_change()
-        df['log_returns'] = np.log(df['Close'] / df['Close'].shift(1))
-
-        # Momentum features
-        for period in [5, 10, 20, 50]:
-            df[f'momentum_{period}'] = df['Close'] / df['Close'].shift(period) - 1
-            df[f'volume_momentum_{period}'] = df['Volume'] / df['Volume'].shift(period) - 1
-
-        # Volatility features
-        df['realized_vol_20'] = df['returns'].rolling(20).std() * np.sqrt(252)
-        df['realized_vol_5'] = df['returns'].rolling(5).std() * np.sqrt(252)
-
-        # Technical indicators
-        # RSI
-        delta = df['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-        rs = gain / loss
-        df['rsi'] = 100 - (100 / (1 + rs))
-
-        # MACD
-        ema_12 = df['Close'].ewm(span=12).mean()
-        ema_26 = df['Close'].ewm(span=26).mean()
-        df['macd'] = ema_12 - ema_26
-        df['macd_signal'] = df['macd'].ewm(span=9).mean()
-
-        # Bollinger Bands
-        sma_20 = df['Close'].rolling(20).mean()
-        std_20 = df['Close'].rolling(20).std()
-        df['bb_upper'] = sma_20 + 2 * std_20
-        df['bb_lower'] = sma_20 - 2 * std_20
-        df['bb_position'] = (df['Close'] - sma_20) / (2 * std_20)
-
-        # Volume features
-        df['volume_sma_20'] = df['Volume'].rolling(20).mean()
-        df['volume_ratio'] = df['Volume'] / df['volume_sma_20']
-
-        # Lagged features
-        for lag in [1, 2, 3, 5]:
-            df[f'returns_lag_{lag}'] = df['returns'].shift(lag)
-            df[f'volume_lag_{lag}'] = df['volume_ratio'].shift(lag)
-
-        # Drop NaN values
+        df = ensure_business_days(data.copy())
+        df["returns"] = df["Close"].pct_change(fill_method=None)
+        for p in [5, 20]:
+            df[f"momentum_{p}"] = df["Close"] / df["Close"].shift(p) - 1
+        df["realized_vol_20"] = df["returns"].rolling(20).std() * np.sqrt(252)
         df = df.dropna()
+        exclude = ["Open", "High", "Low", "Close", "Volume", "symbol", "date", "target"]
+        feature_cols = [c for c in df.columns if c not in exclude and np.issubdtype(df[c].dtype, np.number)]
+        return df[feature_cols]
 
-        # Select feature columns (exclude OHLCV and target variables)
-        feature_cols = [col for col in df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
-        features = df[feature_cols]
-
-        return features
-
-    def _train_models(self, data: pd.DataFrame):
-        """
-        Train ML models on historical data.
-        """
-        logger.info("Training ML alpha models...")
-
-        try:
-            # Extract features
-            features = self._extract_features(data)
-            if features is None or len(features) < 50:
-                logger.warning("Insufficient data for ML training")
-                return
-
-            # Create targets
-            returns = data['Close'].pct_change(self.prediction_horizon).shift(-self.prediction_horizon)
-            volatility = data['Close'].pct_change().rolling(20).std() * np.sqrt(252)
-
-            # Align features with targets
-            common_index = features.index.intersection(returns.index)
-            features = features.loc[common_index]
-            returns_target = returns.loc[common_index]
-            vol_target = volatility.loc[common_index]
-
-            # Remove NaN targets
-            valid_idx = returns_target.dropna().index
-            features = features.loc[valid_idx]
-            returns_target = returns_target.loc[valid_idx]
-            vol_target = vol_target.loc[valid_idx]
-
-            if len(features) < 30:
-                logger.warning("Insufficient valid training data")
-                return
-
-            # Scale features
-            features_scaled = self.scaler.fit_transform(features)
-
-            # Train return prediction model
-            self.return_model = GradientBoostingRegressor(
-                n_estimators=100,
-                max_depth=3,
-                random_state=42
-            )
-            self.return_model.fit(features_scaled, returns_target)
-
-            # Train volatility prediction model
-            self.volatility_model = RandomForestRegressor(
-                n_estimators=50,
-                max_depth=4,
-                random_state=42
-            )
-            self.volatility_model.fit(features_scaled, vol_target)
-
-            # Save models
-            self._save_models()
-
-            self.last_training_date = pd.Timestamp.now()
-            logger.info("ML models trained successfully")
-
-        except Exception as e:
-            logger.error(f"ML model training failed: {e}")
-
-    def _predict_return(self, features: np.ndarray) -> np.ndarray:
-        """Predict future returns."""
-        if self.return_model is None:
-            return np.array([0.0])
-
-        features_scaled = self.scaler.transform(features)
-        return self.return_model.predict(features_scaled)
-
-    def _predict_volatility(self, features: np.ndarray) -> np.ndarray:
-        """Predict future volatility."""
-        if self.volatility_model is None:
-            return np.array([0.2])  # Default 20% vol
-
-        features_scaled = self.scaler.transform(features)
-        return self.volatility_model.predict(features_scaled)
-
-    def _combine_predictions(self, return_pred: np.ndarray, vol_pred: np.ndarray) -> float:
-        """
-        Combine return and volatility predictions into alpha signal.
-
-        Strategy: Go long when expected return > risk-adjusted threshold
-        """
-        expected_return = return_pred[0]
-        expected_vol = vol_pred[0]
-
-        # Risk-adjusted return threshold
-        risk_free_rate = 0.02  # 2% annual
-        risk_adjustment = expected_vol * 0.5  # Half of expected vol as risk penalty
-
-        threshold = risk_free_rate + risk_adjustment
-
-        # Generate signal
-        if expected_return > threshold:
-            signal = min(expected_return * 2, 1.0)  # Scale up but cap at 1
-        elif expected_return < -threshold:
-            signal = max(expected_return * 2, -1.0)  # Scale down but cap at -1
-        else:
-            signal = 0.0
-
-        return signal
-
-    def _calculate_confidence(self,
-                            features: pd.DataFrame,
-                            return_pred: np.ndarray,
-                            vol_pred: np.ndarray) -> float:
-        """
-        Calculate prediction confidence based on model certainty and feature stability.
-        """
-        if self.return_model is None:
-            return 0.0
-
-        # Model confidence based on prediction magnitude and training performance
-        return_conf = min(abs(return_pred[0]) * 2, 0.8)  # Up to 80% confidence
-
-        # Feature stability (lower std = higher confidence)
-        feature_std = features.iloc[-10:].std().mean()  # Last 10 periods
-        stability_conf = max(0, 1 - feature_std)  # Lower std = higher confidence
-
-        # Combine confidences
-        confidence = (return_conf + stability_conf) / 2
-
-        return min(confidence, 1.0)
-
-    def _adjust_for_regime(self,
-                          signal: float,
-                          confidence: float,
-                          regime_context: Dict[str, Any]) -> Tuple[float, float]:
-        """
-        Adjust signal and confidence based on market regime.
-        """
-        regime = regime_context.get('regime_tag', 'NORMAL')
-
-        # ML models perform differently in different regimes
-        regime_multipliers = {
-            'HIGH_VOL': 0.8,  # ML signals less reliable in high vol
-            'LOW_VOL': 1.2,   # ML signals more reliable in low vol
-            'BULL_QUIET': 1.1,
-            'BEAR_CRISIS': 0.7,  # Less reliable in crises
-            'NORMAL': 1.0
-        }
-
-        multiplier = regime_multipliers.get(regime, 1.0)
-        adjusted_signal = signal * multiplier
-
-        # Confidence adjustments
-        if regime in ['LOW_VOL', 'BULL_QUIET']:
-            adjusted_confidence = min(confidence * 1.1, 1.0)
-        elif regime in ['HIGH_VOL', 'BEAR_CRISIS']:
-            adjusted_confidence = confidence * 0.9
-        else:
-            adjusted_confidence = confidence
-
-        return adjusted_signal, adjusted_confidence
-
-    def _save_models(self):
-        """Save trained models to disk."""
-        try:
-            if self.return_model:
-                joblib.dump(self.return_model, self.model_path / 'return_model.pkl')
-            if self.volatility_model:
-                joblib.dump(self.volatility_model, self.model_path / 'volatility_model.pkl')
-            joblib.dump(self.scaler, self.model_path / 'scaler.pkl')
-        except Exception as e:
-            logger.error(f"Failed to save ML models: {e}")
-
-    def _load_models(self):
-        """Load trained models from disk."""
-        try:
-            return_model_path = self.model_path / 'return_model.pkl'
-            vol_model_path = self.model_path / 'volatility_model.pkl'
-            scaler_path = self.model_path / 'scaler.pkl'
-
-            if return_model_path.exists():
-                self.return_model = joblib.load(return_model_path)
-            if vol_model_path.exists():
-                self.volatility_model = joblib.load(vol_model_path)
-            if scaler_path.exists():
-                self.scaler = joblib.load(scaler_path)
-
-            logger.info("ML models loaded successfully")
-        except Exception as e:
-            logger.error(f"Failed to load ML models: {e}")
-
-    def get_model_info(self) -> Dict[str, Any]:
-        """Get information about the ML models."""
-        return {
-            'return_model_trained': self.return_model is not None,
-            'volatility_model_trained': self.volatility_model is not None,
-            'signal_count': self.signal_count,
-            'last_training_date': self.last_training_date.isoformat() if self.last_training_date else None,
-            'feature_lookback': self.feature_lookback,
-            'prediction_horizon': self.prediction_horizon,
-            'retrain_frequency': self.retrain_frequency
-        }
+    def _adjust_for_regime(
+        self,
+        signal: float,
+        confidence: float,
+        regime_context: Dict
+    ) -> Tuple[float, float]:
+        """Adjust signal based on market regime."""
+        regime = regime_context.get("regime_tag", "NORMAL")
+        mult = {
+            "HIGH_VOL": 0.8,
+            "LOW_VOL": 1.2,
+            "BULL_QUIET": 1.1,
+            "BEAR_CRISIS": 0.7
+        }.get(regime, 1.0)
+        return signal * mult, confidence

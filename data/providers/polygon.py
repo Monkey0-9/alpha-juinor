@@ -25,7 +25,10 @@ class PolygonDataProvider(DataProvider):
         config = get_config()
         self.api_key = config.get('data_providers', {}).get('polygon_api_key')
         if not self.api_key:
-            raise ValueError("Polygon API key not found in config. Add 'data_providers.polygon_api_key' to golden_config.yaml")
+            logger.warning("Polygon API key not found in config. Add 'data_providers.polygon_api_key' to golden_config.yaml")
+            self._authenticated = False
+        else:
+            self._authenticated = True
 
     def fetch_ohlcv(self, ticker: str, start_date: str, end_date: str = None) -> pd.DataFrame:
         if end_date is None:

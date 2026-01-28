@@ -68,7 +68,8 @@ class AlternativeAlpha(BaseAlpha):
 
     def generate_signal(self,
                        market_data: pd.DataFrame,
-                       regime_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                       regime_context: Optional[Dict[str, Any]] = None,
+                       **kwargs) -> Dict[str, Any]:
         """
         Generate alternative data alpha signal.
 
@@ -157,7 +158,11 @@ class AlternativeAlpha(BaseAlpha):
         sentiment = base_sentiment + noise
 
         # Apply decay to older sentiment
-        days_old = (pd.Timestamp.now() - current_date).days
+        if hasattr(current_date, 'tz') and current_date.tz:
+            now = pd.Timestamp.now(tz=current_date.tz)
+        else:
+            now = pd.Timestamp.now()
+        days_old = (now - current_date).days
         decay_factor = np.exp(-days_old / self.sentiment_decay_days)
 
         return np.clip(sentiment * decay_factor, -1.0, 1.0)

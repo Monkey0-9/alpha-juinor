@@ -1,0 +1,25 @@
+providers:
+  yahoo:
+    stocks: true
+    fx: true
+    crypto: true
+    commodities: true
+    max_history_days: 10000
+    requires_entitlement: false
+    initial_confidence: 0.85
+  alpaca:
+    stocks: true
+    fx: false
+    crypto: true
+    commodities: false
+    max_history_days: 730
+    requires_entitlement: true
+    initial_confidence: 0.90
+  polygon:
+    stocks: true
+    fx: true
+    crypto: true
+    commodities: false
+    max_history_days: 5000
+    requires_entitlement: true
+    initial_confidence: 0.95

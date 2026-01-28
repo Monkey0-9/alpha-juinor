@@ -24,6 +24,7 @@ class AlertCategory(Enum):
     SYSTEM = "SYSTEM"
     MARKET_DATA = "MARKET_DATA"
     TRADING = "TRADING"
+    DATA_QUALITY = "DATA_QUALITY"
 
 @dataclass
 class AlertMetrics:
@@ -53,7 +54,11 @@ class AlertManager:
     Institutional Alerting System.
     Supports Telegram, Slack, and Discord.
     """
-    
+
+    # Alert thresholds
+    DATA_QUALITY_THRESHOLD = 0.6
+    DATA_MISSING_DAYS_THRESHOLD = 0  # Alert on any missing days
+
     def __init__(self):
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
@@ -67,7 +72,7 @@ class AlertManager:
         self._heartbeat_interval = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", 3600))  # 1 hour default
         self._last_heartbeat = 0
         self._last_status = None  # Track status changes
-        
+
     def validate_config(self) -> bool:
         """Check if at least one alert channel is configured."""
         configured = any([
@@ -78,12 +83,12 @@ class AlertManager:
         if not configured:
             logger.warning("No external alerting channels (Telegram/Slack/Discord) configured.")
         return configured
-        
+
     def send_telegram(self, message: str):
         """Send message via Telegram."""
         if not self.telegram_bot_token or not self.telegram_chat_id:
             return
-            
+
         url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
         payload = {
             "chat_id": self.telegram_chat_id,
@@ -99,7 +104,7 @@ class AlertManager:
         """Send message via Slack Webhook."""
         if not self.slack_webhook_url:
             return
-            
+
         payload = {"text": f"*[QUANT-FUND]*: {message}"}
         try:
             requests.post(self.slack_webhook_url, json=payload, timeout=5)
@@ -110,14 +115,14 @@ class AlertManager:
         """Send message via Discord Webhook."""
         if not self.discord_webhook_url:
             return
-            
+
         payload = {"content": f"**[QUANT-FUND]**: {message}"}
         try:
             requests.post(self.discord_webhook_url, json=payload, timeout=5)
         except Exception as e:
             logger.error(f"Discord alert failed: {e}")
 
-    def alert(self, message: str, level: str = "INFO"):
+    def alert(self, message: str, level: str = "INFO", category: AlertCategory = AlertCategory.SYSTEM):
         """Broadcast alert to all enabled channels with deduplication."""
         # Check notification level
         level_upper = level.upper()
@@ -148,6 +153,63 @@ class AlertManager:
         self.send_telegram(msg)
         self.send_slack(msg)
         self.send_discord(msg)
+
+    # Data Quality Alert Methods (NEW)
+    def alert_data_quality_failure(
+        self,
+        symbol: str,
+        quality_score: float,
+        reasons: list
+    ):
+        """
+        Alert on data quality failure for a symbol.
+
+        Args:
+            symbol: Ticker symbol
+            quality_score: Quality score (0-1)
+            reasons: List of failure reasons
+        """
+        message = (
+            f"DATA_QUALITY_FAILURE | Symbol: {symbol} | "
+            f"Score: {quality_score:.2f} | Reasons: {'; '.join(reasons)}"
+        )
+        # Critical if score is very low
+        severity = "CRITICAL" if quality_score < 0.3 else "HIGH" if quality_score < 0.5 else "WARNING"
+        self.alert(message, level=severity, category=AlertCategory.DATA_QUALITY)
+
+    def alert_data_missing_days(self, missing_count: int, threshold: int = 0):
+        """
+        Alert when data is missing for trading days.
+
+        Args:
+            missing_count: Number of missing days
+            threshold: Alert threshold (default 0 = alert on any)
+        """
+        if missing_count > threshold:
+            message = (
+                f"DATA_MISSING_DAYS | Missing: {missing_count} trading days | "
+                f"Threshold: {threshold}"
+            )
+            self.alert(
+                message,
+                level="HIGH" if missing_count > 10 else "WARNING",
+                category=AlertCategory.DATA_QUALITY
+            )
+
+    def alert_quality_threshold_breach(self, avg_quality_score: float, threshold: float = DATA_QUALITY_THRESHOLD):
+        """
+        Alert when average quality score falls below threshold.
+
+        Args:
+            avg_quality_score: Average quality score across all symbols
+            threshold: Minimum acceptable quality score
+        """
+        if avg_quality_score < threshold:
+            message = (
+                f"QUALITY_THRESHOLD_BREACH | Avg Score: {avg_quality_score:.4f} | "
+                f"Threshold: {threshold}"
+            )
+            self.alert(message, level="CRITICAL", category=AlertCategory.DATA_QUALITY)
 
     def heartbeat(self, diagnosis: Optional[str] = None, force: bool = False):
         """Send a specialized heartbeat ping with resource usage - only on state changes or intervals."""
@@ -193,3 +255,12 @@ alert_manager = AlertManager()
 def alert(message: str, level: str = "INFO"):
     """Convenience function for system-wide alerting."""
     alert_manager.alert(message, level)
+
+def alert_data_quality_failure(symbol: str, quality_score: float, reasons: list):
+    """Convenience function for data quality failure alerts."""
+    alert_manager.alert_data_quality_failure(symbol, quality_score, reasons)
+
+def alert_data_missing_days(missing_count: int, threshold: int = 0):
+    """Convenience function for missing data alerts."""
+    alert_manager.alert_data_missing_days(missing_count, threshold)
+

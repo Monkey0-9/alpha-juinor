@@ -1,0 +1,42 @@
+# Global Regime Override Matrix (Ticket 21)
+# These limits are enforced BLINDLY by Allocator and Execution engines.
+
+CRISIS:
+  max_gross_exposure: 0.20
+  max_position_size: 0.01
+  execution_mode: "DISABLED"  # Stop all buying
+  stop_loss_multiplier: 0.5   # Tighten stops
+  min_confidence: 0.9         # Only high confidence trades allowed (if any)
+  lambda_cvar: 2.0            # Quintuple penalty on tail risk
+
+RISK_OFF:
+  max_gross_exposure: 0.50
+  max_position_size: 0.05
+  execution_mode: "PASSIVE_ONLY"
+  stop_loss_multiplier: 0.8
+  min_confidence: 0.7
+  lambda_cvar: 1.0
+
+LIQUIDITY_STRESS:
+  max_gross_exposure: 0.30
+  max_position_size: 0.02
+  execution_mode: "LIQUIDITY_P" # Provider-algo only
+  stop_loss_multiplier: 0.6
+  min_confidence: 0.8
+  lambda_cvar: 1.5
+
+NORMAL:
+  max_gross_exposure: 1.0
+  max_position_size: 0.10
+  execution_mode: "NORMAL"
+  stop_loss_multiplier: 1.0
+  min_confidence: 0.5
+  lambda_cvar: 0.5
+
+RISK_ON:
+  max_gross_exposure: 1.5
+  max_position_size: 0.15
+  execution_mode: "AGGRESSIVE"
+  stop_loss_multiplier: 1.2
+  min_confidence: 0.4
+  lambda_cvar: 0.2

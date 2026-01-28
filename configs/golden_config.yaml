@@ -7,20 +7,258 @@
 # 1. Trading Universe
 universe:
   tickers:
-    - QQQ
+    - AAPL
+    - ABBV
+    - ABT
+    - ADA-USD
+    - ADI
+    - ADP
+    - ADSK
+    - AEP
+    - AFRM
+    - AI
+    - ALGN
+    - AMD
+    - AMGN
+    - AMZN
+    - ANSS
+    - AUDUSD=X
+    - AVAX-USD
+    - AVGO
+    - AXP
+    - BA
+    - BAC
+    - BDX
+    - BK
+    - BKNG
+    - BKR
+    - BLK
+    - BMY
     - BTC-USD
-    - NVDA
+    - C
+    - CAD=X
+    - CAT
+    - CC=F
+    - CDNS
+    - CFG
+    - CHF=X
+    - CI
+    - CL
+    - CL=F
+    - CMCSA
+    - COF
+    - COIN
+    - COP
+    - COST
+    - CPRT
+    - CRWD
+    - CSCO
+    - CSX
+    - CTAS
+    - CTSH
+    - CVNA
+    - CVS
+    - CVX
+    - DDOG
+    - DE
+    - DG
+    - DHR
+    - DIA
+    - DKNG
+    - DLTR
+    - DOGE-USD
+    - DOT-USD
+    - EA
+    - EBAY
+    - EEM
+    - EFA
+    - EL
+    - ELV
+    - EMR
+    - EOG
     - ETH-USD
+    - ETN
+    - EURUSD=X
+    - EW
+    - EXC
+    - FAST
+    - FDX
+    - FITB
+    - FTNT
+    - GBPUSD=X
+    - GC=F
+    - GD
+    - GE
+    - GEHC
+    - GILD
+    - GIS
+    - GLD
+    - GOOGL
+    - GS
+    - HAL
+    - HBAN
+    - HCA
+    - HD
+    - HES
+    - HG=F
+    - HON
+    - HOOD
+    - HYG
+    - IDXX
+    - INTC
+    - INTU
+    - ISRG
+    - ITW
+    - IWM
+    - IYR
+    - JNJ
+    - JPM
+    - JPY=X
+    - KC=F
+    - KDP
+    - KEY
+    - KHC
+    - KLAC
+    - KMB
+    - KMI
+    - KO
+    - KR
+    - LINK-USD
+    - LLY
+    - LMT
+    - LOW
+    - LQD
+    - LRCX
+    - LTC-USD
+    - MA
+    - MAR
+    - MATIC-USD
+    - MCD
+    - MCHP
+    - MDLZ
+    - MELI
+    - META
+    - MMM
+    - MNST
+    - MPC
+    - MRK
+    - MRVL
+    - MS
     - MSFT
-  data_source: "yahoo"
+    - MSTR
+    - NET
+    - NFLX
+    - NG=F
+    - NKE
+    - NOC
+    - NVDA
+    - NXPI
+    - ODFL
+    - ORLY
+    - OXY
+    - PANW
+    - PATH
+    - PAYX
+    - PCAR
+    - PEP
+    - PFE
+    - PG
+    - PLTR
+    - PNC
+    - PSX
+    - PXD
+    - PYPL
+    - QCOM
+    - QQQ
+    - RBLX
+    - REGN
+    - RF
+    - RKA
+    - ROST
+    - RSG
+    - RTX
+    - SB=F
+    - SBUX
+    - SCHW
+    - SI=F
+    - SIRI
+    - SLB
+    - SLV
+    - SMH
+    - SNPS
+    - SOFI
+    - SOL-USD
+    - SPY
+    - STT
+    - SYK
+    - SYY
+    - TFC
+    - TGT
+    - TJX
+    - TLT
+    - TMO
+    - TMUS
+    - TSLA
+    - TXN
+    - U
+    - UNG
+    - UNH
+    - UNI-USD
+    - UNP
+    - UPS
+    - UPST
+    - USB
+    - USO
+    - V
+    - VLO
+    - VNQ
+    - VRSK
+    - VRTX
+    - WBD
+    - WFC
+    - WM
+    - WMB
+    - WMT
+    - XEL
+    - XLB
+    - XLE
+    - XLF
+    - XLI
+    - XLK
+    - XLP
+    - XLU
+    - XLV
+    - XLY
+    - XOM
+    - XRP-USD
+    - ZS
+    - ZTS
+  data_source: "alpaca"
+  broker: "alpaca"
 
 # 2. Execution Parameters
 execution:
-  mode: "paper"  # paper | backtest | live
+  mode: "live"  # paper | backtest | live
+  enabled: true # Feature flag for execution decision layer
   initial_capital: 1000000.0
   rebalance_frequency: "daily"
-  commission_bps: 2.0  # 0.02% 
+  commission_bps: 2.0  # 0.02%
   slippage_model: "probabilistic"
+
+  # Execution Decision Layer defaults (override by trading_mode)
+  min_notional_usd: 200
+  min_weight_change: 0.0025
+  min_conviction: 0.30
+  max_skip_cycles: 3
+  min_qty: 1
+  safety_buffer_usd: 5.0
+
+# "Safe mode" execution: only passive limit orders
+execution_defaults:
+  aggressiveness: passive
+  max_twap_participation: 0.05
+
+trading_mode: "cautious" # research | cautious | active | aggressive
 
 # 3. Alpha Ensemble Weights
 alpha:
@@ -29,18 +267,31 @@ alpha:
   macro_weight: 0.0  # Optional overlay disabled for baseline
   use_regime_filter: true
 
-# 4. Institutional Risk Limits (HARD LIMITS)
+# 4. Institutional Risk Limits (HARDENED / EMERGENCY)
 risk:
-  max_gross_leverage: 2.0  # Increased from 1.0 for "Hedge Fund" sizing
-  target_volatility_annualized: 0.25 # Increased from 0.15 (More aggressive)
-  position_concentration_limit: 0.20 # Allow 20% in single conviction bet
-  max_drawdown_limit: 0.25 # Allow deeper drawdowns for higher alpha
+  max_gross_leverage: 0.5  # EMERGENCY: Reduced from 2.0
+  target_volatility_annualized: 0.10 # Reduced from 0.25
+  position_concentration_limit: 0.10 # Reduced from 0.20
+  max_drawdown_limit: 0.05 # Stricter limit 5%
+  cvar_limit: 0.03
+
+# 4.1 Optimizer Parameters (Hardened)
+optimizer:
+  lambda_risk: 4.0      # Increased risk aversion
+  gamma_cvar: 8.0       # Higher tail aversion
+  kappa_turnover: 0.1   # Heavier turnover penalty
+  uncertainty_radius: 1.5
 
 # 5. Monitoring & Reconciliation
 ops:
   reconciliation_threshold_bps: 10.0 # 0.1% drift allowed
   min_data_fill_rate: 0.95
   alert_level: "INFO"
+
+# 5.1 Database Hardening
+database:
+  sqlite_wal: true
+  sqlite_busy_timeout_ms: 5000
 
 # 6. Notification & Alerting (Added for spam reduction)
 notifications:
@@ -52,6 +303,8 @@ notifications:
 
 # 6. Feature Flags (Institutional Upgrades)
 features:
+  ml_enabled: true  # ACTIVATED: Shadow Mode for Alpha Rehabilitation
+  ml_mode: shadow  # ML operating mode: disabled | shadow | live
   use_regime_detection: true
   use_wyckoff_filter: true
   use_auction_market_confidence: true
@@ -62,7 +315,39 @@ features:
   use_vpin_filter: true
   use_cointegration_filter: false # Research only for now
 
+# 7. ML Quality Gates
+ml_quality:
+  min_sharpe: 0.5          # Minimum Sharpe ratio for model approval
+  max_drawdown: 0.20       # Maximum 20% drawdown
+  min_ic: 0.05             # Minimum information coefficient
+
 # 7. Data Provider API Keys
 data_providers:
   polygon_api_key: "bRAf6qbh9IkaI_ZlU2CrItZFqR2m00zq"
   news_api_key: "0382afa018fe447abb2787152dc806c1"
+# 8. ML Governance
+ml_governance:
+  failure_threshold: 10  # Reduced aggression: allow 10 critical failures per window
+  window_seconds: 600    # 10 minute window
+
+# 9. Quantum Physics Modules (FROZEN SPEC)
+# Any change requires Governance Approval + Decision Log
+quantum:
+  # Regime State Space (B, B, S, V, C)
+  regimes: 5
+
+  # Entanglement (Coupling Phase Transition)
+  tail_quantile: 0.05
+  entanglement_threshold: 0.7
+  entanglement_beta: 0.5  # Cap reduction factor
+
+  # Path Integral (Feynman-Kac Stress)
+  path_integral:
+    samples: 2000
+    importance_bias: 0.10  # Shift mean by 0.1 sigma
+
+  # Non-Commutative Operators
+  operator_sequence:
+    max_ops: 4
+    beam_width: 5
+
