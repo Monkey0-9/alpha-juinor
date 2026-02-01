@@ -22,7 +22,16 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    # Fail gracefully if python-dotenv is not installed
+    warnings.warn(
+        "python-dotenv not found. Falling back to OS environment variables."
+    )
+
+    def load_dotenv(**kwargs):
+        pass
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
