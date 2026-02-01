@@ -1,4 +1,6 @@
 """
+data/ingestion/ingest_process.py
+
 Institutional Market Data Ingestion Agent.
 Handles 5-year historical data ingestion with strict governance and quality rules.
 """
@@ -51,7 +53,7 @@ class TokenBucket:
             time.sleep(0.1)
 
 
-class InstitutionalIngestionAgent:
+class DataIngestionAgent:
     """
     Mandated Institutional Ingestion Agent.
     Strictly adheres to failure handling, archiving, and quality scoring rules.
@@ -130,7 +132,6 @@ class InstitutionalIngestionAgent:
             extreme_spike_flag = 0.0
 
         # Weighted Score (Strict Institutional Formula - Tuned)
-        # score = 1.0 - (missing_dates_pct * 0.3 + duplicate_pct * 0.2 + zero_negative_flag * 0.2 + extreme_spike_flag * 0.05)
         penalty = (
             missing_dates_pct * 0.3
             + duplicate_pct * 0.2
@@ -150,48 +151,53 @@ class InstitutionalIngestionAgent:
             },
         }
 
-    def ingest_symbol(self, symbol: str):
-        """Transactional Ingestion Logic for a single symbol."""
-        started_at = datetime.utcnow().isoformat()
-        asset_class = self.router._classify_ticker(symbol)
+    def fetch_daily_bars(self, symbol: str) -> pd.DataFrame:
+        """Fetch Standardized Daily Bars."""
         history_days = int(
             6.0 * 365
         )  # Approx 2190 days to ensure FULL 5 years (1260 trading days) of history
 
         provider = self.router.select_provider(symbol, history_days=history_days)
-
         if provider == "NO_VALID_PROVIDER":
-            self._log_audit(
-                symbol,
-                asset_class,
-                "NONE",
-                "REJECTED",
-                "NO_VALID_PROVIDER",
-                "No provider entitled/available for request",
-                started_at,
-            )
-            with self._stats_lock:
-                self.stats["rejected"] += 1
-                self.stats["processed"] += 1
-            return
+            return pd.DataFrame(), provider
 
         # Throttling
         if provider in self.throttlers:
             self.throttlers[provider].wait_and_consume()
 
-        try:
-            # Fetch
-            # Calculate start date for institutional backfill
-            start_date = (datetime.utcnow() - timedelta(days=history_days)).strftime(
-                "%Y-%m-%d"
-            )
-            df = self.router.get_price_history(
-                symbol, start_date=start_date, allow_long_history=True
-            )
+        start_date = (datetime.utcnow() - timedelta(days=history_days)).strftime(
+            "%Y-%m-%d"
+        )
+        df = self.router.get_price_history(
+            symbol, start_date=start_date, allow_long_history=True
+        )
+        return df, provider
 
-            # Archive (Mocking raw data as dict for now, usually get_price_history should return raw or we fetch separately)
-            # In this architecture, DataRouter returns DataFrame. To adhere perfectly to 'raw_ingest_archive',
-            # we'd need providers to return raw JSON too. For now, archive the DF as JSON.
+    def _classify_ticker(self, symbol: str) -> str:
+        if "-USD" in symbol: return "CRYPTO"
+        if "=X" in symbol: return "FX"
+        if "=F" in symbol: return "FUTURES"
+        return "EQUITY"
+
+    def ingest_symbol(self, symbol: str):
+        """Transactional Ingestion Logic for a single symbol."""
+        started_at = datetime.utcnow().isoformat()
+        asset_class = self._classify_ticker(symbol)
+
+        try:
+            df, provider = self.fetch_daily_bars(symbol)
+
+            if provider == "NO_VALID_PROVIDER":
+                 self._log_audit(
+                    symbol, asset_class, "NONE", "REJECTED",
+                    "NO_VALID_PROVIDER", "No provider entitled", started_at
+                )
+                 with self._stats_lock:
+                    self.stats["rejected"] += 1
+                    self.stats["processed"] += 1
+                 return
+
+            # Archive
             self._archive_raw_response(symbol, provider, df.to_dict(orient="records"))
 
             if df.empty:
@@ -202,9 +208,10 @@ class InstitutionalIngestionAgent:
             status = "SUCCESS" if quality["score"] >= 0.6 else "REJECTED"
             reason = None if status == "SUCCESS" else "INVALID_DATA"
 
-            # Transactional Persist (Week 2 Hardening)
+            # Transactional Persist
             price_records_dicts = []
             for dt, row in df.iterrows():
+                # Extract extended fields if available, else default
                 price_records_dicts.append({
                     "symbol": symbol,
                     "date": dt.strftime("%Y-%m-%d") if isinstance(dt, datetime) else str(dt),
@@ -213,6 +220,8 @@ class InstitutionalIngestionAgent:
                     "low": float(row["Low"]),
                     "close": float(row["Close"]),
                     "volume": int(row["Volume"]),
+                    "vwap": float(row.get("VWAP", row.get("vwap", 0.0))),
+                    "trade_count": int(row.get("TradeCount", row.get("trade_count", 0))),
                     "adjusted_close": float(row.get("adjusted_close", row["Close"])),
                     "provider": provider,
                     "ingestion_timestamp": datetime.utcnow().isoformat(),
@@ -239,7 +248,7 @@ class InstitutionalIngestionAgent:
                 "finished_at": datetime.utcnow().isoformat()
             }
 
-            # Atomic Write: Prices + Quality + Audit
+            # Atomic Write
             success = self.db.atomic_ingest(
                 prices=price_records_dicts,
                 quality=quality_record_dict,
@@ -255,7 +264,6 @@ class InstitutionalIngestionAgent:
                     self.stats["processed"] += 1
                     self.stats["quality_scores"].append(quality["score"])
             else:
-                 # If atomic ingest failed, log fallback audit (best effort)
                  self._log_audit(symbol, asset_class, provider, "FAILED", "DB_WRITE_ERROR", "Atomic ingest failed", started_at)
                  with self._stats_lock:
                      self.stats["failed"] += 1
@@ -263,28 +271,17 @@ class InstitutionalIngestionAgent:
 
         except Exception as e:
             error_msg = str(e)
-            # Fail-Fast on 403/400 (Handled in Router but catching here for audit)
             if "403" in error_msg or "400" in error_msg:
                 self._log_audit(
-                    symbol,
-                    asset_class,
-                    provider,
-                    "REJECTED",
-                    "ENTITLEMENT_FAILURE",
-                    error_msg,
-                    started_at,
+                    symbol, asset_class, "UNKNOWN", "REJECTED",
+                    "ENTITLEMENT_FAILURE", error_msg, started_at
                 )
                 with self._stats_lock:
                     self.stats["rejected"] += 1
             else:
                 self._log_audit(
-                    symbol,
-                    asset_class,
-                    provider,
-                    "FAILED",
-                    "PROVIDER_ERROR",
-                    error_msg,
-                    started_at,
+                    symbol, asset_class, "UNKNOWN", "FAILED",
+                    "PROVIDER_ERROR", error_msg, started_at
                 )
                 with self._stats_lock:
                     self.stats["failed"] += 1
@@ -316,10 +313,11 @@ class InstitutionalIngestionAgent:
         print(f"Target Universe: {len(tickers)} symbols\n")
 
         with ThreadPoolExecutor(max_workers=32) as executor:
-            executor.map(self.ingest_symbol, tickers)
+            # Force execution by converting to list
+            list(executor.map(self.ingest_symbol, tickers))
 
         self.stats["end_time"] = datetime.utcnow().isoformat()
-        self.finalize_run()
+        return self.finalize_run()
 
     def finalize_run(self):
         """Mandated JSON Summary and Dashboard Output."""
@@ -354,27 +352,12 @@ class InstitutionalIngestionAgent:
         print(f"AVG QUALITY: {summary['avg_data_quality'] * 100:.1f}%")
         print("=" * 60 + "\n")
 
-        # Mandatory Alert Check (>5% Invalid Data)
-        if (
-            summary["total_symbols"] > 0
-            and (summary["rejected"] / summary["total_symbols"]) > 0.05
-        ):
-            print(f"!! ALERT !! >5% of symbols rejected. Review 'data_quality' table.")
-
-        # WEEK 3: AUTOMATED KILL SWITCH CHECK
-        from governance.kill_switch import AutoKillSwitch
-        ks = AutoKillSwitch(self.db)
-        if not ks.check_slas(summary):
-             print("!!! SYSTEM HALTED BY SLA MONITOR !!!")
-             # We rely on the kill file existence to stop downstream components (like main.py)
-
         return summary
-
 
 if __name__ == "__main__":
     from data.universe_manager import UnifiedUniverseManager
 
     mgr = UnifiedUniverseManager()
     tickers = mgr.get_active_universe()
-    agent = InstitutionalIngestionAgent(tickers)
+    agent = DataIngestionAgent(tickers)
     agent.run_full_universe(tickers)

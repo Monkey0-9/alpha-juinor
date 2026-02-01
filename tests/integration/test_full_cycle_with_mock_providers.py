@@ -3,19 +3,22 @@ Integration Test: Full Cycle with Mock Providers
 Tests 100% decision coverage and audit record generation.
 """
 
-import pytest
 import os
 import sys
-import sqlite3
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 import pandas as pd
+import random
 
 # Add parent directory to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+)
 
-from orchestration.cycle_orchestrator import CycleOrchestrator
-from contracts import decision_enum
-from audit.decision_log import get_cycle_decisions, get_decision_counts, AUDIT_DB_PATH
+from orchestration.cycle_orchestrator import CycleOrchestrator  # noqa: E402
+from contracts import decision_enum  # noqa: E402
+from audit.decision_log import (  # noqa: E402
+    get_cycle_decisions, get_decision_counts, AUDIT_DB_PATH
+)
 
 
 class MockDataProvider:
@@ -31,7 +34,6 @@ class MockDataProvider:
         self.call_count += 1
 
         # Simulate failure
-        import random
         if random.random() < self.failure_rate:
             return pd.DataFrame()  # Empty = failure
 
@@ -67,11 +69,14 @@ def test_full_cycle_with_mock_providers():
     orchestrator = CycleOrchestrator(mode="test")
 
     # Mock universe manager
-    orchestrator.universe_manager.get_active_universe = Mock(return_value=test_universe)
+    orchestrator.universe_manager.get_active_universe = Mock(
+        return_value=test_universe
+    )
 
     # Mock data router with provider that succeeds 80% of the time
     mock_provider = MockDataProvider(name="mock_provider", failure_rate=0.2)
-    orchestrator.data_router.get_price_history = mock_provider.get_price_history
+    orchestrator.data_router.get_price_history = \
+        mock_provider.get_price_history
 
     # Run cycle
     results = orchestrator.run_cycle()
@@ -93,13 +98,15 @@ def test_full_cycle_with_mock_providers():
 
     # 3. All symbols accounted for
     result_symbols = {d.symbol for d in results}
+    missing_syms = set(test_universe) - result_symbols
     assert result_symbols == set(test_universe), \
-        f"Missing symbols: {set(test_universe) - result_symbols}"
+        f"Missing symbols: {missing_syms}"
 
     # 4. Audit DB has correct number of records
     cycle_decisions = get_cycle_decisions(orchestrator.cycle_id)
-    assert len(cycle_decisions) == len(test_universe), \
-        f"Audit DB should have {len(test_universe)} records, has {len(cycle_decisions)}"
+    msg = f"Audit DB should have {len(test_universe)} records, " \
+          f"has {len(cycle_decisions)}"
+    assert len(cycle_decisions) == len(test_universe), msg
 
     # 5. Decision counts match
     decision_counts = get_decision_counts(orchestrator.cycle_id)
@@ -111,11 +118,12 @@ def test_full_cycle_with_mock_providers():
     assert len(orchestrator.providers_tally) > 0, "No provider usage tracked"
 
     # 7. At least some decisions should be EXECUTE or HOLD (not all REJECT)
-    execute_or_hold = decision_counts.get('EXECUTE', 0) + decision_counts.get('HOLD', 0)
+    # execute_or_hold = decision_counts.get('EXECUTE', 0) + \
+    #                   decision_counts.get('HOLD', 0)
     # With mock data, we expect at least some to pass quality checks
     # But this is lenient since agents might reject for other reasons
 
-    print(f"\n✓ Test Passed!")
+    print("\n✓ Test Passed!")
     print(f"  - Universe size: {len(test_universe)}")
     print(f"  - Decisions generated: {len(results)}")
     print(f"  - Decision breakdown: {decision_counts}")
@@ -130,11 +138,14 @@ def test_provider_failure_handling():
     test_universe = ['AAPL', 'MSFT', 'GOOGL']
 
     orchestrator = CycleOrchestrator(mode="test")
-    orchestrator.universe_manager.get_active_universe = Mock(return_value=test_universe)
+    orchestrator.universe_manager.get_active_universe = Mock(
+        return_value=test_universe
+    )
 
     # Mock provider that always fails
     mock_provider = MockDataProvider(name="failing_provider", failure_rate=1.0)
-    orchestrator.data_router.get_price_history = mock_provider.get_price_history
+    orchestrator.data_router.get_price_history = \
+        mock_provider.get_price_history
 
     results = orchestrator.run_cycle()
 
@@ -142,10 +153,11 @@ def test_provider_failure_handling():
     assert len(results) == len(test_universe)
 
     for decision in results:
-        assert decision.final_decision == decision_enum.REJECT, \
-            f"Expected REJECT for {decision.symbol}, got {decision.final_decision}"
-        assert "NO_DATA" in decision.reason_codes, \
-            f"Expected NO_DATA reason for {decision.symbol}"
+        msg = f"Expected REJECT for {decision.symbol}, got " \
+              f"{decision.final_decision}"
+        assert decision.final_decision == decision_enum.REJECT, msg
+        msg = f"Expected NO_DATA reason for {decision.symbol}"
+        assert "NO_DATA" in decision.reason_codes, msg
 
     print("\n✓ Provider Failure Test Passed!")
     print(f"  - All {len(results)} decisions correctly marked as REJECT")

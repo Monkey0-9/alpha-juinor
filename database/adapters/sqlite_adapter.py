@@ -139,12 +139,14 @@ class SQLiteAdapter(DatabaseAdapter):
         try:
             cursor = conn.execute('''
                 INSERT INTO price_history
-                (symbol, date, open, high, low, close, volume, adjusted_close, provider, ingestion_timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (symbol, date, open, high, low, close, volume, vwap, trade_count, adjusted_close, provider, ingestion_timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(symbol, date) DO UPDATE SET
-                    close = excluded.close, volume = excluded.volume, ingestion_timestamp = excluded.ingestion_timestamp
+                    close = excluded.close, volume = excluded.volume, vwap = excluded.vwap,
+                    trade_count = excluded.trade_count, ingestion_timestamp = excluded.ingestion_timestamp
             ''', (record.symbol, record.date, record.open, record.high, record.low,
-                  record.close, record.volume, record.adjusted_close, record.provider, record.ingestion_timestamp))
+                  record.close, record.volume, record.vwap, record.trade_count,
+                  record.adjusted_close, record.provider, record.ingestion_timestamp))
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:
@@ -182,16 +184,16 @@ class SQLiteAdapter(DatabaseAdapter):
         if not records: return 0
         try:
             with self.transaction() as conn:
-                data = [(r.symbol, r.date, r.open, r.high, r.low, r.close, r.volume,
+                data = [(r.symbol, r.date, r.open, r.high, r.low, r.close, r.volume, r.vwap, r.trade_count,
                          r.adjusted_close, r.provider, r.raw_hash,
                          json.dumps(r.validation_flags) if isinstance(r.validation_flags, dict) else r.validation_flags,
                          r.ingestion_timestamp) for r in records]
                 conn.executemany('''
-                    INSERT INTO price_history (symbol, date, open, high, low, close, volume, adjusted_close, provider, raw_hash, validation_flags, ingestion_timestamp)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO price_history (symbol, date, open, high, low, close, volume, vwap, trade_count, adjusted_close, provider, raw_hash, validation_flags, ingestion_timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(symbol, date) DO UPDATE SET
-                        close=excluded.close, volume=excluded.volume, ingestion_timestamp=excluded.ingestion_timestamp,
-                        validation_flags=excluded.validation_flags
+                        close=excluded.close, volume=excluded.volume, vwap=excluded.vwap, trade_count=excluded.trade_count,
+                        ingestion_timestamp=excluded.ingestion_timestamp, validation_flags=excluded.validation_flags
                 ''', data)
             return len(records)
         except Exception as e:

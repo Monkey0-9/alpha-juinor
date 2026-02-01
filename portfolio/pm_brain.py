@@ -9,23 +9,26 @@ import numpy as np
 import logging
 from typing import List, Dict, Tuple, Optional
 import pandas as pd
-from contracts import AlphaDistribution
+from contracts.alpha_model import AlphaOutput
 from alpha_families.normalization import AlphaNormalizer
+from risk.quantum.state_space import RegimeStateSpace
+from risk.quantum.entanglement_detector import EntanglementDetector
+from contracts.allocation import RejectedAsset
+
 
 logger = logging.getLogger(__name__)
 
 # Initialize Normalizer
 normalizer = AlphaNormalizer()
 
-from risk.quantum.state_space import RegimeStateSpace
-from risk.quantum.entanglement_detector import EntanglementDetector
+
+# Try optional optimizer import
 try:
     from portfolio.optimizer import PortfolioOptimizer, Constraint
 except ImportError:
     PortfolioOptimizer = None
     Constraint = None
-    pass
-from contracts.allocation import RejectedAsset
+
 
 class PMBrain:
     """
@@ -40,7 +43,6 @@ class PMBrain:
         self.max_positions = max_positions
 
         # Quantum Modules
-        # In a real system, these might be injected or loaded from persistent state
         self.regime_space = RegimeStateSpace()
         self.entanglement = EntanglementDetector(threshold=0.7)
 
@@ -48,27 +50,23 @@ class PMBrain:
         self.regime_space.update()
 
     def get_rejected_assets(self) -> List[RejectedAsset]:
-        """Return list of rejected assets from last cycle."""
-        # This implementation requires state tracking of rejections which is not currently in the class scope.
-        # For strict compliance, we'd need to refactor to return an AllocationPlan object.
-        # As a patch, we assume this is handled by the caller or we return it inside the result dict in a special key?
-        # The prompt asks for 'rejected_assets' output.
-        # We will assume calling code handles this if not returned here,
-        # OR we modify the return signature of allocate.
-        # Given existing interfaces, we stick to Dict[str, float] but log rejections.
+        """Return list of rejected assets (placeholder for stateful impl)."""
         return []
 
-    def allocate(self,
-                 alphas: Dict[str, AlphaDistribution],
-                 current_positions: Dict[str, float],
-                 cov: np.array,
-                 liquidity: Dict[str, float],
-                 prices: Optional[pd.DataFrame] = None) -> Tuple[Dict[str, float], List[RejectedAsset]]:
+    def allocate(
+        self,
+        alphas: Dict[str, AlphaOutput],
+        current_positions: Dict[str, float],
+        cov: np.array = None,
+        liquidity: Dict[str, float] = None,
+        prices: Optional[pd.DataFrame] = None
+    ) -> Tuple[Dict[str, float], List[RejectedAsset]]:
         """
         Institutional Allocation using Constrained Optimizer & Quantum Modules.
         Returns: (weights, rejected_assets)
         """
         rejected_assets = []
+        liquidity = liquidity or {}
 
         # 1. Enforce Alpha Contract
         alphas = self.enforce_alpha_contract(alphas)
@@ -77,22 +75,15 @@ class PMBrain:
         if not tickers:
             return {}, []
 
-        # 2. Quantum Updates
-        # A. Regime Adjustment
-        # r_i = p(t) . C_i
-        # Ideally C_i comes from metadata. For now, we assume uniform or random C_i per asset
-        # In prod: C_i loaded from feature store
+        # 2. Quantum Updates & Regime Adjustment
         regime_compatible_mus = []
 
         for t in tickers:
             # Mock compatibility profile (should come from metadata)
-            # In real system: alpha.features.regime_profile
             c_profile = np.ones(5) / 5.0
             r_i = self.regime_space.get_compatibility(c_profile)
 
-            # Apply to mu
-            # mu_new = mu * conf * r_i
-            # (Note: alpha.mu usually already includes some confidence, but we explicitly apply here as per spec)
+            # Apply to mu (Regime Adjustment)
             adj_mu = alphas[t].mu * alphas[t].confidence * r_i
             regime_compatible_mus.append(adj_mu)
 
@@ -106,207 +97,168 @@ class PMBrain:
                 ))
 
         # B. Entanglement Gating (Updates w_max)
-        w_max_map = {t: 0.20 for t in tickers} # Default 20%
+        # Dynamic cap: Ensure we can reach 100% exposure even with few assets
+        base_cap = max(0.20, 1.1 / len(tickers))
+        w_max_map = {t: base_cap for t in tickers}
 
         if prices is not None and not prices.empty:
             ent_report = self.entanglement.compute_metric(prices)
             if ent_report.threshold_breach:
-                logger.warning(f"[QUANTUM] Entanglement Breach: {ent_report.global_index:.2f} > 0.7")
+                msg = f"[QUANTUM] Entanglement Breach: " \
+                      f"{ent_report.global_index:.2f} > 0.7"
+                logger.warning(msg)
 
                 for t in tickers:
                     centrality = ent_report.asset_centrality.get(t, 0.0)
-                    beta = 0.5 # Config entanglement_beta
-                    # w_max <- w_max * (1 - beta * ent)
+                    beta = 0.5
                     new_max = 0.20 * (1.0 - beta * centrality)
-                    w_max_map[t] = max(0.01, new_max) # Floor at 1%
+                    w_max_map[t] = max(0.01, new_max)
 
                     if new_max < 0.02:
-                        # Effectively reject if cap is too small
+                        reason = f"Entanglement Gating " \
+                                 f"(Cap {new_max:.2%} < 2%)"
                         rejected_assets.append(RejectedAsset(
                             symbol=t,
-                            reason=f"Entanglement Gating (Cap {new_max:.2%} < 2%)",
+                            reason=reason,
                             mu=alphas[t].mu,
                             sigma=alphas[t].sigma,
                             score=ent_report.global_index
                         ))
 
-        # 3. Optimization Setup
-        mu_vec = np.array(regime_compatible_mus)
-        current_w = np.array([current_positions.get(t, 0.0) for t in tickers])
-        liq_costs = np.array([liquidity.get(t, 0.01) for t in tickers])
+        # 4. Optimization Setup
+        # Filter out rejected
+        rejected_symbols = {r.symbol for r in rejected_assets}
+        active_tickers = [t for t in tickers if t not in rejected_symbols]
 
-        # Build Constraints
-        # Leverage 1.0
-        optimizer_constraints = [
-            Constraint("leverage", {"limit": 1.0})
-        ]
+        if not active_tickers:
+            return {}, rejected_assets
 
-        # Position Limits (variable per asset not fully supported in simple Constraint struct)
-        # We need to pass bounds. Our Optimizer supports 'max_pos' as scalar.
-        # If we have vector bounds, we need to upgrade Optimizer or pass as specific constraints.
-        # For this turn, we apply key limits via pre-filtering or average cap.
-        # STRICT MODE: Optimizer needs to support vector bounds.
-        # We will use the minimum w_max as the scalar limit to be safe, or pass a new constraint type if we upgraded it.
-        # We didn't upgrade 'max_pos' to vector in Step 1075. We left it as scalar.
-        # So we take min(w_max_map) or use a "sector" constraint hack?
-        # Let's use scalar safely:
-        safe_scalar_limit = min(w_max_map.values())
-        optimizer_constraints.append(Constraint("max_pos", {"limit": safe_scalar_limit}))
+        # Re-index for optimizer
+        active_indices = [tickers.index(t) for t in active_tickers]
+        mu_vec = np.array([regime_compatible_mus[i] for i in active_indices])
 
-        # 4. Run Optimization
-        opt = PortfolioOptimizer()
-        res = opt.optimize(tickers, mu_vec, cov, current_w, optimizer_constraints, liq_costs, self.cvar_limit)
-
-        if res.status == "SUCCESS":
-            # Filter dust
-            final_weights = {k: v for k, v in res.weights.items() if v > 0.001}
-
-            # Log rejections for non-selected
-            selected_set = set(final_weights.keys())
-            for t in tickers:
-                if t not in selected_set and t not in [r.symbol for r in rejected_assets]:
-                     rejected_assets.append(RejectedAsset(
-                        symbol=t,
-                        reason="Optimizer Zero Weight (Opportunity Cost)",
-                        mu=alphas[t].mu,
-                        sigma=alphas[t].sigma,
-                        score=0.0
-                    ))
-
-            return final_weights, rejected_assets
+        # Handle COV
+        if cov is None:
+            sigmas = np.array([alphas[t].sigma for t in active_tickers])
+            sub_cov = np.diag(sigmas ** 2)
         else:
-            logger.warning(f"Optimizer failed ({res.status}), falling back to heuristic.")
-            # Heuristic fallback does NOT produce quantum rejected assets logic precisely,
-            # but we return what we have.
-            return self.allocate_capital(alphas), rejected_assets
+            sub_cov = cov[np.ix_(active_indices, active_indices)]
 
+        current_w = np.array(
+            [current_positions.get(t, 0.0) for t in active_tickers]
+        )
 
-    def allocate_capital(self, alphas: Dict[str, AlphaDistribution],
-                        total_capital: float = 1.0) -> Dict[str, float]:
-        """
-        Allocate capital using heuristic (Fallback).
-        """
-        # ... (Existing Logic kept as fallback)
-        # Rank opportunities
-        ranked = self.rank_opportunities(alphas)
-
-        # Take top N positions
-        top_opportunities = ranked[:self.max_positions]
-
-        # Filter to positive scores only
-        valid_opportunities = [(s, sc) for s, sc in top_opportunities if sc > 0]
-
-        if not valid_opportunities:
-            logger.warning("[PM_BRAIN] No valid opportunities after CVaR filtering")
-            return {}
-
-        if not valid_opportunities:
-            logger.warning("[PM_BRAIN] No valid opportunities after CVaR filtering")
-            return {}
-
-        # Simple proportional allocation by score
-        total_score = sum(sc for _, sc in valid_opportunities)
-
-        allocations = {}
-        for symbol, score in valid_opportunities:
-             # Sanity check distribution one last time (REPAIR LOGIC)
-             # Note: 'score' is derived from alpha, but we need to ensure the underlying distribution is valid if used else where.
-             # The repair should ideally happen at ENTRY to the brain.
-             allocations[symbol] = (score / total_score) * total_capital
-
-        logger.info(f"[PM_BRAIN] Allocated capital to {len(allocations)} positions")
-        return allocations
-
-    def enforce_alpha_contract(self, alphas: Dict[str, AlphaDistribution]) -> Dict[str, AlphaDistribution]:
-        """
-        MANDATORY: Enforce contract and repair broken alphas.
-        """
-        clean_alphas = {}
-        for symbol, alpha in alphas.items():
-            # Convert NamedTuple/Object to dict for repair if needed, or create new object
-            # Assuming AlphaDistribution is a Pydantic model or dataclass
-
-            # For this fix, we assume we can treat it as an object we can read attributes from.
-            # We reconstruct it using the normalizer.repair_distribution logic.
-
-            raw_dist = {
-                "mu": alpha.mu,
-                "sigma": alpha.sigma,
-                "p_loss": alpha.p_loss,
-                "cvar_95": alpha.cvar_95,
-                "confidence": alpha.confidence
-            }
-
-            fixed = normalizer.repair_distribution(raw_dist)
-
-            # Reconstruct object (assuming AlphaDistribution constructor takes these args)
-            clean_alphas[symbol] = AlphaDistribution(**fixed)
-
-            # Log significant repairs
-            if fixed['confidence'] != raw_dist['confidence']:
-               logger.debug(f"Repaired confidence for {symbol}: {raw_dist['confidence']} -> {fixed['confidence']}")
-
-        return clean_alphas
-
-    def mean_variance_optimize(self, alphas: Dict[str, AlphaDistribution],
-                               covariance_matrix: np.ndarray = None) -> Dict[str, float]:
-        """
-        Mean-Variance optimization with CVaR constraints.
-        Uses scipy.optimize for proper Markowitz allocation.
-        """
-        from scipy.optimize import minimize
-
-        tickers = list(alphas.keys())
-        n = len(tickers)
-        if n == 0:
-            return {}
-
-        # Expected returns vector
-        mu = np.array([alphas[t].mu for t in tickers])
-
-        # Build covariance matrix if not provided
-        if covariance_matrix is None or covariance_matrix.shape != (n, n):
-            # Use diagonal with sigma values
-            sigmas = np.array([alphas[t].sigma for t in tickers])
-            covariance_matrix = np.diag(sigmas ** 2)
-
-        # Risk aversion parameter (higher = more conservative)
-        gamma = 2.0
-
-        def objective(w):
-            """Maximize utility: mu'w - 0.5*gamma*w'Σw"""
-            port_return = np.dot(mu, w)
-            port_var = np.dot(w.T, np.dot(covariance_matrix, w))
-            return -(port_return - 0.5 * gamma * port_var)
-
-        # Constraints
-        constraints = [
-            {'type': 'ineq', 'fun': lambda w: 1.0 - np.sum(np.abs(w))},  # |w| <= 1 (leverage)
-        ]
-
-        # CVaR constraint: simplified check (filter out high-risk assets)
-        for i, t in enumerate(tickers):
-            if alphas[t].cvar_95 < self.cvar_limit:
-                # Force weight = 0 for breaching symbols
-                constraints.append({'type': 'eq', 'fun': lambda w, idx=i: w[idx]})
-
-        # Bounds: allow long-only or long/short
-        bounds = [(0, 0.20)] * n  # Max 20% per position, long only
-
-        # Initial guess: equal weight
-        w0 = np.ones(n) / n
-
+        # Generate Scenarios (Monte Carlo) for CVaR optimizer
+        # N_scenarios = 1000
+        # If sub_cov is valid, sample. Else diagonal.
         try:
-            result = minimize(objective, w0, method='SLSQP', bounds=bounds, constraints=constraints)
+            # Ensure PSD
+            scenarios = np.random.multivariate_normal(mu_vec, sub_cov, 1000)
+        except Exception:
+            # Fallback to diagonal
+            sigmas = np.sqrt(np.diag(sub_cov))
+            scenarios = np.random.normal(
+                mu_vec, sigmas, (1000, len(active_tickers))
+            )
 
-            if result.success:
-                weights = {t: float(result.x[i]) for i, t in enumerate(tickers) if result.x[i] > 1e-4}
-                logger.info(f"[PM_BRAIN] MVO Success: {len(weights)} positions")
-                return weights
+        # Bounds
+        w_min = np.zeros(len(active_tickers))
+        w_max = np.array([w_max_map[t] for t in active_tickers])
+
+        # Params
+        opt_params = {
+            "lambda": 1.0,
+            "gamma": 5.0,  # CVaR aversion
+            "alpha": 0.95
+        }
+
+        # Run Optimization
+        if PortfolioOptimizer:
+            opt = PortfolioOptimizer()
+            # Signature: mu, Sigma, scenario_returns, w_prev, w_min, w_max,
+            #            sector_map, params
+            res = opt.optimize(
+                mu=mu_vec,
+                Sigma=sub_cov,
+                scenario_returns=scenarios,
+                w_prev=current_w,
+                w_min=w_min,
+                w_max=w_max,
+                sector_map=None,
+                params=opt_params
+            )
+
+            if isinstance(res, dict) and "w" in res:
+                # Extract weights
+                w_opt = res["w"]
+                final_weights = {
+                    active_tickers[i]: float(w_opt[i])
+                    for i in range(len(active_tickers))
+                    if w_opt[i] > 0.001
+                }
+
+                # Log non-selected opportunity cost
+                for t in active_tickers:
+                    if t not in final_weights:
+                        rejected_assets.append(RejectedAsset(
+                            symbol=t,
+                            reason="Optimizer Zero Weight",
+                            mu=alphas[t].mu,
+                            sigma=alphas[t].sigma,
+                            score=0.0
+                        ))
+                return final_weights, rejected_assets
             else:
-                logger.warning(f"[PM_BRAIN] MVO failed: {result.message}, using fallback")
-        except Exception as e:
-            logger.warning(f"[PM_BRAIN] MVO exception: {e}, using fallback")
+                msg = f"Optimizer failed ({res.status}), using fallback."
+                logger.warning(msg)
 
-        # Fallback to heuristic
-        return self.allocate_capital(alphas)
+        # Fallback
+        res_fallback = self.allocate_capital(
+            {t: alphas[t] for t in active_tickers}
+        )
+        return res_fallback, rejected_assets
+
+    def allocate_capital(
+        self,
+        alphas: Dict[str, AlphaOutput],
+        total_capital: float = 1.0
+    ) -> Dict[str, float]:
+        """Heuristic Fallback Allocation."""
+        # Simple risk-parity-like or mu-weighted
+        valid = []
+        for sym, alpha in alphas.items():
+            if alpha.mu > 0 and alpha.cvar_95 > self.cvar_limit:
+                score = alpha.mu / alpha.sigma  # Sharpe proxy
+                valid.append((sym, score))
+
+        if not valid:
+            return {}
+
+        total_score = sum(s for _, s in valid)
+        if total_score <= 0:
+            return {}
+
+        return {
+            sym: (s / total_score) * total_capital
+            for sym, s in valid
+        }
+
+    def enforce_alpha_contract(
+        self,
+        alphas: Dict[str, AlphaOutput]
+    ) -> Dict[str, AlphaOutput]:
+        """Enforce strict contract."""
+        clean = {}
+        for sym, alpha in alphas.items():
+            # Already validated by Pydantic on creation?
+            # We can re-validate or trust.
+            # But let's check basic sanity if something slipped or if we want
+            # to filter specific anomalies.
+            if alpha.confidence < 0.2:
+                msg = f"Rejecting {sym} due to low confidence " \
+                      f"{alpha.confidence}"
+                logger.debug(msg)
+                continue
+
+            clean[sym] = alpha
+        return clean

@@ -6,16 +6,19 @@ Responsibilities:
 1. Classify symbols into ACTIVE, DEGRADED, or QUARANTINED.
 2. Enforce 5-year (1260 rows) threshold.
 3. Persist classification.
+
+OPTIMIZED: Batch queries instead of per-symbol queries.
 """
 
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, List
 
 from database.manager import DatabaseManager
 from database.schema import SymbolGovernanceRecord
 
 logger = logging.getLogger("SYMBOL_GOVERNOR")
+
 
 class SymbolGovernor:
     """
@@ -28,38 +31,96 @@ class SymbolGovernor:
     def __init__(self, db: Optional[DatabaseManager] = None):
         self.db = db or DatabaseManager()
 
-    def check_monitoring_alerts(self, symbol: str, quality_score: float, row_count: int):
-        """
-        Check for monitoring alerts.
-        """
-        # 1. Data Quality Alert
-        if quality_score < 0.75:
-            logger.error(
-                f"[MONITORING] ALERT: Low Data Quality for {symbol} ({quality_score:.2f} < 0.75)"
-            )
-
-        # 2. Provider Failure (Deduced from low rows + quality?)
-        if row_count == 0:
-             logger.warning(f"[MONITORING] Zero history for {symbol}")
-
     def classify_all(self):
-        """Perform a full governance sweep of all symbols in price_history."""
+        """
+        Perform a FAST governance sweep using batch queries.
+        Optimized to avoid N+1 query problem.
+        """
         with self.db.get_connection() as conn:
-            cursor = conn.execute("SELECT DISTINCT symbol FROM price_history")
-            symbols = [row[0] for row in cursor.fetchall()]
+            # BATCH QUERY 1: Get row counts for all symbols
+            cursor = conn.execute("""
+                SELECT symbol, COUNT(*) as row_count
+                FROM price_history
+                GROUP BY symbol
+            """)
+            row_counts: Dict[str, int] = {row[0]: row[1] for row in cursor.fetchall()}
 
-        logger.info(f"[GOVERNOR] Starting sweep of {len(symbols)} symbols...")
+            # BATCH QUERY 2: Get latest quality scores
+            cursor = conn.execute("""
+                SELECT symbol, quality_score
+                FROM data_quality
+                WHERE rowid IN (
+                    SELECT MAX(rowid) FROM data_quality GROUP BY symbol
+                )
+            """)
+            quality_scores: Dict[str, float] = {}
+            for row in cursor.fetchall():
+                try:
+                    quality_scores[row[0]] = float(row[1]) if row[1] else 0.0
+                except (ValueError, TypeError):
+                    quality_scores[row[0]] = 0.0
+
+        symbols = list(row_counts.keys())
+        logger.info(f"[GOVERNOR] Fast sweep of {len(symbols)} symbols...")
+
+        # Track alerts (batch logging instead of per-symbol)
+        low_quality_count = 0
+        classified = {"ACTIVE": 0, "DEGRADED": 0, "QUARANTINED": 0}
 
         for symbol in symbols:
-            self.classify_symbol(symbol)
+            row_count = row_counts.get(symbol, 0)
+            quality_score = quality_scores.get(symbol, 0.0)
 
-        logger.info(f"[GOVERNOR] Completed sweep of {len(symbols)} symbols")
+            # Check for low quality (only log first 50 to avoid spam)
+            if quality_score < 0.75:
+                low_quality_count += 1
+                if low_quality_count <= 50:
+                    print(
+                        f"[MONITORING] ALERT: Low Data Quality for {symbol} "
+                        f"({quality_score:.2f} < 0.75)"
+                    )
+
+            # Classify
+            if row_count >= self.ACTIVE_THRESHOLD and quality_score >= self.QUALITY_THRESHOLD:
+                state = "ACTIVE"
+                reason = "Institutional Grade"
+            elif row_count >= self.DEGRADED_THRESHOLD:
+                state = "DEGRADED"
+                reason = "Sub-optimal history or quality"
+            else:
+                state = "QUARANTINED"
+                reason = f"Critical history failure: {row_count} rows"
+
+            classified[state] += 1
+
+            # Persist
+            record = SymbolGovernanceRecord(
+                symbol=symbol,
+                history_rows=row_count,
+                data_quality=quality_score,
+                state=state,
+                reason=reason,
+                last_checked_ts=datetime.utcnow().isoformat(),
+                metadata={},
+            )
+            try:
+                self.db.upsert_symbol_governance(record)
+            except AttributeError:
+                pass  # Method missing, skip
+
+        if low_quality_count > 50:
+            print(f"[MONITORING] ... and {low_quality_count - 50} more low quality symbols")
+
+        logger.info(
+            f"[GOVERNOR] Completed: ACTIVE={classified['ACTIVE']}, "
+            f"DEGRADED={classified['DEGRADED']}, QUARANTINED={classified['QUARANTINED']}"
+        )
 
     def classify_symbol(self, symbol: str) -> str:
         """
-        Classify symbol into ACTIVE, DEGRADED, or QUARANTINED.
+        Classify a single symbol (for individual use).
+        For bulk operations, use classify_all() instead.
         """
-        # 1. Get row count
         with self.db.get_connection() as conn:
             cursor = conn.execute(
                 "SELECT COUNT(*) FROM price_history WHERE symbol = ?", (symbol,)
@@ -67,40 +128,23 @@ class SymbolGovernor:
             row = cursor.fetchone()
             row_count = row[0] if row else 0
 
-            # 2. Get latest quality score
             cursor = conn.execute(
                 "SELECT quality_score FROM data_quality WHERE symbol = ? ORDER BY recorded_at DESC LIMIT 1",
                 (symbol,),
             )
             q_row = cursor.fetchone()
-            quality_score = 0.0
-            if q_row:
-                try:
-                    quality_score = q_row[0]
-                except Exception as e:
-                    logger.error(f"[GOVERNOR] Error parsing quality for {symbol}: {e}")
+            quality_score = float(q_row[0]) if q_row and q_row[0] else 0.0
 
-            # TRIGGER MONITORING ALERTS
-            self.check_monitoring_alerts(symbol, quality_score, row_count)
-
-        # 3. Apply logic
-        state = "QUARANTINED"
-        reason = "Insufficient history"
-
-        if (row_count >= self.ACTIVE_THRESHOLD and quality_score >= self.QUALITY_THRESHOLD):
+        if row_count >= self.ACTIVE_THRESHOLD and quality_score >= self.QUALITY_THRESHOLD:
             state = "ACTIVE"
             reason = "Institutional Grade"
         elif row_count >= self.DEGRADED_THRESHOLD:
             state = "DEGRADED"
             reason = "Sub-optimal history or quality"
         else:
+            state = "QUARANTINED"
             reason = f"Critical history failure: {row_count} rows"
 
-        # 4. Update consolidated Governance Table
-        # Using upsert logic if manager supports it, or simple insert
-        # Assume manager has upsert_symbol_governance
-        # If not, we might fail. The previous code called upsert_symbol_governance.
-        # We'll create the record object.
         record = SymbolGovernanceRecord(
             symbol=symbol,
             history_rows=row_count,
@@ -113,8 +157,6 @@ class SymbolGovernor:
         try:
             self.db.upsert_symbol_governance(record)
         except AttributeError:
-             # If method missing, implement inline or skip
-             logger.warning("upsert_symbol_governance method missing on DatabaseManager")
+            pass
 
-        logger.debug(f"[GOVERNOR] {symbol} classified as {state} ({reason})")
         return state

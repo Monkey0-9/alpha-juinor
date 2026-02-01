@@ -22,7 +22,7 @@ from utils.timeutils import ensure_business_days
 from utils.metrics import metrics
 from .base_alpha import BaseAlpha
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("LIVE_AGENT")
 
 
 class MLAlpha(BaseAlpha):
@@ -301,6 +301,8 @@ class MLAlpha(BaseAlpha):
         super().__init__()
         self.MIN_ML_SAMPLES = 5000
         self.MIN_FEATURES = 20
+
+
         self.model_path = Path(model_path) if model_path else Path("models/ml_alpha")
         self.model_path.mkdir(parents=True, exist_ok=True)
         self.prediction_horizon = prediction_horizon
@@ -481,3 +483,11 @@ class MLAlpha(BaseAlpha):
             "BEAR_CRISIS": 0.7
         }.get(regime, 1.0)
         return signal * mult, confidence
+
+    def ml_training_ready(self, data: pd.DataFrame) -> Tuple[bool, List[str]]:
+        """Check if model is ready for training."""
+        reasons = []
+        if len(data) < self.MIN_ML_SAMPLES:
+            reasons.append(f"Insufficient samples: {len(data)} < {self.MIN_ML_SAMPLES}")
+            return False, reasons
+        return True, []

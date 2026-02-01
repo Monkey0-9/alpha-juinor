@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS price_history (
     close REAL,
     adjusted_close REAL,
     volume INTEGER,
+    vwap REAL,
+    trade_count INTEGER,
     provider TEXT NOT NULL,
     raw_hash TEXT NOT NULL,
     raw_row_json TEXT,             -- Full raw data persistence
@@ -559,6 +561,8 @@ class DailyPriceRecord:
     close: float
     adjusted_close: float
     volume: int
+    vwap: float
+    trade_count: int
     provider: str
     raw_hash: str
     raw_row_json: Optional[str] = None
@@ -613,6 +617,132 @@ class DecompositionRecord:
     correlation: float
     treynor_ratio: float
     information_ratio: float
+
+@dataclass
+class FactorReturn:
+    """Factor return record"""
+    date: str
+    factor: str
+    return_val: float
+    t_stat: float = 0.0
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class SecurityFactorExposure:
+    """Factor exposure record"""
+    date: str
+    symbol: str
+    factor: str
+    exposure: float
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class AgentWeight:
+    """Agent Weight record"""
+    symbol: str
+    weight: float
+    agent: str # strategy/alpha name
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class AgentPerformance:
+    date: str
+    agent: str
+    sharpe: float
+    sortino: float
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class RegimeHistory:
+    date: str
+    regime: str
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class ExecutionModelVersion:
+    version: str
+    model_type: str
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class ExecutionDecision:
+    order_id: str
+    side: str
+    quantity: float
+    symbol: str
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class ExecutionOutcome:
+    order_id: str
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class PortfolioTarget:
+    cycle_id: str
+    symbol: str
+    weight: float
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class PortfolioConstraint:
+    cycle_id: str
+    constraint_type: str
+    value: float
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class OptimizationResult:
+    cycle_id: str
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class ExecutionFeedback:
+    order_id: str
+    price: float
+    fill_price: float
+    cost: float
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class SlippageModelCoeff:
+    symbol: str
+    date: str
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class SlippagePredictionError:
+    date: str
+    symbol: str
+    predicted: float
+    actual: float
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class AgentPnl:
+    """Agent PnL record"""
+    cycle_id: str
+    symbol: str
+    agent_name: str
+    mu_hat: float
+    sigma_hat: float
+    confidence: float
+    agent_weight: float
+    realized_return: float
+    pnl_contribution: float
+    factor_adjusted_return: float = 0.0
+    metadata: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class PortfolioAttribution:
+    """Portfolio attribution record"""
+    date: str
+    period: str = "daily"
+    total_return: float = 0.0
+    market_contribution: float = 0.0
+    alpha_contribution: float = 0.0
+    metadata: Optional[Dict[str, Any]] = None
 
 @dataclass
 class DataQualityRecord:

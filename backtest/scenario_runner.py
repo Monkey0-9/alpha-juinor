@@ -1,114 +1,185 @@
 """
 backtest/scenario_runner.py
 
-Section G: Historical Crisis Backtest Runner.
-Runs full pipeline simulations over defined crisis periods.
+Historical Scenario and Stress Test Runner.
 """
 
 import logging
-import pandas as pd
 import numpy as np
-from typing import List, Dict
+import pandas as pd
+from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass
-from datetime import datetime
-
-# Import components
-# from scripts.ingest_5y_batch import NightlyIngestionAgent (would be used for fetch)
-# from portfolio.pm_brain import PMBrain
-# from execution.fill_simulator import FillSimulator
 
 logger = logging.getLogger("SCENARIO_RUNNER")
 
+
 @dataclass
 class ScenarioResult:
-    name: str
+    """Result of a scenario run."""
+    scenario_name: str
+    start_date: str
+    end_date: str
+    total_return: float
     max_drawdown: float
-    cvar_95: float
-    recovery_time_days: int
-    final_return: float
-    passed: bool
+    sharpe_ratio: float
+    volatility: float
+    trades_count: int
+    win_rate: float
+    avg_holding_period: float
+    meta: Dict[str, Any]
+
 
 class ScenarioRunner:
-    SCENARIOS = {
-        "TECH_BUBBLE": ("2000-01-01", "2003-01-01"),
-        "GFC": ("2007-06-01", "2009-06-01"),
-        "COVID": ("2020-02-01", "2020-06-01"),
-        "RATE_SHOCK": ("2022-01-01", "2022-12-31")
+    """
+    Run historical scenarios and stress tests.
+
+    Built-in scenarios:
+    - COVID_CRASH: Feb-Mar 2020
+    - TECH_SELLOFF: Sep 2022
+    - FLASH_CRASH: May 2010
+    - STEADY_BULL: 2017
+    """
+
+    BUILT_IN_SCENARIOS = {
+        "COVID_CRASH": ("2020-02-19", "2020-03-23"),
+        "TECH_SELLOFF": ("2022-08-15", "2022-10-12"),
+        "FLASH_CRASH": ("2010-05-05", "2010-05-07"),
+        "STEADY_BULL": ("2017-01-01", "2017-12-31"),
+        "RATE_HIKE_2022": ("2022-01-01", "2022-06-30"),
     }
 
-    def __init__(self):
-        pass
+    def __init__(self, strategy_fn: Optional[Callable] = None):
+        """
+        Args:
+            strategy_fn: Function(prices_df) -> signals_df
+        """
+        self.strategy_fn = strategy_fn
+        self._results: List[ScenarioResult] = []
+        logger.info("[SCENARIO_RUNNER] Initialized")
 
-    def run_scenario(self, name: str, start_date: str, end_date: str) -> ScenarioResult:
-        logger.info(f"Running Scenario: {name} ({start_date} to {end_date})")
+    def run_scenario(
+        self,
+        scenario_name: str,
+        prices: pd.DataFrame,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> ScenarioResult:
+        """Run a single scenario."""
+        # Use built-in dates if scenario is known
+        if scenario_name in self.BUILT_IN_SCENARIOS and not start_date:
+            start_date, end_date = self.BUILT_IN_SCENARIOS[scenario_name]
 
-        # 1. Ingest / Mock Data
-        # In a real run, we'd trigger ingestion or load pre-cached data.
-        # For this prototype agent, we simulate the equity curve behavior
-        # based on the intent (as we can't easily backfill 2000 data live from Yahoo usually reliably in 5s)
+        # Filter data
+        if start_date:
+            prices = prices[prices.index >= start_date]
+        if end_date:
+            prices = prices[prices.index <= end_date]
 
-        # Simulating a "Survival" test
-        # We assume the PM Brain runs and generates a series of returns.
+        if prices.empty:
+            logger.warning(f"[SCENARIO] {scenario_name}: No data")
+            return self._empty_result(scenario_name)
 
-        # Let's mock a return series that drops then recovers (or doesn't)
-        # to test the METRICS logic.
+        # Calculate returns
+        returns = prices.pct_change().dropna()
 
-        dates = pd.date_range(start_date, end_date, freq='B')
-        n = len(dates)
+        # Simple strategy simulation (buy-and-hold if no strategy_fn)
+        if self.strategy_fn:
+            signals = self.strategy_fn(prices)
+            portfolio_returns = (signals.shift(1) * returns).sum(axis=1)
+        else:
+            # Equal weight buy-and-hold
+            portfolio_returns = returns.mean(axis=1)
 
-        # Simulated returns (Random Walk with shock)
-        # If GFC, we inject a crash
-        returns = np.random.normal(0.0005, 0.01, n)
+        # Calculate metrics
+        total_return = (1 + portfolio_returns).prod() - 1
+        volatility = portfolio_returns.std() * np.sqrt(252)
+        sharpe = (
+            (portfolio_returns.mean() * 252) / volatility
+            if volatility > 0 else 0
+        )
 
-        if name == "GFC":
-            # Inject crash in middle
-            mid = n // 2
-            returns[mid:mid+20] = -0.05 # -5% for 20 days
+        # Drawdown
+        cumulative = (1 + portfolio_returns).cumprod()
+        running_max = cumulative.cummax()
+        drawdown = (cumulative - running_max) / running_max
+        max_dd = drawdown.min()
 
-        equity = (1 + returns).cumprod()
+        result = ScenarioResult(
+            scenario_name=scenario_name,
+            start_date=str(prices.index[0]),
+            end_date=str(prices.index[-1]),
+            total_return=float(total_return),
+            max_drawdown=float(max_dd),
+            sharpe_ratio=float(sharpe),
+            volatility=float(volatility),
+            trades_count=len(prices),
+            win_rate=float((portfolio_returns > 0).mean()),
+            avg_holding_period=1.0,
+            meta={"days": len(prices)}
+        )
 
-        # Compute Metrics
-        # Max DD
-        peak = np.maximum.accumulate(equity)
-        drawdown = (equity - peak) / peak
-        max_dd = np.min(drawdown)
+        self._results.append(result)
+        logger.info(
+            f"[SCENARIO] {scenario_name}: Return={total_return:.2%}, "
+            f"MaxDD={max_dd:.2%}, Sharpe={sharpe:.2f}"
+        )
+        return result
 
-        # CVaR 95
-        cvar_95 = np.mean(returns[returns <= np.percentile(returns, 5)])
-
-        # Recovery Time
-        # Time from Max DD to new High
-        # Simplified: check if final > peak at max_dd
-        idx_dd = np.argmin(drawdown)
-        peak_val = peak[idx_dd]
-
-        recovery_days = 9999
-        if idx_dd < n-1:
-            future = equity[idx_dd:]
-            rec_idx = np.where(future >= peak_val)[0]
-            if len(rec_idx) > 0:
-                recovery_days = rec_idx[0]
-
-        # Acceptance Criteria
-        passed = True
-        if max_dd < -0.30: passed = False # Fail if > 30% DD
-        if cvar_95 < -0.03: passed = False # Fail if CVaR worse than -3%
-
-        return ScenarioResult(name, max_dd, cvar_95, recovery_days, equity[-1]-1, passed)
-
-    def run_all(self) -> List[ScenarioResult]:
+    def run_all_built_in(self, prices: pd.DataFrame) -> List[ScenarioResult]:
+        """Run all built-in scenarios."""
         results = []
-        for name, (start, end) in self.SCENARIOS.items():
+        for name in self.BUILT_IN_SCENARIOS:
             try:
-                res = self.run_scenario(name, start, end)
-                results.append(res)
+                result = self.run_scenario(name, prices)
+                results.append(result)
             except Exception as e:
-                logger.error(f"Scenario {name} failed: {e}")
-                results.append(ScenarioResult(name, 0, 0, 0, 0, False))
+                logger.error(f"[SCENARIO] {name} failed: {e}")
         return results
 
-if __name__ == "__main__":
-    runner = ScenarioRunner()
-    results = runner.run_all()
-    for r in results:
-        print(r)
+    def stress_test(
+        self,
+        prices: pd.DataFrame,
+        shock_pct: float = -0.10
+    ) -> ScenarioResult:
+        """Apply synthetic shock and measure impact."""
+        # Simulate a sudden drop
+        shocked = prices.copy()
+        mid_idx = len(shocked) // 2
+        shocked.iloc[mid_idx:] *= (1 + shock_pct)
+
+        return self.run_scenario(
+            f"STRESS_SHOCK_{int(abs(shock_pct)*100)}pct",
+            shocked
+        )
+
+    def _empty_result(self, name: str) -> ScenarioResult:
+        return ScenarioResult(
+            scenario_name=name,
+            start_date="",
+            end_date="",
+            total_return=0.0,
+            max_drawdown=0.0,
+            sharpe_ratio=0.0,
+            volatility=0.0,
+            trades_count=0,
+            win_rate=0.0,
+            avg_holding_period=0.0,
+            meta={"error": "No data"}
+        )
+
+    def get_summary(self) -> pd.DataFrame:
+        """Get summary of all scenario results."""
+        if not self._results:
+            return pd.DataFrame()
+
+        data = [
+            {
+                "Scenario": r.scenario_name,
+                "Return": f"{r.total_return:.2%}",
+                "MaxDD": f"{r.max_drawdown:.2%}",
+                "Sharpe": f"{r.sharpe_ratio:.2f}",
+                "WinRate": f"{r.win_rate:.2%}"
+            }
+            for r in self._results
+        ]
+        return pd.DataFrame(data)

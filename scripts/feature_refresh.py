@@ -19,7 +19,7 @@ from data.collectors.data_router import DataRouter
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("FEATURE_REFRESH")
 
-def refresh_features(symbols_limit=None, workers=4):
+def refresh_features(symbols_limit=None, workers=4, tickers=None):
     """
     Refresh features for all/some symbols.
     """
@@ -27,7 +27,10 @@ def refresh_features(symbols_limit=None, workers=4):
     store = FeatureStore()
 
     # 1. Get Active Universe
-    active_symbols = db.get_active_symbols()
+    if tickers:
+        active_symbols = tickers
+    else:
+        active_symbols = db.get_active_symbols()
 
     if not active_symbols:
         logger.warning("No ACTIVE symbols found in symbol_governance. Falling back to universe.json if needed or exit.")
@@ -57,6 +60,16 @@ def refresh_features(symbols_limit=None, workers=4):
             df = db.get_daily_prices(symbol, limit=750)
             if df.empty or len(df) < 60:
                 return False, f"Insufficient data: {len(df)}"
+
+            # Standardize columns to capitalized for feature engine
+            df = df.rename(columns={
+                'open': 'Open',
+                'high': 'High',
+                'low': 'Low',
+                'close': 'Close',
+                'volume': 'Volume',
+                'adjusted_close': 'Adjusted_Close'
+            })
 
             # Compute and store
             ok = store.compute_and_store(symbol, df)
@@ -93,6 +106,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Force refresh of features")
     parser.add_argument("--limit", type=int, help="Limit number of symbols", default=None)
     parser.add_argument("--workers", type=int, help="Parallel workers", default=4)
+    parser.add_argument("--tickers", type=str, help="Specific tickers to refresh (comma separated)", default=None)
     args = parser.parse_args()
 
-    refresh_features(symbols_limit=args.limit, workers=args.workers)
+    tickers = args.tickers.split(",") if args.tickers else None
+    refresh_features(symbols_limit=args.limit, workers=args.workers, tickers=tickers)

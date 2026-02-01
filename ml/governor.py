@@ -17,17 +17,32 @@ class ModelGovernor:
     def calculate_psi(self, expected: np.array, actual: np.array, buckets=10) -> float:
         """
         Calculate Population Stability Index (PSI).
+        Robust to small samples and flat arrays.
         """
+        if len(expected) < 10 or len(actual) < 10:
+             return 0.0 # Not enough data to judge stability
+
         def scale_range(input, min, max):
-            input += -(np.min(input))
-            input /= np.max(input) / (max - min)
+            den = max - min
+            if den == 0:
+                return input # Flat array
+            input = input - np.min(input)
+            input /= den
             input += min
             return input
 
         breakpoints = np.arange(0, buckets + 1) / (buckets) * 100
 
-        # Determine buckets based on expected
-        expected_percents = np.percentile(expected, breakpoints)
+        try:
+            expected_percents = np.percentile(expected, breakpoints)
+        except Exception:
+            # Fallback for small/weird data
+            expected_percents = np.linspace(np.min(expected), np.max(expected), buckets + 1)
+
+        # Handle unique logic if percentile returns non-unique bins
+        expected_percents = np.unique(expected_percents)
+        if len(expected_percents) < 2:
+             return 0.0 # Everything is uniform
 
         expected_cnts, _ = np.histogram(expected, expected_percents)
         actual_cnts, _ = np.histogram(actual, expected_percents)

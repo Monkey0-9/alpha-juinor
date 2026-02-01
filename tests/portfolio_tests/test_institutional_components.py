@@ -9,15 +9,17 @@ import logging
 from unittest.mock import MagicMock
 
 sys.path.insert(0, r'c:\mini-quant-fund')
-
-from portfolio.capital_competition import CapitalCompetitionEngine, CompetitionResult
 from portfolio.opportunity_cost import OpportunityCostManager
+from portfolio.capital_competition import CapitalCompetitionEngine
 from risk.portfolio_stress_simulator import PortfolioStressSimulator
 from risk.kill_switch import GlobalKillSwitch
 from risk.regime_controller import RegimeController
 from ui.terminal_dashboard import TerminalDashboard
 from contracts.allocation import AllocationRequest
 from contracts.alpha_contract import AlphaOutput
+
+sys.path.insert(0, r'c:\mini-quant-fund')
+
 
 class TestInstitutionalComponents(unittest.TestCase):
     def test_capital_competition(self):
@@ -72,6 +74,33 @@ class TestInstitutionalComponents(unittest.TestCase):
         )
         valid, errs = ao.validate()
         self.assertTrue(valid, f"Validation failed: {errs}")
+
+    def test_opportunity_cost_manager(self):
+        ocm = OpportunityCostManager(
+            risk_free_rate=0.04, time_horizon=1.0
+        )
+        # Mock some alpha outputs
+        alpha_outputs = [
+            AlphaOutput(
+                mu=0.01, sigma=0.01, cvar_95=-0.02, confidence=0.8,
+                provider="test", model_version="1.0", input_schema_hash="abc",
+                distribution_type="NORMAL", model_disagreement=0.5
+            ),
+            AlphaOutput(
+                mu=0.005, sigma=0.005, cvar_95=-0.01, confidence=0.9,
+                provider="test", model_version="1.0", input_schema_hash="def",
+                distribution_type="NORMAL", model_disagreement=0.2
+            )
+        ]
+        results = ocm.calculate_opportunity_costs(alpha_outputs)
+        self.assertIsInstance(results, dict)
+        self.assertIn('weighted_cost', results)
+        # Validate fields
+        self.assertGreater(
+            results['weighted_cost'], 0, "Weighted cost should be positive"
+        )
+
+
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.ERROR)

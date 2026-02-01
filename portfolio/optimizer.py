@@ -7,21 +7,25 @@ subject to:
     sum(w) == 1
     w_min <= w <= w_max
     sector caps (optional)
-Deterministic: uses seeded RNG to generate solver_seed and seeds scenario samplers.
+Deterministic: uses seeded RNG to generate solver_seed and seeds
+    scenario samplers.
 Outputs: weights, rejected_assets, explain (metrics).
 Requires: cvxpy, numpy
 """
-from typing import Dict, Any, Tuple, List, Optional
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass
 import numpy as np
 import cvxpy as cp
 import hashlib
 import json
-import os
 
 CONTRACT_VERSION = "1.0.0"
 
+
 def _schema_hash(obj: Dict) -> str:
-    return "sha256:" + hashlib.sha256(json.dumps(obj, sort_keys=True).encode()).hexdigest()
+    encoded = json.dumps(obj, sort_keys=True).encode()
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
 
 def optimize_portfolio(
     mu: np.ndarray,
@@ -38,11 +42,13 @@ def optimize_portfolio(
     Inputs:
       mu: expected returns vector (n,)
       Sigma: covariance matrix (n,n)
-      scenario_returns: matrix (N_scenarios, n) of scenario asset returns for CVaR estimation
+      scenario_returns: matrix (N_scenarios, n) of scenario asset returns
+                        for CVaR estimation
       w_prev: previous weights (n,)
       w_min, w_max: box bounds (n,) (can set to zeros and max caps)
       sector_map: optional {sector_name: [asset_indices]}
-      params: dict with keys: lambda, gamma, alpha, kappa, eta, uncertainty_radius
+      params: dict with keys: lambda, gamma, alpha, kappa, eta,
+              uncertainty_radius
       rng_seed: integer seed for reproducibility
 
     Returns:
@@ -57,7 +63,8 @@ def optimize_portfolio(
     n = mu.shape[0]
     N_s = scenario_returns.shape[0]
 
-    # Regime compatibility and data confidence are expected to be included in mu already (mu_adj).
+    # Regime compatibility and data confidence are expected to be included
+    # in mu already (mu_adj).
     # But allow an optional multiplier in params
     data_conf = params.get("data_confidence", np.ones(n))
     regime_r = params.get("regime_compatibility", np.ones(n))
@@ -65,7 +72,8 @@ def optimize_portfolio(
 
     # Robust covariance shrinkage (Ledoit-Wolf simplistic)
     uncertainty_radius = params.get("uncertainty_radius", 0.0)
-    # If uncertainty_radius > 0, we'll apply a simple diagonal inflation to Sigma
+    # If uncertainty_radius > 0, we'll apply a simple diagonal inflation
+    # to Sigma
     if uncertainty_radius > 0:
         Sigma = Sigma + uncertainty_radius * np.diag(np.diag(Sigma))
 
@@ -84,10 +92,12 @@ def optimize_portfolio(
     t = cp.Variable(1)
     z = cp.Variable(N_s)  # scenario exceedances
 
-    # Impact term: approximate via quadratic using Sigma-like or H diagonal in params
+    # Impact term: approximate via quadratic using Sigma-like or
+    # H diagonal in params
     H = params.get("impact_matrix")
     if H is None:
-        # default small diagonal impact proportional to liquidity proxies if provided
+        # default small diagonal impact proportional to liquidity proxies
+        # if provided
         H = params.get("impact_diag", 1e-4) * np.eye(n)
     else:
         H = np.array(H)
@@ -123,7 +133,8 @@ def optimize_portfolio(
     # sector caps
     if sector_map:
         for sector, indices in sector_map.items():
-            constraints += [cp.sum(w[indices]) <= params.get("sector_caps", {}).get(sector, 1.0)]
+            sector_cap = params.get("sector_caps", {}).get(sector, 1.0)
+            constraints += [cp.sum(w[indices]) <= sector_cap]
 
     # Problem objective (maximize -> minimize negative)
     objective = cp.Maximize(
@@ -136,10 +147,14 @@ def optimize_portfolio(
 
     prob = cp.Problem(objective, constraints)
 
-    # Choose deterministic solver settings; prefer OSQP (deterministic) when available
+    # Choose deterministic solver settings; prefer OSQP (deterministic)
+    # when available
     solver = cp.OSQP
-    solve_opts = {"eps_abs": 1e-6, "eps_rel": 1e-6, "max_iter": 100000, "verbose": False}
-    # OSQP may produce deterministic outputs; fix warm_start False; random seed not generally available for OSQP via cvxpy
+    solve_opts = {
+        "eps_abs": 1e-6, "eps_rel": 1e-6, "max_iter": 100000, "verbose": False
+    }
+    # OSQP may produce deterministic outputs; fix warm_start False;
+    # random seed not generally available for OSQP via cvxpy
     try:
         prob.solve(solver=solver, **solve_opts)
     except Exception as e:
@@ -162,11 +177,15 @@ def optimize_portfolio(
         else:
             w_val = w_val / w_val.sum()
 
-    # Rejected assets: assets with w == w_min and would improve expected objective if allowed -> simple dominance test
+    # Rejected assets: assets with w == w_min and would improve expected
+    # objective if allowed -> simple dominance test
     rejected = []
     for i in range(n):
         if np.isclose(w_val[i], w_min[i]) and mu_adj[i] > 0:
-            rejected.append({"asset_index": int(i), "reason": "hit lower bound; positive adjusted mean"})
+            rejected.append({
+                "asset_index": int(i),
+                "reason": "hit lower bound; positive adjusted mean"
+            })
 
     # Explain payload
     explain = {
@@ -180,7 +199,11 @@ def optimize_portfolio(
     # compute CVaR estimate on scenarios (post-hoc)
     port_losses = - (R @ w_val)
     VaR = np.quantile(port_losses, alpha)
-    cvar_est = np.mean(port_losses[port_losses >= VaR]) if np.any(port_losses >= VaR) else float(np.max(port_losses))
+    cvar_est = (
+        np.mean(port_losses[port_losses >= VaR])
+        if np.any(port_losses >= VaR)
+        else float(np.max(port_losses))
+    )
     explain["cvar_estimate"] = float(cvar_est)
     explain["VaR"] = float(VaR)
 
@@ -199,3 +222,44 @@ def optimize_portfolio(
         }),
     }
     return result
+
+
+class PortfolioOptimizer:
+    """
+    Adapter class for optimize_portfolio to satisfy class-based
+    interfaces/tests.
+    """
+    def __init__(self, config: Dict[str, Any] = None):
+        self.config = config or {}
+
+    def optimize(self,
+                 mu: np.ndarray,
+                 Sigma: np.ndarray,
+                 scenario_returns: np.ndarray,
+                 w_prev: np.ndarray,
+                 w_min: np.ndarray,
+                 w_max: np.ndarray,
+                 sector_map: Optional[Dict[str, List[int]]] = None,
+                 params: Dict[str, Any] = None,
+                 rng_seed: int = 0) -> Dict[str, Any]:
+
+        # Merge config params with runtime params
+        run_params = self.config.copy()
+        if params:
+            run_params.update(params)
+
+        return optimize_portfolio(
+            mu, Sigma, scenario_returns, w_prev, w_min, w_max,
+            sector_map, run_params, rng_seed
+        )
+
+# Export for tests
+
+
+@dataclass
+class Constraint:
+    name: str
+    params: Dict[str, Any]
+
+
+CVXPY_AVAILABLE = True

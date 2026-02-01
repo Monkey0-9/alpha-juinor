@@ -3,7 +3,7 @@ import logging
 import numpy as np
 from typing import Dict, Any, Optional
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("LIVE_AGENT")
 
 def run_agent(agent: Any, *args, **kwargs) -> Dict[str, Any]:
     """
@@ -17,6 +17,12 @@ def run_agent(agent: Any, *args, **kwargs) -> Dict[str, Any]:
         'error': str|None
     }
     """
+    # Robust name extraction
+    try:
+        agent_name = agent.__class__.__name__
+    except:
+        agent_name = str(agent)
+
     try:
         # Standardize call
         # Robust signature handling:

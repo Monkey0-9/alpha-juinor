@@ -27,10 +27,11 @@ print("\n1. Testing Data Quality Module...")
 from data.quality import compute_data_quality, validate_data_for_trading, validate_data_for_ml
 
 # Create good quality data
-dates = pd.date_range('2020-01-01', periods=1500, freq='D')
+# 1. Create Mock Data
+dates = pd.date_range('2020-01-01', periods=5500, freq='D')
 np.random.seed(42)
-prices = 100 * np.exp(np.cumsum(np.random.normal(0.0005, 0.02, 1500)))
-volumes = np.random.lognormal(10, 0.5, 1500)
+prices = 100 * np.exp(np.cumsum(np.random.normal(0.0005, 0.02, 5500)))
+volumes = np.random.lognormal(10, 0.5, 5500)
 
 good_data = pd.DataFrame({
     'Close': prices,
@@ -97,7 +98,7 @@ print("   ✓ ML readiness gate works")
 print("\n6. Testing Strategy Defensive Checks...")
 from strategies.institutional_strategy import InstitutionalStrategy
 
-strategy = InstitutionalStrategy(tickers=['TEST'])
+strategy = InstitutionalStrategy()
 
 # Test with empty data
 empty_result = strategy.generate_signals(pd.DataFrame())

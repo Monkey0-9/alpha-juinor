@@ -1,0 +1,24 @@
+# Canary Trading Configuration
+# Phase 10: Go-Live with minimal capital
+
+[canary]
+enabled = true
+capital_pct = 0.005  # 0.5% of total capital
+
+[risk]
+max_position_pct = 0.01  # 1% max per position
+max_daily_trades = 5
+kill_switch_drawdown = -0.02  # 2% drawdown triggers halt
+
+[execution]
+mode = "paper"  # paper | live
+slippage_buffer_bps = 10
+
+[monitoring]
+log_level = "DEBUG"
+alert_on_trade = true
+dashboard_enabled = true
+
+[alphas]
+enabled = ["momentum", "mean_reversion"]
+ml_enabled = false  # Disable ML until validated

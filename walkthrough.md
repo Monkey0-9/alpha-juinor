@@ -95,3 +95,16 @@ Zero-crash stability achieved on full 225-symbol paper cycle:
 
 ---
 **Handover Status**: RELEASED.
+
+## 7. Schema & Import Fixes (Session 2)
+
+- [x] **Database Schema**: Added 16 missing dataclasses to `database/schema.py` to align with `tests/test_institutional_schema.py` and `INSTITUTIONAL_ARCHITECTURE_SPECIFICATION.md`.
+  - Added: `FactorReturn`, `SecurityFactorExposure`, `AgentPnl`, `PortfolioAttribution`, `AgentWeight`, `RegimeHistory`, `ExecutionModelVersion`, etc.
+  - Updated `AgentPnl` and `PortfolioAttribution` to match spec fields and defaults.
+- [x] **Portfolio Namespace Issue**:
+  - Renamed `tests/portfolio` -> `tests/portfolio_tests` to prevent shadowing the source `portfolio` package.
+  - Moved `tests/test_institutional_components.py` to `tests/portfolio_tests/`.
+  - Verified `portfolio` package is protected from namespace pollution in pytest.
+- [x] **Test Suite**:
+  - Refactored `tests/test_institutional_schema.py` from a script to a proper pytest module.
+  - Verified all schema tests pass.

@@ -159,6 +159,7 @@ class ImpactGate:
         # Get regime-adjusted thresholds
         max_impact, max_adv = self._get_regime_thresholds()
 
+
         # Calculate participation rate
         participation_rate = quantity / max(1, adv)
 
@@ -171,12 +172,18 @@ class ImpactGate:
         # ========== DECISION LOGIC ==========
 
         # Check ADV limit
+        # Check ADV limit
         if participation_rate > max_adv:
-            # Can we reduce to fit?
-            reduced_qty = adv * max_adv * 0.9  # 90% of limit
+            # STRICT REDUCTION
+            # Reduce to exactly the limit (minus a small buffer)
+            max_allowed_qty = adv * max_adv * 0.99
+            reduced_qty = min(quantity, max_allowed_qty)
+
+            # Recalculate impact for reduced qty
             reduced_impact = self._estimate_impact(reduced_qty, volatility, adv, spread_bps)
 
             if reduced_impact < max_impact:
+
                 result = ImpactGateResult(
                     decision=ImpactDecision.REDUCE,
                     symbol=symbol,

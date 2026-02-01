@@ -22,6 +22,21 @@ class TransactionCostModel:
     Models for estimating market impact and slippage.
     """
 
+    def __init__(self, config_path="configs/tc_params.json"):
+        import os, json
+        self.params = {}
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, "r") as f:
+                    self.params = json.load(f)
+            except:
+                pass
+
+        # Load calibrated parameters or defaults
+        self.base_spread_bps = float(self.params.get("base_spread_bps", 5.0))
+        self.impact_coeff = float(self.params.get("impact_coeff", 0.1))
+        self.min_slippage_bps = float(self.params.get("min_slippage_bps", 1.0))
+
     @staticmethod
     def almgren_chriss_slippage(
         qty: float, adv: float, volatility: float, price: float, eta: float = 0.1
@@ -75,8 +90,9 @@ class TransactionCostModel:
             return {"cost_bps": 0.0}
 
         participation = abs(qty) / params.adv
-        impact_pct = 0.1 * params.volatility * np.sqrt(participation)
-        cost_bps = impact_pct * 10000
+        # Use calibrated impact coefficient
+        impact_pct = self.impact_coeff * params.volatility * np.sqrt(participation)
+        cost_bps = (impact_pct * 10000) + self.base_spread_bps
 
         return {"cost_bps": cost_bps}
 

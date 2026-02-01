@@ -7,6 +7,8 @@ from contracts.alpha_contract import AlphaOutput as AlphaOutputV2, AlphaContract
 from contracts.allocation import AllocationRequest, OrderInfo, DecisionRecord
 from contracts.base_agent import BaseAgent, AgentResult
 
+from contracts.enums import decision_enum
+
 __all__ = [
     'AlphaDistribution',
     'validate_alpha_output',
@@ -17,5 +19,6 @@ __all__ = [
     'OrderInfo',
     'DecisionRecord',
     'BaseAgent',
-    'AgentResult'
+    'AgentResult',
+    'decision_enum'
 ]

@@ -2,7 +2,7 @@ import logging
 import pandas as pd
 import numpy as np
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("LIVE_AGENT")
 from strategies.regime_engine import RegimeEngine
 from alpha_families import get_alpha_families
 from strategies.ml_referee import MLReferee
@@ -12,6 +12,7 @@ from risk.engine import RiskManager
 from strategies.nlp_engine import InstitutionalNLPEngine
 from concurrent.futures import ThreadPoolExecutor
 from mini_quant_fund.intelligence.feature_store import FeatureStore
+from services.risk_enforcer import RiskEnforcer
 
 # Institutional Infrastructure (Phase 8 Integration)
 from regime.controller import get_regime_controller, RegimeLabel
@@ -44,6 +45,7 @@ class InstitutionalStrategy:
         self.nlp_engine = InstitutionalNLPEngine()
         self.executor = ThreadPoolExecutor(max_workers=16)
         self.feature_store = FeatureStore(schema_path="configs/feature_schema.json")
+        self.risk_enforcer = RiskEnforcer()
 
         # Institutional Infrastructure Integration
         self.regime_controller = get_regime_controller()
@@ -143,7 +145,7 @@ class InstitutionalStrategy:
                     now = pd.Timestamp.utcnow()
                     age_hours = (now - feature_ts).total_seconds() / 3600.0
 
-                    if age_hours > 24:
+                    if age_hours > 168:
                         logger.warning(f"[STALE_FEATURES] {symbol}: Features are {age_hours:.1f}h old. Rejecting symbol.")
                         # Audit the rejection immediately
                         rejection_audit = {
@@ -423,7 +425,65 @@ class InstitutionalStrategy:
         else:
             self.allocator.max_pos = 0.10 # Restore default
 
-        return self.allocator.allocate(signals, data, current_portfolio)
+        # 3. Allocator run
+        target_allocation = self.allocator.allocate(signals, data, current_portfolio)
+
+        # 4. SAFETY ENFORCEMENT: Risk CVaR & Entanglement Check
+        try:
+            # Use historical returns as scenarios (Bootstrap / Historical Simulation)
+            if not data.empty and len(data) > 30:
+                returns_df = data.pct_change().dropna()
+                # Align columns with weights
+                # target_allocation is likely a dict or Series. Convert to aligned array.
+                if isinstance(target_allocation, dict):
+                    assets = list(target_allocation.keys())
+                    weights_arr = np.array([target_allocation.get(a, 0.0) for a in assets])
+                elif hasattr(target_allocation, 'index'):
+                    assets = target_allocation.index.tolist()
+                    weights_arr = target_allocation.values
+                else:
+                    assets = []
+                    weights_arr = np.array([])
+
+                if len(assets) > 0 and not returns_df.empty:
+                    # Filter returns to assets in portfolio
+                    valid_assets = [a for a in assets if a in returns_df.columns]
+                    if valid_assets:
+                        scenario_returns = returns_df[valid_assets].values
+                        # Re-align weights to valid assets for check
+                        check_weights = np.array([target_allocation.get(a, 0.0) for a in valid_assets])
+
+                        # Normalize check weights to sum to exposure (approx) or just pass as is
+                        # RiskEnforcer expects standard weight vector matching columns
+
+                        enforce_res = self.risk_enforcer.enforce(
+                            check_weights,
+                            scenario_returns,
+                            returns_matrix_for_ent=scenario_returns.T
+                        )
+
+                        if not enforce_res["allow"]:
+                            logger.warning(f"[RISK_ENFORCER] Portfolio blocked: {enforce_res['reasons']}")
+                            if enforce_res["suggested_weights"] is not None:
+                                logger.info("[RISK_ENFORCER] Applying suggested haircuts")
+                                # Map back to target_allocation
+                                for i, asset in enumerate(valid_assets):
+                                    # Update specific asset weight
+                                    if hasattr(target_allocation, 'loc'):
+                                        target_allocation.loc[asset] = enforce_res["suggested_weights"][i]
+                                    else:
+                                        target_allocation[asset] = enforce_res["suggested_weights"][i]
+                            else:
+                                logger.error("[RISK_ENFORCER] No suggestion provided. Returning empty allocation safety fallback.")
+                                return {} # Safety collapse
+
+        except Exception as e:
+            logger.error(f"[RISK_ENFORCER] Failed to check portfolio risk: {e}")
+            # Fail closed or open? Fail closed for safety.
+            logger.error("[RISK_ENFORCER] FAILING CLOSED.")
+            return {}
+
+        return target_allocation
 
     def train_models(self, train_panel):
         """

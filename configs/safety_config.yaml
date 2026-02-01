@@ -1,0 +1,17 @@
+circuit:
+  max_single_trade_loss_pct: 0.01
+  max_daily_loss_pct: 0.02
+  max_weekly_loss_pct: 0.05
+  nav_usd: 1000000.0
+
+risk_enforcer:
+  cvar_limit_pct: 0.05
+  entanglement_threshold: 0.7
+  entanglement_haircut: 0.5
+
+execution:
+  max_participation: 0.03
+  min_edge_bps: 10.0
+
+tc_params:
+  path: configs/tc_params.json

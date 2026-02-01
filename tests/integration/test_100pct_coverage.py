@@ -5,12 +5,15 @@ Tests that every symbol in universe gets exactly one decision.
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from orchestration.cycle_orchestrator import CycleOrchestrator
-from audit.decision_log import SystemHalt
 import sqlite3
 import logging
+
+# Path hack to allow running from scripts/ or root
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from orchestration.cycle_orchestrator import CycleOrchestrator  # noqa: E402
+from audit.decision_log import SystemHalt  # noqa: E402
+from contracts import decision_enum  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,25 +39,33 @@ def test_100pct_coverage():
         results = orch.run_cycle()
 
         # Verify coverage
-        assert len(results) == universe_size, f"Coverage mismatch: {len(results)} != {universe_size}"
+        msg = f"Coverage mismatch: {len(results)} != {universe_size}"
+        assert len(results) == universe_size, msg
         logger.info(f"✓ Coverage test PASSED: {len(results)}/{universe_size}")
 
         # Verify audit DB
         conn = sqlite3.connect('runtime/audit.db')
         cursor = conn.cursor()
-        cursor.execute(f"SELECT COUNT(*) FROM decisions WHERE cycle_id = ?", (orch.cycle_id,))
+        query = "SELECT COUNT(*) FROM decisions WHERE cycle_id = ?"
+        cursor.execute(query, (orch.cycle_id,))
         db_count = cursor.fetchone()[0]
         conn.close()
 
-        assert db_count == universe_size, f"Audit DB mismatch: {db_count} != {universe_size}"
+        msg = f"Audit DB mismatch: {db_count} != {universe_size}"
+        assert db_count == universe_size, msg
         logger.info(f"✓ Audit DB test PASSED: {db_count} records")
 
         # Verify all decisions have valid enum
-        from contracts import decision_enum
-        valid_decisions = {decision_enum.EXECUTE, decision_enum.HOLD, decision_enum.REJECT, decision_enum.ERROR}
+        valid_decisions = {
+            decision_enum.EXECUTE,
+            decision_enum.HOLD,
+            decision_enum.REJECT,
+            decision_enum.ERROR
+        }
         for d in results:
-            assert d.final_decision in valid_decisions, f"Invalid decision: {d.final_decision}"
-        logger.info(f"✓ Decision enum test PASSED")
+            msg = f"Invalid decision: {d.final_decision}"
+            assert d.final_decision in valid_decisions, msg
+        logger.info("✓ Decision enum test PASSED")
 
         logger.info("=" * 80)
         logger.info("ALL TESTS PASSED ✓")

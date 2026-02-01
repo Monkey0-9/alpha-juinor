@@ -24,8 +24,9 @@ def test_arima_minimum_sample_check():
     # Create insufficient data
     data = create_price_data(n_rows=20)  # Less than MIN_ARIMA_SAMPLE (30)
 
-    with pytest.raises(ModelNotFitError, match="Insufficient data"):
-        alpha.arima_safe_predict(data, symbol="TEST")
+    result = alpha.arima_safe_predict(data, symbol="TEST")
+    assert result["method"] == "NONE"
+    assert result["reason"] == "SHORT_SERIES"
 
 
 def test_arima_ewma_fallback():
