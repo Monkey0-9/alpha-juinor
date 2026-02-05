@@ -189,7 +189,7 @@ def _internal_write_audit(record):
                 return
 
             if 'written_at' not in record_dict:
-                record_dict['written_at'] = pd.Timestamp.utcnow().isoformat()
+                record_dict['written_at'] = pd.Timestamp.now('UTC').isoformat()
 
             line = json.dumps(record_dict, default=str)
             with open(AUDIT_JSONL_PATH, 'a', encoding='utf-8') as f:
@@ -228,7 +228,7 @@ def _internal_write_audit(record):
                 record_dict = record
                 cycle_id = record_dict.get('cycle_id', 'UNKNOWN')
                 symbol = record_dict.get('symbol', 'UNKNOWN')
-                timestamp = record_dict.get('timestamp', pd.Timestamp.utcnow().isoformat())
+                timestamp = record_dict.get('timestamp', pd.Timestamp.now('UTC').isoformat())
                 data_providers = json.dumps(record_dict.get('data_providers', {}))
                 alphas = json.dumps(record_dict.get('alphas', {}))
                 sigmas = json.dumps(record_dict.get('sigmas', {}))

@@ -213,7 +213,7 @@ class BaseAgent:
         self.config = config
         self.name = self.__class__.__name__
 
-    def evaluate(self, symbol: str, data: Any) -> AgentResult:
+    def evaluate(self, symbol: str, data: Any, **kwargs) -> AgentResult:
         """
         Must be implemented by all agents.
         """

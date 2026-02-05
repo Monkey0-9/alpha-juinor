@@ -76,7 +76,7 @@ class FeatureStore:
             return True
 
         except Exception as e:
-            logger.error(f"Feature computation/storage failed for {symbol}: {e}")
+            logger.exception(f"Feature computation/storage failed for {symbol}: {e}")
             return False
 
     def get_latest(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:

@@ -35,9 +35,19 @@ try:
 except Exception:
     ENTANGLEMENT_AVAILABLE = False
 
+# Optional LLM trade analyzer - zero-error design
+try:
+    from agents.llm_trade_analyzer import (
+        get_llm_trade_analyzer,
+        LLMTradeAnalysis
+    )
+    LLM_ANALYZER_AVAILABLE = True
+except Exception:
+    LLM_ANALYZER_AVAILABLE = False
+
 # CONSTANTS
-CONTRACT_VERSION = "1.0"
-SCHEMA_HASH_SEED = "decision_agent_schema_v1"
+CONTRACT_VERSION = "1.1"  # Updated with LLM integration
+SCHEMA_HASH_SEED = "decision_agent_schema_v1_llm"
 
 def _sha256_hex(obj: Any) -> str:
     s = json.dumps(obj, sort_keys=True, default=str)
@@ -93,10 +103,18 @@ class DecisionAgent:
             "entanglement_threshold": 0.7,
             "entanglement_beta": 0.5,
             "min_data_confidence": 0.6,
-            "safety_buffer_bps": 5.0
+            "safety_buffer_bps": 5.0,
+            # LLM integration settings
+            "use_llm_analysis": True,
+            "llm_weight": 0.25,  # LLM influence on final decision
+            "llm_veto_threshold": 0.85,  # High confidence LLM can veto
+            "llm_boost_threshold": 0.80  # High confidence LLM boosts
         }
         if config:
             self.config.update(config)
+
+        # Initialize LLM analyzer (lazy, zero-error)
+        self._llm_analyzer = None
 
     # -----------------------
     # Utilities
@@ -379,25 +397,129 @@ class DecisionAgent:
             "time_in_trade_limit_minutes": int(input_obj.get("risk", {}).get("time_in_trade_limit_minutes", 1440))
         }
 
-        risk_checks = {"data_confidence_ok": True, "cvar_ok": cvar_ok, "entanglement_ok": ent_ok, "execution_cost_ok": exec_ok}
+        risk_checks = {
+            "data_confidence_ok": True,
+            "cvar_ok": cvar_ok,
+            "entanglement_ok": ent_ok,
+            "execution_cost_ok": exec_ok,
+            "llm_validated": True  # Default, updated below
+        }
+
+        # =============================================
+        # LLM TRADE ANALYSIS (Zero-Error Integration)
+        # =============================================
+        llm_analysis = None
+        llm_validation = None
+
+        if self.config["use_llm_analysis"] and LLM_ANALYZER_AVAILABLE:
+            try:
+                if self._llm_analyzer is None:
+                    self._llm_analyzer = get_llm_trade_analyzer()
+
+                # Perform comprehensive LLM analysis
+                llm_analysis = self._llm_analyzer.analyze_trade(
+                    symbol=symbol,
+                    price=price,
+                    features=features,
+                    ensemble_score=ensemble,
+                    models=models,
+                    risk_data=risk,
+                    position_state=position_state,
+                    news_sentiment=features.get("sentiment", 0.0),
+                    market_regime=features.get("regime", "normal")
+                )
+
+                # Validate decision against LLM recommendation
+                llm_validation = self._llm_analyzer.validate_decision(
+                    symbol=symbol,
+                    proposed_decision=decision,
+                    ensemble_score=ensemble,
+                    llm_analysis=llm_analysis
+                )
+
+                risk_checks["llm_validated"] = llm_validation["validated"]
+
+                # LLM can influence decision in specific cases
+                if llm_analysis.llm_available:
+                    w = self.config["llm_weight"]
+
+                    # Boost confidence if LLM strongly agrees
+                    if (llm_validation["agreement_score"] > 0.9 and
+                            llm_analysis.confidence > self.config["llm_boost_threshold"]):
+                        confidence = min(0.99, confidence + 0.1)
+
+                    # LLM veto: high-confidence disagreement
+                    if (not llm_validation["validated"] and
+                            llm_analysis.confidence > self.config["llm_veto_threshold"]):
+                        if decision == "BUY" and llm_analysis.recommendation == "AVOID":
+                            decision = "HOLD"
+                            warnings.append(
+                                f"llm_veto: {llm_analysis.reasoning}"
+                            )
+                        elif llm_analysis.risk_assessment == "extreme":
+                            if decision == "BUY":
+                                decision = "HOLD"
+                                warnings.append("llm_extreme_risk_flag")
+
+            except Exception as e:
+                # Zero-error: LLM failure never crashes decision agent
+                warnings.append(f"llm_analysis_skipped")
+                llm_analysis = None
+                llm_validation = None
 
         explain = {
-            "why_price_is_mispriced": f"Ensemble={ensemble:.3f}; MR_comp={comps['mr']:.3f}; MOM_comp={comps['mom']:.3f}",
-            "indicators_used": {"rsi_3": features.get("rsi_3"), "boll_z": features.get("boll_z"), "ema_gap_pct": comps.get("ema_gap_pct"), "atr_pct": features.get("atr_pct")},
+            "why_price_is_mispriced": (
+                f"Ensemble={ensemble:.3f}; "
+                f"MR_comp={comps['mr']:.3f}; "
+                f"MOM_comp={comps['mom']:.3f}"
+            ),
+            "indicators_used": {
+                "rsi_3": features.get("rsi_3"),
+                "boll_z": features.get("boll_z"),
+                "ema_gap_pct": comps.get("ema_gap_pct"),
+                "atr_pct": features.get("atr_pct")
+            },
             "expected_edge_bps": expected_edge_bps,
             "expected_return_pct": mu_a,
-            "model_versions": {"ensemble": "ens_v1", "bootstrap": f"bs{self.config['bootstrap_samples']}"}
+            "model_versions": {
+                "ensemble": "ens_v1",
+                "bootstrap": f"bs{self.config['bootstrap_samples']}"
+            }
         }
+
+        # Add LLM insights to explanation if available
+        if llm_analysis and llm_analysis.llm_available:
+            explain["llm_analysis"] = {
+                "recommendation": llm_analysis.recommendation,
+                "confidence": llm_analysis.confidence,
+                "reasoning": llm_analysis.reasoning,
+                "risk_assessment": llm_analysis.risk_assessment,
+                "key_factors": llm_analysis.key_factors
+            }
+        if llm_validation:
+            explain["llm_validation"] = {
+                "agreement_score": llm_validation["agreement_score"],
+                "concerns": llm_validation["concerns"]
+            }
 
         # create proposal dataclass
         proposal = DecisionProposal(
-            run_id=run_id, seed=seed, timestamp=ts, agent_id=self.agent_id,
-            decision=decision, confidence=float(confidence), ensemble_score=float(ensemble),
-            primary_signal=primary_signal, suggested_notional_pct=float(suggested_pct),
-            suggested_qty=int(suggested_qty), price_limits={"min":price_min,"max":price_max},
-            entry_zone={"low":price_min,"high":price_max,"type":"LIMIT"},
-            exit_logic=exit_logic, risk_checks=risk_checks,
-            explain=explain, warnings=warnings
+            run_id=run_id,
+            seed=seed,
+            timestamp=ts,
+            agent_id=self.agent_id,
+            decision=decision,
+            confidence=float(confidence),
+            ensemble_score=float(ensemble),
+            primary_signal=primary_signal,
+            suggested_notional_pct=float(suggested_pct),
+            suggested_qty=int(suggested_qty),
+            price_limits={"min": price_min, "max": price_max},
+            entry_zone={"low": price_min, "high": price_max, "type": "LIMIT"},
+            exit_logic=exit_logic,
+            risk_checks=risk_checks,
+            explain=explain,
+            warnings=warnings
         )
         # schema hash & signature
         proposal.schema_hash = _sha256_hex(SCHEMA_HASH_SEED)

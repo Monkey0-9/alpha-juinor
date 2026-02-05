@@ -22,6 +22,7 @@ from data_intelligence.provider_health import ProviderCircuitBreaker
 from data_intelligence.quality_agent import QualityAgent
 from data_intelligence.confidence_agent import ConfidenceAgent
 from portfolio.allocator import InstitutionalAllocator
+from strategies.stat_arb.engine import StatArbEngine
 from monitoring.cycle_summary import print_cycle_summary
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ class CycleOrchestrator:
         self.data_router = DataRouter()
         self.pm_brain = PMBrain(config=pm_config)
         self.risk_manager = RiskManager()
+        self.statarb_engine = StatArbEngine()
         self.allocator = InstitutionalAllocator()
 
         # Agents Registry (50 Agents)
@@ -154,10 +156,34 @@ class CycleOrchestrator:
             "avg_quality_score": 0.0
         }
 
+        # 1.5 GLOBAL PRE-SCAN (StatArb)
+        statarb_signals = pd.DataFrame()
+        try:
+            # Fetch small sample for all to get latest closes
+            logger.info("StatArb: Performing global scan for pairs discovery...")
+            panel_data = {}
+            for sym in universe:
+                # Get enough for cointegration check
+                panel_data[sym] = self.data_router.get_price_history(sym, start_date="2022-01-01")
+
+            # Convert to wide format
+            all_closes = pd.DataFrame()
+            for sym, df in panel_data.items():
+                if not df.empty and 'Close' in df.columns:
+                    all_closes[sym] = df['Close']
+
+            if not all_closes.empty:
+                statarb_signals = self.statarb_engine.generate_signals(all_closes)
+                logger.info(f"StatArb: Found {len(statarb_signals)} pair signals")
+            self.all_closes = all_closes # Store for optimization
+        except Exception as e:
+            logger.error(f"Global StatArb scan failed: {e}")
+            self.all_closes = pd.DataFrame()
+
         # 2. Parallel Map Phase
         with ThreadPoolExecutor(max_workers=50) as executor:
             future_to_symbol = {
-                executor.submit(self.worker.process_symbol, self.cycle_id, sym): sym
+                executor.submit(self.worker.process_symbol, self.cycle_id, sym, statarb_signals=statarb_signals): sym
                 for sym in universe
             }
 
@@ -224,7 +250,20 @@ class CycleOrchestrator:
                 "risk_aversion": 2.0,
                 "cvar_weight": 5.0
             }
-            opt_result = self.pm_brain.optimize_cycle(candidates, config=opt_config)
+            # Prepare historical returns for Ledoit-Wolf
+            historical_returns = None
+            if not self.all_closes.empty:
+                candidate_symbols = [c.symbol for c in candidates]
+                # Filter all_closes to candidates
+                present_symbols = [s for s in candidate_symbols if s in self.all_closes.columns]
+                if present_symbols:
+                    historical_returns = self.all_closes[present_symbols].pct_change().dropna()
+
+            opt_result = self.pm_brain.optimize_cycle(
+                candidates,
+                config=opt_config,
+                historical_returns=historical_returns
+            )
 
             # Map results back to symbols
             weights_map = {opt_result['symbols'][i]: opt_result['w'][i] for i in range(len(opt_result['symbols']))}

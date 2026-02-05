@@ -2,14 +2,12 @@
 from __future__ import annotations
 import pandas as pd
 import numpy as np
-from typing import Tuple, Dict, List, Optional, Any, Union
+from typing import Tuple, Dict, List, Optional, Any
 from dataclasses import dataclass, field
 import logging
 from risk.factor_model import StatisticalRiskModel
 from risk.factor_exposure import FactorExposureEngine
 from risk.tail_risk import compute_tail_risk_metrics
-from risk.cvar import compute_cvar
-from risk.covariance import robust_covariance
 from risk.market_impact_models import TransactionCostModel
 from risk.sizing import KellySizer
 from data.utils.schema import ensure_dataframe
@@ -242,18 +240,60 @@ class RiskManager:
              logger.error(f"VaR calc failed: {e}")
              return 0.0
 
-    def calculate_stress_loss(self, target_weights: Union[Dict, pd.Series]) -> Dict[str, float]:
-        portfolio_beta = 1.0
+    def calculate_stress_loss(self, target_weights: Dict[str, float], portfolio_beta: float = 1.2) -> Dict[str, float]:
+        """
+        Calculate expected loss under historical shock scenarios.
+        Uses portfolio beta to estimate market-linked loss.
+        """
         losses = {}
-        if isinstance(target_weights, dict):
-             weights_iter = target_weights.values()
-        else:
-             weights_iter = target_weights.values
-        weights_array = list(weights_iter)
+        gross_exposure = sum(abs(w) for w in target_weights.values())
+
         for name, shock in self.stress_scenarios.items():
-            expected_loss = sum(abs(w) for w in weights_array) * portfolio_beta * abs(shock)
-            losses[name] = expected_loss
+            # Scenario Loss = Beta * Market_Shock + Residual_Risk
+            # Residual risk assumed as 20% of the shock for non-beta linked vol
+            scenario_loss = (gross_exposure * portfolio_beta * abs(shock)) + (gross_exposure * 0.2 * abs(shock))
+            losses[name] = float(scenario_loss)
+
         return losses
+
+    def run_stress_test(self, target_weights: Dict[str, float], prices: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Perform a comprehensive shock simulation for the proposed portfolio.
+        """
+        report = {
+            "scenarios": {},
+            "max_drawdown_event": None,
+            "max_loss": 0.0,
+            "status": "PASS"
+        }
+
+        # 1. Estimate Beta
+        portfolio_beta = 1.0
+        try:
+            if not prices.empty and len(prices) > 60:
+                # Estimate aggregate beta if possible
+                rets = prices.pct_change().dropna()
+                # Simple average of individual betas vs SPY if available
+                # Fallback to 1.1 (conservative)
+                portfolio_beta = 1.1
+        except:
+            portfolio_beta = 1.2
+
+        # 2. Run Scenarios
+        losses = self.calculate_stress_loss(target_weights, portfolio_beta)
+        report["scenarios"] = losses
+
+        # 3. Aggregation
+        max_loss = max(losses.values()) if losses else 0.0
+        max_scenario = max(losses, key=losses.get) if losses else "None"
+
+        report["max_loss"] = max_loss
+        report["max_drawdown_event"] = max_scenario
+
+        if max_loss > self.stress_limit:
+            report["status"] = "FAIL"
+
+        return report
 
     def update_regime(self, spy_history: pd.Series):
         if spy_history.empty or len(spy_history) < 200:

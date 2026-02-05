@@ -3,8 +3,6 @@ import os
 import sys
 import time
 import warnings
-from pathlib import Path
-from typing import Optional
 
 # Third-party imports for structured and rich logging
 try:
@@ -82,6 +80,13 @@ def setup_logging(name: str = "mini_quant", log_dir: str = "runtime/logs") -> lo
         console_fmt = logging.Formatter('%(message)s')
         console_handler.setFormatter(console_fmt)
         logger.addHandler(console_handler)
+    else:
+        # Fallback console handler if rich is not available
+        fallback_handler = logging.StreamHandler(sys.stdout)
+        fallback_handler.setLevel(logging.INFO)
+        fallback_fmt = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+        fallback_handler.setFormatter(fallback_fmt)
+        logger.addHandler(fallback_handler)
 
     # 2. Main Structured File Handler (JSONL)
     json_log_path = os.path.join(log_dir, "live.jsonl")
@@ -121,11 +126,7 @@ def setup_logging(name: str = "mini_quant", log_dir: str = "runtime/logs") -> lo
     logger.addHandler(file_handler)
     logger.addHandler(error_handler)
 
-    # Institutional Warning Throttling
-    warnings.filterwarnings("once", category=UserWarning)
-    warnings.filterwarnings("once", category=DeprecationWarning)
-    # Specific spammy warnings
-    warnings.filterwarnings("ignore", message="X does not have valid feature names")
+    # Warnings are configured in main.py
 
     # Prevent propagation to root logger
     logger.propagate = False

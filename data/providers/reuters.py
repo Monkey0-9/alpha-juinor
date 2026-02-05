@@ -33,7 +33,7 @@ class ReutersDataProvider(DataProvider):
         """Initialize Reuters/Refinitiv API connection."""
         try:
             if not self.api_key or not self.app_id:
-                logger.warning("Reuters API credentials not provided. Provider will be unavailable.")
+                logger.info("Reuters API credentials not provided. Provider will be unavailable.")
                 return
 
             self.session = requests.Session()

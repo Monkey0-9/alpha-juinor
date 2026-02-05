@@ -1,0 +1,53 @@
+{
+    "trading_mode": "autonomous",
+    "auto_execute": true,
+    "max_positions": 50,
+    "position_size_pct": 0.02,
+    "max_sector_exposure": 0.25,
+    "daily_turnover_limit": 0.20,
+    "min_signal_confidence": 0.6,
+    "use_full_market_scan": true,
+    "universe_source": "full_market",
+    "sectors_enabled": [
+        "Technology",
+        "Financials",
+        "Healthcare",
+        "Consumer Discretionary",
+        "Industrials",
+        "Energy",
+        "Communication Services",
+        "Consumer Staples",
+        "Materials",
+        "Utilities",
+        "Real Estate"
+    ],
+    "models_enabled": {
+        "hmm": true,
+        "deep_ensemble": true,
+        "rl_agent": true,
+        "momentum": true,
+        "technical": true,
+        "nlp_sentiment": true,
+        "llm_signals": true
+    },
+    "risk_limits": {
+        "max_drawdown": 0.10,
+        "max_daily_loss": 0.03,
+        "max_position_loss": 0.05,
+        "vix_cutoff": 35
+    },
+    "execution_settings": {
+        "order_type": "market",
+        "time_in_force": "day",
+        "use_smart_router": true,
+        "slippage_limit_bps": 50
+    },
+    "schedule": {
+        "market_scan_time": "09:35",
+        "rebalance_time": "10:00",
+        "close_positions_time": "15:45",
+        "run_continuously": true,
+        "scan_interval_minutes": 30
+    },
+    "notes": "Edit this file daily to change trading behavior"
+}

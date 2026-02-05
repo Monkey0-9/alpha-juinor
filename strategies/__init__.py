@@ -9,7 +9,7 @@ This package contains various trading strategies including:
 """
 
 # Import key classes for convenience
-from .stat_arb import KalmanPairsTrader
+from .stat_arb import StatArbEngine
 from .alpha import CompositeAlpha, TrendAlpha, MeanReversionAlpha
 from .composite_alpha import CompositeAlphaStrategy
 from .factory import StrategyFactory
@@ -19,7 +19,7 @@ from .institutional_strategy import InstitutionalStrategy
 # from strategies.ml_models.ml_alpha import MLAlpha
 
 __all__ = [
-    'KalmanPairsTrader',
+    'StatArbEngine',
     'CompositeAlpha',
     'TrendAlpha',
     'MeanReversionAlpha',

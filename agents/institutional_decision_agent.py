@@ -32,6 +32,16 @@ import numpy as np
 
 logger = logging.getLogger("INSTITUTIONAL_DECISION_AGENT")
 
+# Optional LLM integration (Zero-Error)
+try:
+    from agents.llm_trade_analyzer import (
+        get_llm_trade_analyzer,
+        LLMTradeAnalysis
+    )
+    LLM_AVAILABLE = True
+except ImportError:
+    LLM_AVAILABLE = False
+
 # =============================================================================
 # CONSTANTS
 # =============================================================================
@@ -131,6 +141,9 @@ class InstitutionalProposal:
     contract_version: str
     schema_hash: str
     signature: str
+    llm_analysis: Optional[Dict[str, Any]] = None  # New field for LLM insights
+    signature: str
+    llm_analysis: Optional[Dict[str, Any]] = None  # New field for LLM insights
 
     def to_json(self) -> str:
         """Serialize to JSON string."""
@@ -593,7 +606,49 @@ class InstitutionalDecisionAgent:
         self.buy_threshold = buy_threshold
         self.sell_threshold = sell_threshold
 
+        self.buy_threshold = buy_threshold
+        self.sell_threshold = sell_threshold
+
+        # LLM Settings
+        self.use_llm = True
+        self.llm_weight = 0.25
+
         logger.info(f"[INIT] InstitutionalDecisionAgent initialized | cvar_limit={cvar_limit} | per_symbol_cap={per_symbol_cap}")
+
+    def _get_llm_analysis(self, input_data: Dict[str, Any], ensemble_score: float) -> Optional[Dict[str, Any]]:
+        """
+        Get LLM analysis safe-guarded.
+        """
+        if not self.use_llm or not LLM_AVAILABLE:
+            return None
+
+        try:
+            analyzer = get_llm_trade_analyzer()
+            # Construct simplified input for LLM to avoid serialization issues
+            analysis = analyzer.analyze_trade(
+                symbol=input_data["symbol"],
+                price=input_data["price"],
+                features=input_data["features"],
+                ensemble_score=ensemble_score,
+                models=input_data.get("models", {}),
+                risk_data=input_data.get("risk", {}),
+                position_state=input_data.get("position_state", {}),
+                news_sentiment=input_data.get("features", {}).get("sentiment", 0.0),
+                market_regime=input_data.get("market", {}).get("regime", "normal")
+            )
+
+            # Return dict representation for JSON serialization
+            return {
+                "recommendation": analysis.recommendation,
+                "confidence": analysis.confidence,
+                "reasoning": analysis.reasoning,
+                "risk_assessment": analysis.risk_assessment,
+                "key_factors": analysis.key_factors,
+                "available": analysis.llm_available
+            }
+        except Exception as e:
+            logger.warning(f"LLM analysis failed: {e}")
+            return None
 
     def compute_proposal(self, input_data: Dict[str, Any]) -> InstitutionalProposal:
         """
@@ -758,6 +813,24 @@ class InstitutionalDecisionAgent:
 
         # 9. Compute confidence
         confidence = min(1.0, abs(ensemble_score) * 1.2)
+
+        # 10. LLM Analysis & Enhancement (Top 1% Logic)
+        llm_result = self._get_llm_analysis(input_data, ensemble_score)
+
+        if llm_result and llm_result.get("available"):
+            # Boost confidence if LLM agrees
+            if (decision == Decision.BUY and
+                llm_result["recommendation"] == "BUY" and
+                llm_result["confidence"] > 0.8):
+                confidence = min(0.99, confidence + 0.1)
+
+            # Veto check
+            if (decision == Decision.BUY and
+                llm_result["risk_assessment"] == "extreme"):
+                decision = Decision.HOLD
+                suggested_notional_pct = 0.0
+                suggested_qty = 0
+                warnings.append(f"LLM_VETO: {llm_result['reasoning']}")
 
         # 10. Build explanation
         explain = {

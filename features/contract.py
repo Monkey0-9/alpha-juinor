@@ -39,9 +39,11 @@ def load_feature_contract(name: str = "ml_v1") -> Dict[str, Any]:
         >>> print(contract["n_features"])
         28
     """
-    contract_path = Path(__file__).parent / "feature_contracts" / f"feature_contract_{name}.json"
+    import os
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    contract_path = os.path.join(base_dir, "feature_contracts", f"feature_contract_{name}.json")
 
-    if not contract_path.exists():
+    if not os.path.exists(contract_path):
         raise FeatureContractError(
             f"Feature contract not found: {contract_path}\n"
             f"Expected contract file: feature_contract_{name}.json"

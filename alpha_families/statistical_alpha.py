@@ -1,3 +1,4 @@
+
 import logging
 import warnings
 from typing import Dict, Any
@@ -5,7 +6,7 @@ from collections import defaultdict
 import pandas as pd
 import numpy as np
 from statsmodels.tsa.arima.model import ARIMA
-from statsmodels.tools.sm_exceptions import ValueWarning
+from statsmodels.tools.sm_exceptions import ValueWarning, ConvergenceWarning
 from .base_alpha import BaseAlpha
 from utils.metrics import metrics
 
@@ -79,13 +80,14 @@ class StatisticalAlpha(BaseAlpha):
             return {"signal": 0.0, "method": "NONE", "reason": "SHORT_SERIES"}
 
         try:
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=ValueWarning)
-                warnings.filterwarnings("error", category=UserWarning)
-                warnings.filterwarnings("error", category=RuntimeWarning)
-
-                model = ARIMA(returns, order=self.arima_order)
-                model_fit = model.fit()
+            # Relax constraints for better convergence on short windows
+            model = ARIMA(
+                returns,
+                order=self.arima_order,
+                enforce_stationarity=False,
+                enforce_invertibility=False
+            )
+            model_fit = model.fit()
 
             if not getattr(
                 model_fit, 'mle_retvals', {}
@@ -97,6 +99,8 @@ class StatisticalAlpha(BaseAlpha):
             return {"signal": float(np.tanh(forecast * 10)), "method": "ARIMA"}
 
         except Exception as e:
+            # Log failure at debug level to avoid spam, but allow diagnostics
+            logger.debug(f"[ARIMA_FAIL] {symbol}: {e}")
             self._record_arima_failure(symbol)
             self.arima_fallbacks += 1
             metrics.arima_fallbacks += 1
@@ -107,8 +111,37 @@ class StatisticalAlpha(BaseAlpha):
             }
 
     def generate_signal(self, data: pd.DataFrame, **kwargs) -> Dict[str, Any]:
-        """Generate statistical signal."""
+        """Generate statistical signal including StatArb."""
         symbol = kwargs.get("symbol", "UNKNOWN")
+        statarb_signals = kwargs.get("statarb_signals")
+
+        # 1. Check for Cointegration/Pairs Trading signals
+        if statarb_signals is not None and not statarb_signals.empty:
+            # Look for this symbol in active pairs
+            # Pair signal: signal_val is for leg1.
+            # leg2 signal is -signal_val * (p1/p2) or similar,
+            # but we simplify to -signal_val
+            match_leg1 = statarb_signals[statarb_signals['leg1'] == symbol]
+            match_leg2 = statarb_signals[statarb_signals['leg2'] == symbol]
+
+            if not match_leg1.empty:
+                sig = match_leg1.iloc[0]['signal']
+                z = match_leg1.iloc[0]['z_score']
+                return {
+                    "signal": float(sig),
+                    "confidence": 0.8,
+                    "metadata": {"method": "STAT_ARB_LEG1", "z_score": z}
+                }
+            elif not match_leg2.empty:
+                sig = -match_leg2.iloc[0]['signal']
+                z = match_leg2.iloc[0]['z_score']
+                return {
+                    "signal": float(sig),
+                    "confidence": 0.8,
+                    "metadata": {"method": "STAT_ARB_LEG2", "z_score": z}
+                }
+
+        # 2. Fallback to ARIMA
         res = self.arima_safe_predict(data, symbol=symbol)
         return {
             "signal": res["signal"],
@@ -133,7 +166,7 @@ class StatisticalAlpha(BaseAlpha):
         return float(returns.std() * np.sqrt(252))
 
     def _calculate_cointegration_signal(self, data: pd.DataFrame) -> float:
-        """Test expected method: cointegration signal."""
+        """Cointegration signal stub - now integrated in generate_signal."""
         return 0.0
 
     def _calculate_arima_forecast(self, data: pd.DataFrame) -> float:
@@ -142,5 +175,5 @@ class StatisticalAlpha(BaseAlpha):
         return float(res["signal"])
 
     def _calculate_statistical_arbitrage(self, data: pd.DataFrame) -> float:
-        """Test expected method: stat-arb signal."""
+        """Stat-arb signal stub - now integrated in generate_signal."""
         return 0.0

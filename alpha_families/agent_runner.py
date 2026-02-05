@@ -20,7 +20,7 @@ def run_agent(agent: Any, *args, **kwargs) -> Dict[str, Any]:
     # Robust name extraction
     try:
         agent_name = agent.__class__.__name__
-    except:
+    except Exception:
         agent_name = str(agent)
 
     try:

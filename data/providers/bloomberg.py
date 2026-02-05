@@ -33,7 +33,7 @@ class BloombergDataProvider(DataProvider):
         """Initialize Bloomberg API connection."""
         try:
             if not self.api_key:
-                logger.warning("Bloomberg API key not provided. Provider will be unavailable.")
+                logger.info("Bloomberg API key not provided. Provider will be unavailable.")
                 return
 
             # In a real implementation, this would authenticate with Bloomberg's API

@@ -304,7 +304,7 @@ notifications:
 # 6. Feature Flags (Institutional Upgrades)
 features:
   ml_enabled: true  # ACTIVATED: Shadow Mode for Alpha Rehabilitation
-  ml_mode: shadow  # ML operating mode: disabled | shadow | live
+  ml_mode: live  # ML operating mode: disabled | shadow | live
   use_regime_detection: true
   use_wyckoff_filter: true
   use_auction_market_confidence: true

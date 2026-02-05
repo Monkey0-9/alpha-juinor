@@ -37,13 +37,13 @@ class NewsDataProvider(DataProvider):
         """Initialize news data API connections."""
         try:
             if not self.api_key:
-                logger.warning("News API key not provided. Provider will be unavailable.")
+                logger.info("News API key not provided. Provider will be unavailable.")
                 return
 
             self.session = requests.Session()
             # NewsData.io uses apikey parameter, not Bearer token in regular headers
             # But we keep session for connection pooling
-            
+
             self._authenticated = True
             logger.info("News data provider initialized for NewsData.io")
 
@@ -104,7 +104,7 @@ class NewsDataProvider(DataProvider):
             if response.status_code == 200:
                 data = response.json()
                 results = data.get('results', [])
-                
+
                 # Normalize to standard format
                 news_items = []
                 for item in results:

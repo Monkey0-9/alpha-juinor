@@ -7,14 +7,14 @@ import pandas as pd
 from contracts import AgentResult, AllocationRequest
 from meta_intelligence.disagreement import ModelDisagreement
 from meta_intelligence.opportunity_cost import OpportunityCostEngine
+from meta_intelligence.bayesian_scorer import BayesianScorer
+logger = logging.getLogger(__name__)
+
 try:
     from portfolio.optimizer import optimize_portfolio
 except Exception as e:
     logger.error(f"Failed to import optimize_portfolio: {e}")
     optimize_portfolio = None
-    pass
-
-logger = logging.getLogger(__name__)
 
 class PMBrain:
     """
@@ -32,6 +32,7 @@ class PMBrain:
         self.opportunity_cost = OpportunityCostEngine(replacement_threshold=0.20)
         self.risk_manager = risk_manager
         self.portfolio_state = portfolio_state or {}
+        self.scorer = BayesianScorer()
 
         # Universe scores for opportunity cost (updated externally)
         self.universe_scores: Dict[str, float] = {}
@@ -85,16 +86,25 @@ class PMBrain:
         if not valid_results:
             return None, "REJECT", ["ALL_AGENTS_ZERO_CONFIDENCE"], metadata
 
-        # 2. Aggregation (Equal Weight for now)
+        # 2. Aggregation (Performance-Weighted Institutional Approach)
         mus = [r.mu for r in valid_results]
         sigmas = [r.sigma for r in valid_results]
         confidences = [r.confidence for r in valid_results]
 
-        mu_hat = sum(mus) / len(mus)
-        # Sigma aggregation (assuming independence)
-        w = 1.0 / len(mus)
-        sigma_hat = math.sqrt(sum((w * s)**2 for s in sigmas))
-        avg_confidence = sum(confidences) / len(confidences)
+        # Bayesian Weights
+        raw_weights = [self.scorer.get_weight(r.name) for r in valid_results]
+        sum_weights = sum(raw_weights)
+        if sum_weights > 0:
+            norm_weights = [w / sum_weights for w in raw_weights]
+        else:
+            norm_weights = [1.0 / len(valid_results)] * len(valid_results)
+
+        mu_hat = sum(mu * w for mu, w in zip(mus, norm_weights))
+
+        # Sigma aggregation (Performance-scaled)
+        # Using a weighted quadratic mean
+        sigma_hat = math.sqrt(sum((w * s)**2 for s, w in zip(sigmas, norm_weights)))
+        avg_confidence = sum(c * w for c, w in zip(confidences, norm_weights))
 
         # 3. Conviction Z-Score (MAD-based)
         conviction_zscore = self.compute_conviction_zscore(mu_hat, mus)
@@ -197,13 +207,12 @@ class PMBrain:
         self,
         candidates: List[Any], # List[DecisionRecord]
         w_prev: Optional[np.ndarray] = None,
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
+        historical_returns: Optional[pd.DataFrame] = None
     ) -> Dict[str, Any]:
         """
         Run global portfolio optimization on a set of candidates.
         """
-        # from portfolio.optimizer import optimize_portfolio # Moved to top
-
         if optimize_portfolio is None:
             logger.error("Optimizer not available (ImportError). Returning empty.")
             return {"w": np.array([]), "rejected_assets": [], "error": "Optimizer Import Error"}
@@ -218,9 +227,34 @@ class PMBrain:
         mu = np.array([c.mu for c in candidates])
         sigmas = np.array([c.sigma if c.sigma > 0 else 0.01 for c in candidates])
 
-        # 2. Construct Covariance (Diagonal Robust Assumption)
-        # Sigma[i,i] = sigma[i]^2
+        # 2. Construct Covariance
+        # Default: Diagonal Robust Assumption
         Sigma = np.diag(sigmas**2)
+
+        # Upgrade: Ledoit-Wolf Shrinkage (Institutional Standard)
+        if historical_returns is not None and not historical_returns.empty:
+            try:
+                from sklearn.covariance import LedoitWolf
+                # Ensure we only use returns for the candidates
+                # (handled by caller, but we double check)
+                common_cols = [s for s in symbols if s in historical_returns.columns]
+                if len(common_cols) == n:
+                    lw = LedoitWolf().fit(historical_returns[symbols])
+                    Sigma_lw = lw.covariance_
+
+                    # Hybrid: Scale LW correlation by active sigma forecasts
+                    # D = diag(sigmas)
+                    # Sigma = D * Corr(Sigma_lw) * D
+                    diag_lw = np.sqrt(np.diag(Sigma_lw))
+                    # Avoid division by zero
+                    diag_lw[diag_lw == 0] = 1e-9
+                    Corr_lw = Sigma_lw / np.outer(diag_lw, diag_lw)
+                    Sigma = np.diag(sigmas) @ Corr_lw @ np.diag(sigmas)
+                    logger.info("PMBrain: Used Ledoit-Wolf Shrinkage for covariance")
+                else:
+                    logger.warning(f"PMBrain: Returns panel missing symbols ({len(common_cols)}/{n}). Using diagonal.")
+            except Exception as e:
+                logger.error(f"PMBrain: Ledoit-Wolf failed: {e}. Falling back to diagonal.")
 
         # 3. Optimization Params
         opt_config = config or {}

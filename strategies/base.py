@@ -9,12 +9,12 @@ class BaseStrategy(ABC):
     Formal Strategy interface as per institutional requirements.
     Wraps Alpha generation and Risk logic into a single unit.
     """
-    
+
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         self.name = config.get('name', self.__class__.__name__)
         self.tickers = config.get('tickers', [])
-        
+
     @abstractmethod
     def generate_signals(self, market_data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -23,14 +23,26 @@ class BaseStrategy(ABC):
         Returns a DataFrame indexed by timestamp with columns as tickers.
         """
         pass
-    
+
     @abstractmethod
     def calculate_risk(self, signals: pd.DataFrame, market_data: pd.DataFrame) -> pd.DataFrame:
         """
         Adjust signals based on strategy-specific risk (e.g. stop losses).
         """
         return signals # Default: No adjustment
-    
+
     def on_order_fill(self, trade_data: Dict[str, Any]):
         """Callback for execution feedback."""
         pass
+
+    def check_session_validity(self, exchange: str = "NYSE") -> bool:
+        """
+        P3: Global Awareness Check.
+        Returns True if the relevant exchange is open.
+        """
+        try:
+            from core.global_session_tracker import get_global_session_tracker
+            tracker = get_global_session_tracker()
+            return tracker.is_market_open(exchange)
+        except Exception:
+            return True # Fail open if module missing

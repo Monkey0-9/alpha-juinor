@@ -6,17 +6,39 @@ from contracts import BaseAgent, AgentResult
 # --- STATISTICAL ---
 
 class StatArbAgent(BaseAgent):
-    def evaluate(self, symbol: str, data: pd.DataFrame) -> AgentResult:
-        # Requires cross-sectional data, stub for single-symbol view
-        return AgentResult(symbol, self.name, 0.0, 0.0, 0.0)
+    def evaluate(self, symbol: str, data: pd.DataFrame, **kwargs) -> AgentResult:
+        statarb_signals = kwargs.get("statarb_signals")
+        if statarb_signals is not None and not statarb_signals.empty:
+            match_leg1 = statarb_signals[statarb_signals['leg1'] == symbol]
+            match_leg2 = statarb_signals[statarb_signals['leg2'] == symbol]
+
+            if not match_leg1.empty:
+                sig = match_leg1.iloc[0]['signal']
+                return AgentResult(symbol, self.name, float(sig), 0.01, 0.8,
+                                   metadata={"role": "leg1", "pair": match_leg1.iloc[0]['leg2']})
+            elif not match_leg2.empty:
+                sig = -match_leg2.iloc[0]['signal']
+                return AgentResult(symbol, self.name, float(sig), 0.01, 0.8,
+                                   metadata={"role": "leg2", "pair": match_leg2.iloc[0]['leg1']})
+
+        return AgentResult(symbol, self.name, 0.0, 0.01, 0.0, metadata={"reason": "NO_PAIR_MATCH"})
 
 class CointegrationAgent(BaseAgent):
-    def evaluate(self, symbol: str, data: pd.DataFrame) -> AgentResult:
-        return AgentResult(symbol, self.name, 0.0, 0.0, 0.0)
+    def evaluate(self, symbol: str, data: pd.DataFrame, **kwargs) -> AgentResult:
+        # Cointegration is binary, but we use Z-score if available
+        statarb_signals = kwargs.get("statarb_signals")
+        if statarb_signals is not None and not statarb_signals.empty:
+            match = statarb_signals[(statarb_signals['leg1'] == symbol) | (statarb_signals['leg2'] == symbol)]
+            if not match.empty:
+                z = match.iloc[0]['z_score']
+                return AgentResult(symbol, self.name, 0.0, 0.01, 1.0, metadata={"cointegrated": True, "z_score": z})
+
+        return AgentResult(symbol, self.name, 0.0, 0.01, 0.0, metadata={"cointegrated": False})
 
 class PairsTradingAgent(BaseAgent):
-    def evaluate(self, symbol: str, data: pd.DataFrame) -> AgentResult:
-        return AgentResult(symbol, self.name, 0.0, 0.0, 0.0)
+    def evaluate(self, symbol: str, data: pd.DataFrame, **kwargs) -> AgentResult:
+        # Mirror StatArbAgent for redundancy/ensemble benefit
+        return StatArbAgent(self.config).evaluate(symbol, data, **kwargs)
 
 class KalmanFilterAgent(BaseAgent):
     def evaluate(self, symbol: str, data: pd.DataFrame) -> AgentResult:

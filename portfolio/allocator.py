@@ -7,7 +7,9 @@ import logging
 
 # Institutional Infrastructure (Phase 8 Integration)
 from risk.cvar_gate import get_cvar_gate
+from risk.cvar_gate import get_cvar_gate
 from regime.controller import get_regime_controller
+from execution.algo_executor import get_smart_execution, AlgoType
 
 logger = logging.getLogger("ALLOCATOR")
 
@@ -126,14 +128,28 @@ class InstitutionalAllocator:
         weights = self.allocate_batch([request])
         weight = weights.get(request.symbol, 0.0)
 
+        # Intelligent Execution Recommendation (Top 1%)
+        smart_exec = get_smart_execution()
+
+        # Determine urgency based on confidence/mu
+        urgency = "high" if request.confidence > 0.8 else "medium"
+
+        best_algo = smart_exec.select_best_algo(
+            symbol=request.symbol,
+            side="BUY" if weight > 0 else "SELL", # heuristic
+            quantity=int(weight * 100), # dummy qty for selection logic
+            urgency=urgency
+        )
+
         return {
             "symbol": request.symbol,
             "quantity": weight,
-            "order_type": "MARKET",
+            "order_type": best_algo.value.upper(), # TWAP/VWAP/POV/MARKET
             "metadata": {
                 "mu": request.mu,
                 "sigma": request.sigma,
-                "confidence": request.confidence
+                "confidence": request.confidence,
+                "execution_plan": best_algo.value
             }
         }
 

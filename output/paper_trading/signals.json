@@ -1,0 +1,34 @@
+[
+  {
+    "symbol": "SPY",
+    "direction": "HOLD",
+    "weight": 0.0,
+    "rsi": 50.27050444700716,
+    "volatility": 0.10366960574017488,
+    "confidence": 0.5
+  },
+  {
+    "symbol": "QQQ",
+    "direction": "HOLD",
+    "weight": 0.0,
+    "rsi": 49.19971431472448,
+    "volatility": 0.1370703762933059,
+    "confidence": 0.5
+  },
+  {
+    "symbol": "GLD",
+    "direction": "HOLD",
+    "weight": 0.0,
+    "rsi": 51.60193369771245,
+    "volatility": 0.48652058666299985,
+    "confidence": 0.5
+  },
+  {
+    "symbol": "TLT",
+    "direction": "HOLD",
+    "weight": 0.0,
+    "rsi": 40.47623989569611,
+    "volatility": 0.0897876288383707,
+    "confidence": 0.5
+  }
+]

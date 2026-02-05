@@ -62,7 +62,7 @@ class SymbolWorker:
         # Allocation
         self.allocator = allocator or InstitutionalAllocator()
 
-    def process_symbol(self, cycle_id: str, symbol: str, regime: str = "UNCERTAIN") -> DecisionRecord:
+    def process_symbol(self, cycle_id: str, symbol: str, regime: str = "UNCERTAIN", statarb_signals: Optional[pd.DataFrame] = None) -> DecisionRecord:
         """
         Process symbol through state machine.
         Returns: DecisionRecord object (guaranteed)
@@ -159,7 +159,8 @@ class SymbolWorker:
             agent_results = []
             for agent in self.agents:
                 try:
-                    res = agent.evaluate(symbol, data)
+                    # Pass extra context to agents (statarb)
+                    res = agent.evaluate(symbol, data, statarb_signals=statarb_signals)
                     agent_results.append(res)
                 except Exception as e:
                     logger.error(f"Agent {agent.name} failed on {symbol}: {e}")

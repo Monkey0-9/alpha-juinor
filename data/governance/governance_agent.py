@@ -109,7 +109,7 @@ class SymbolGovernor:
                 pass  # Method missing, skip
 
         if low_quality_count > 50:
-            print(f"[MONITORING] ... and {low_quality_count - 50} more low quality symbols")
+            logger.warning(f"[MONITORING] ... and {low_quality_count - 50} more low quality symbols")
 
         logger.info(
             f"[GOVERNOR] Completed: ACTIVE={classified['ACTIVE']}, "

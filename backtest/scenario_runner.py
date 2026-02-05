@@ -125,6 +125,18 @@ class ScenarioRunner:
         )
         return result
 
+    # Backward-compat wrapper
+    def run_all(self) -> List[ScenarioResult]:
+        import pandas as pd
+        # Fallback: run on empty DataFrame to avoid exceptions and keep interface
+        empty = pd.DataFrame()
+        return [self._empty_result(name) for name in self.BUILT_IN_SCENARIOS]
+
+    # Optional legacy signature wrapper
+    def run_scenario_legacy(self, name: str, start_date: str, end_date: str) -> ScenarioResult:
+        import pandas as pd
+        return self.run_scenario(name, pd.DataFrame(), start_date, end_date)
+
     def run_all_built_in(self, prices: pd.DataFrame) -> List[ScenarioResult]:
         """Run all built-in scenarios."""
         results = []

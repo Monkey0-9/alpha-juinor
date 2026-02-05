@@ -32,7 +32,7 @@ class SentimentDataProvider(DataProvider):
         """Initialize sentiment data API connections."""
         try:
             if not self.api_key:
-                logger.warning("Sentiment API key not provided. Provider will be unavailable.")
+                logger.info("Sentiment API key not provided. Provider will be unavailable.")
                 return
 
             self.session = requests.Session()

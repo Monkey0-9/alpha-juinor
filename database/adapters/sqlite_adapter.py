@@ -12,15 +12,13 @@ from pathlib import Path
 from .base import DatabaseAdapter
 from ..schema import (
     SCHEMA_SQL, SCHEMA_VERSION, DailyPriceRecord, IntradayPriceRecord,
-    IngestionAuditRecord, DataQualityRecord, ProviderMetricsRecord,
-    ExecutionFeedbackRecord, BackfillFailureRecord, SymbolGovernanceRecord,
-    ModelDecayMetric, CapitalAllocation, GovernanceDecisionRecord,
-    StrategyLifecycleRecord, CorporateAction, FeatureRecord, ModelOutput,
-    DecisionRecord, OrderRecord, PositionRecord, AuditEntry, CycleMeta
+    IngestionAuditRecord, DataQualityRecord, SymbolGovernanceRecord,
+    CorporateAction, PositionRecord, AuditEntry
 )
 from ..errors import DatabaseError
 
 logger = logging.getLogger(__name__)
+
 
 class SQLiteAdapter(DatabaseAdapter):
     """
@@ -356,24 +354,45 @@ class SQLiteAdapter(DatabaseAdapter):
     def log_governance_decision(self, record) -> bool: return True
     def upsert_strategy_lifecycle(self, record) -> bool: return True
     def upsert_features(self, records) -> int:
-        # Simplified feature upsert
-        if not records: return 0
+        if not records:
+            return 0
         conn = self._get_connection()
         try:
             for r in records:
-                conn.execute('INSERT OR REPLACE INTO features (symbol, date, features_json) VALUES (?, ?, ?)',
-                             (r.symbol, r.date, json.dumps(r.features)))
+                conn.execute(
+                    'INSERT OR REPLACE INTO features (symbol, date, features_json, version) '
+                    'VALUES (?, ?, ?, ?)',
+                    (r.symbol, r.date, json.dumps(r.features), r.version)
+                )
             conn.commit()
             return len(records)
-        except Exception: return 0
+        except Exception as e:
+            logger.error(f"upsert_features failed: {e}")
+            return 0
 
     def get_latest_features(self, symbols: List[str]) -> Dict[str, Dict]:
-        # Simplified
         res = {}
         for s in symbols:
-            f = self.get_features(s)
-            if f: res[s] = {'features': f, 'date': datetime.utcnow().isoformat()} # Mock date if needed or fetch real
+            f_data = self.get_features_full(s)
+            if f_data:
+                res[s] = f_data
         return res
+
+    def get_features_full(self, symbol: str) -> Optional[Dict]:
+        conn = self._get_connection()
+        cur = conn.execute(
+            "SELECT features_json, date, version FROM features "
+            "WHERE symbol=? ORDER BY date DESC LIMIT 1",
+            (symbol,)
+        )
+        row = cur.fetchone()
+        if row:
+            return {
+                'features': json.loads(row[0]),
+                'date': row[1],
+                'version': row[2]
+            }
+        return None
 
     def get_features(self, symbol: str, date: str = None) -> Dict:
         conn = self._get_connection()

@@ -13,14 +13,15 @@ import pandas as pd
 import sklearn.ensemble
 from sklearn.preprocessing import StandardScaler
 
-# Institutional Patch: Legacy Sklearn Compatibility
-sys.modules["sklearn.ensemble.forest"] = sklearn.ensemble
-
+from .base_alpha import BaseAlpha
 from data.processors.validator import validate_features
 from utils.errors import ModelFeatureMismatchError, GovernanceDisabledError
 from utils.timeutils import ensure_business_days
 from utils.metrics import metrics
-from .base_alpha import BaseAlpha
+
+# Institutional Patch: Legacy Sklearn Compatibility
+sys.modules["sklearn.ensemble.forest"] = sklearn.ensemble
+
 
 logger = logging.getLogger("LIVE_AGENT")
 
@@ -44,7 +45,9 @@ class MLAlpha(BaseAlpha):
         # But for ML, order usually matters. User said "X has 4 features...".
         # sklearn expects exact column order usually.
         # So we hash the EXACT list.
-        return hashlib.md5(json.dumps(features).encode()).hexdigest()
+        return hashlib.md5(
+            json.dumps(features).encode()
+        ).hexdigest()
 
 
     def _load_legacy_global(self):
@@ -61,12 +64,20 @@ class MLAlpha(BaseAlpha):
                 self._cached_models["LEGACY_GLOBAL"] = {
                     "model": model,
                     "features": features,
-                    "metadata": {"features": features, "schema_hash": self._compute_schema_hash(features) if features else ""},
+                    "metadata": {
+                        "features": features,
+                        "schema_hash": self._compute_schema_hash(features)
+                        if features else ""
+                    },
                     "status": "LEGACY"
                 }
-                logger.warning("[ML_ALPHA] Pre-loaded LEGACY GLOBAL fallback model.")
+                logger.info(
+                    "[ML_ALPHA] Pre-loaded LEGACY GLOBAL fallback model."
+                )
             except Exception as e:
-                logger.error(f"[ML_ALPHA] Failed to pre-load legacy global model: {e}")
+                logger.error(
+                    f"[ML_ALPHA] Failed to load legacy global: {e}"
+                )
 
     def _load_model_for_symbol(self, symbol: str) -> Optional[Dict[str, Any]]:
 
@@ -138,9 +149,11 @@ class MLAlpha(BaseAlpha):
                 # ENFORCE SCHEMA HASH (Legacy global usually has features in dict)
                 features = model_data.get("features", [])
                 if features:
-                     model_data["metadata"] = model_data.get("metadata", {})
-                     model_data["metadata"]["features"] = features
-                     model_data["metadata"]["schema_hash"] = self._compute_schema_hash(features)
+                    model_data["metadata"] = model_data.get("metadata", {})
+                    model_data["metadata"]["features"] = features
+                    model_data["metadata"]["schema_hash"] = (
+                        self._compute_schema_hash(features)
+                    )
 
                 self._cached_models["GLOBAL"] = model_data
                 return model_data
@@ -162,7 +175,9 @@ class MLAlpha(BaseAlpha):
 
         # Remove failures outside the time window
         cutoff_time = now - self._failure_window_seconds
-        self._failure_window = [(t, e) for (t, e) in self._failure_window if t > cutoff_time]
+        self._failure_window = [
+            (t, e) for (t, e) in self._failure_window if t > cutoff_time
+        ]
 
         # Check if we've exceeded the threshold
         if len(self._failure_window) >= self._failure_threshold:
@@ -192,7 +207,7 @@ class MLAlpha(BaseAlpha):
         Institutional Grade Predict Wrapper with Governance Escalation.
         Uses feature alignment and fallback to prevent hard crashes.
         """
-        from ml.safe_input import align_features, distributional_sanity_check
+        from ml.safe_input import align_features
 
         # Check governance state
         if self._governance_disabled:
@@ -228,15 +243,19 @@ class MLAlpha(BaseAlpha):
                     mismatch_detected = True
 
                     # Align features (impute missing, drop extra, reorder)
-                    X_aligned, missing, extra = align_features(X_df, required_features)
+                    X_aligned, missing, extra = align_features(
+                        X_df, required_features
+                    )
 
                     # Determine severity
                     is_critical = len(missing) > len(required_features) * 0.3
 
                     if is_critical:
-                        # Record failure and escalate only if critical
                         self._record_failure("FEATURE_SCHEMA_MISMATCH_CRITICAL")
-                        logger.error(f"Critical feature mismatch for {symbol}: {len(missing)} missing.")
+                        logger.error(
+                            f"Critical feature mismatch for {symbol}: "
+                            f"{len(missing)} missing."
+                        )
                     else:
                         # Log as recovered mismatch
                         logger.warning(json.dumps({
@@ -246,18 +265,23 @@ class MLAlpha(BaseAlpha):
                             "event": "FEATURE_MISMATCH",
                             "missing": missing,
                             "extra": extra,
-                            "action": "aligned_with_impute",
-                            "severity": "RECOVERED"
+                            "recovery": "aligned_with_impute"
                         }))
 
 
             # Validate remains for types/scales
-            X_validated = validate_features(X_aligned, required_features=required_features)
+            X_validated = validate_features(
+                X_aligned, required_features=required_features
+            )
 
             # Perform prediction
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                X_final = X_validated.values if isinstance(X_validated, pd.DataFrame) else X_validated
+                X_final = (
+                    X_validated.values
+                    if isinstance(X_validated, pd.DataFrame)
+                    else X_validated
+                )
                 prediction = model.predict(X_final)
 
                 # Clip and scale prediction to reasonable daily return bounds
@@ -273,7 +297,10 @@ class MLAlpha(BaseAlpha):
 
                     # Log if prediction was clipped significantly
                     if abs(mu) > 1.0:
-                        logger.debug(f"ML prediction for {symbol} clipped: {mu:.4f} -> {mu_clipped:.4f}")
+                        logger.debug(
+                            f"ML prediction for {symbol} clipped: "
+                            f"{mu:.4f} -> {mu_clipped:.4f}"
+                        )
 
                 return prediction
 
@@ -320,8 +347,12 @@ class MLAlpha(BaseAlpha):
         # Load configurable thresholds
         from configs.config_manager import ConfigManager
         cfg = ConfigManager().config
-        self._failure_threshold = cfg.get("ml_governance", {}).get("failure_threshold", 3)
-        self._failure_window_seconds = cfg.get("ml_governance", {}).get("window_seconds", 300)
+        self._failure_threshold = cfg.get(
+            "ml_governance", {}
+        ).get("failure_threshold", 3)
+        self._failure_window_seconds = cfg.get(
+            "ml_governance", {}
+        ).get("window_seconds", 300)
 
         self._load_legacy_global()
 
@@ -339,13 +370,27 @@ class MLAlpha(BaseAlpha):
         # Check if ML is enabled via config
         from configs.config_manager import ConfigManager
         cfg = ConfigManager().config
+        features_cfg = cfg.get("features", {})
 
-        if not cfg.get("features", {}).get("ml_enabled", False):
-            logger.info(f"[ML_ALPHA] Disabled by governance flag (cfg.features.ml_enabled=false)")
+        ml_enabled = features_cfg.get("ml_enabled", False)
+        ml_mode = features_cfg.get("ml_mode", "shadow")
+
+        if not ml_enabled:
+            logger.info(
+                "[ML_ALPHA] Disabled by governance flag "
+                "(cfg.features.ml_enabled=false)"
+            )
             return {
                 "signal": 0.0,
                 "confidence": 0.0,
                 "metadata": {"reason": "ML_DISABLED_BY_CONFIG"}
+            }
+
+        if ml_mode == "disabled":
+            return {
+                "signal": 0.0,
+                "confidence": 0.0,
+                "metadata": {"reason": "ML_MODE_DISABLED"}
             }
 
         # Check governance state
@@ -353,7 +398,10 @@ class MLAlpha(BaseAlpha):
             return {
                 "signal": 0.0,
                 "confidence": 0.0,
-                "metadata": {"reason": "ML_DISABLED_BY_GOVERNANCE", "model_errors": self.model_errors}
+                "metadata": {
+                    "reason": "ML_DISABLED_BY_GOVERNANCE",
+                    "model_errors": self.model_errors
+                }
             }
 
         try:
@@ -375,7 +423,9 @@ class MLAlpha(BaseAlpha):
             else:
                 # Use contract-aligned feature extraction (28 features)
                 from data.processors.features import compute_features_for_symbol
-                extracted = compute_features_for_symbol(market_data, contract_name="ml_v1")
+                extracted = compute_features_for_symbol(
+                    market_data, contract_name="ml_v1"
+                )
                 X = extracted.iloc[-1:] if extracted is not None else None
 
             if X is None or len(X) == 0:
@@ -400,14 +450,25 @@ class MLAlpha(BaseAlpha):
             if pred is None:
                 if "LEGACY_GLOBAL" in self._cached_models:
                     legacy_data = self._cached_models["LEGACY_GLOBAL"]
-                    pred = self.ml_predict_safe(legacy_data["model"], X, legacy_data.get("metadata"), symbol=f"{symbol}_LEGACY")
+                    pred = self.ml_predict_safe(
+                        legacy_data["model"],
+                        X,
+                        legacy_data.get("metadata"),
+                        symbol=f"{symbol}_LEGACY"
+                    )
                     if pred is not None:
                         metadata["status"] = "FALLBACK"
                         metadata["reason"] = "PRIMARY_FAILED"
-                elif "GLOBAL" in self._cached_models and symbol != "GLOBAL":
-                     global_data = self._cached_models["GLOBAL"]
-                     pred = self.ml_predict_safe(global_data["model"], X, global_data.get("metadata"), symbol=f"{symbol}_GLOBAL")
-                     if pred is not None:
+                elif ("GLOBAL" in self._cached_models
+                      and symbol != "GLOBAL"):
+                    global_data = self._cached_models["GLOBAL"]
+                    pred = self.ml_predict_safe(
+                        global_data["model"],
+                        X,
+                        global_data.get("metadata"),
+                        symbol=f"{symbol}_GLOBAL"
+                    )
+                    if pred is not None:
                         metadata["status"] = "FALLBACK"
                         metadata["reason"] = "SYMBOL_MODEL_MISSING"
 
@@ -424,10 +485,40 @@ class MLAlpha(BaseAlpha):
             if regime_context:
                 signal, confidence = self._adjust_for_regime(signal, confidence, regime_context)
 
+            # --- SHADOW MODE ENFORCEMENT ---
+            if ml_mode == "shadow":
+                # Log shadow prediction
+                log_data = {
+                    "ts": datetime.utcnow().isoformat() + "Z",
+                    "component": "ML_SHADOW",
+                    "symbol": symbol,
+                    "prediction": float(signal),
+                    "confidence": float(confidence),
+                    "model_id": "ml_v1",
+                    "features_hash": (
+                        self._compute_schema_hash(list(X.columns))
+                        if X is not None else "NONE"
+                    )
+                }
+                logger.info(json.dumps(log_data))
+
+                return {
+                    "signal": 0.0,
+                    "confidence": 0.0,
+                    "metadata": {
+                        "status": "SHADOW",
+                        "shadow_signal": float(signal),
+                        "ml_mode": "shadow"
+                    }
+                }
+
             return {
                 "signal": float(signal),
                 "confidence": float(confidence),
-                "metadata": {"status": "ACTIVE"}
+                "metadata": {
+                    "status": "ACTIVE",
+                    "ml_mode": "live"
+                }
             }
 
         except GovernanceDisabledError as e:
@@ -464,8 +555,14 @@ class MLAlpha(BaseAlpha):
             df[f"momentum_{p}"] = df["Close"] / df["Close"].shift(p) - 1
         df["realized_vol_20"] = df["returns"].rolling(20).std() * np.sqrt(252)
         df = df.dropna()
-        exclude = ["Open", "High", "Low", "Close", "Volume", "symbol", "date", "target"]
-        feature_cols = [c for c in df.columns if c not in exclude and np.issubdtype(df[c].dtype, np.number)]
+        exclude = [
+            "Open", "High", "Low", "Close", "Volume",
+            "symbol", "date", "target"
+        ]
+        feature_cols = [
+            c for c in df.columns
+            if c not in exclude and np.issubdtype(df[c].dtype, np.number)
+        ]
         return df[feature_cols]
 
     def _adjust_for_regime(

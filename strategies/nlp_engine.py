@@ -1,13 +1,11 @@
 import logging
 import re
-import pandas as pd
 import numpy as np
-from typing import Dict, List, Optional, Tuple, Any, Set
+from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 from enum import Enum
 from collections import Counter, defaultdict
-import json
 from pathlib import Path
 import hashlib
 
@@ -20,8 +18,8 @@ try:
     from nltk.tokenize import word_tokenize, sent_tokenize
     from nltk.corpus import stopwords
     from nltk.stem import WordNetLemmatizer
-    from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-    from sklearn.decomposition import LatentDirichletAllocation, NMF
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.decomposition import LatentDirichletAllocation
     from textblob import TextBlob
     import spacy
     NLP_AVAILABLE = True
@@ -49,7 +47,7 @@ try:
 
 except ImportError:
     NLP_AVAILABLE = False
-    logger.warning("NLP libraries not available. NLP features disabled.")
+    logger.debug("NLP libraries not available. NLP features disabled.")
 
 class SentimentLabel(Enum):
     STRONG_NEGATIVE = -2
@@ -109,7 +107,8 @@ class MarketImpact:
 class InstitutionalNLPEngine:
     """
     INSTITUTIONAL-GRADE NATURAL LANGUAGE PROCESSING ENGINE
-    Advanced news analysis, sentiment extraction, topic modeling, and market impact assessment.
+    Advanced news analysis, sentiment extraction, topic modeling,
+    and market impact assessment.
     """
 
     def __init__(self, model_dir: str = "models/nlp", cache_dir: str = "data/cache/nlp"):
@@ -120,7 +119,7 @@ class InstitutionalNLPEngine:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         if not NLP_AVAILABLE:
-            logger.error("NLP libraries not available")
+            logger.debug("NLP libraries not available")
             return
 
         # Initialize NLP components

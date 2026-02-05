@@ -36,12 +36,28 @@ class DecisionRecord:
 
 
 class DecisionType(str, Enum):
-    """Types of trading decisions."""
+    """Types of trading decisions (backward-compatible)."""
     BUY = "BUY"
     SELL = "SELL"
     HOLD = "HOLD"
     ABSTAIN = "ABSTAIN"
     SKIP = "SKIP"
+    # Back-compat aliases
+    EXECUTE = "EXECUTE"
+    REJECT = "REJECT"
+    ERROR = "ERROR"
+
+    @classmethod
+    def normalize(cls, v: str) -> "DecisionType":
+        mapping = {
+            "EXECUTE": cls.BUY,
+            "REJECT": cls.ABSTAIN,
+            "ERROR": cls.ABSTAIN,
+        }
+        try:
+            return cls(v)
+        except ValueError: # Changed from generic Exception to ValueError for precision
+            return mapping.get(v, cls.HOLD)
 
 
 @dataclass
