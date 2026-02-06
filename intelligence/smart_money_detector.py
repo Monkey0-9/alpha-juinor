@@ -15,10 +15,10 @@ When smart money moves, we follow.
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal, getcontext
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import numpy as np
 import pandas as pd
@@ -26,6 +26,21 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 getcontext().prec = 50
+
+
+@dataclass
+class SMCOpportunity:
+    """Smart Money Concept Opportunity Structure."""
+
+    type: Literal[
+        "BullishOB", "BearishOB", "LiquidityGap", "BullishHunt", "BearishHunt"
+    ]
+    confidence: float  # 0.0-1.0
+    timeframe: str  # "15m", "1h", "4h", "1d"
+    level: float  # Price level
+    strength: int  # 1-5
+    symbol: str
+    timestamp: datetime = field(default_factory=datetime.utcnow)
 
 
 @dataclass
@@ -216,6 +231,153 @@ class SmartMoneyDetector:
             reasoning=reasoning,
         )
 
+    def detect_smc_opportunities(
+        self,
+        symbol: str,
+        prices: pd.Series,
+        volumes: pd.Series,
+        high: pd.Series,
+        low: pd.Series,
+        open_px: pd.Series,
+    ) -> List[SMCOpportunity]:
+        """
+        Detect specific SMC patterns: Order Blocks, Liquidity Gaps, Hunts.
+        Returns structured SMCOpportunity objects.
+        """
+        opportunities = []
+        if len(prices) < 50:
+            return opportunities
+
+        # Convert to numpy for performance
+        c = prices.values
+        h = high.values
+        l = low.values
+        o = open_px.values
+        v = volumes.values
+
+        # 1. Fair Value Gaps (FVG)
+        # Bullish FVG: High[i-2] < Low[i]
+        # Bearish FVG: Low[i-2] > High[i]
+
+        # Check last 5 candles for fresh FVGs
+        for i in range(len(c) - 1, len(c) - 6, -1):
+            if i < 2:
+                continue
+
+            # Bullish FVG
+            if l[i] > h[i - 2]:
+                gap_size = l[i] - h[i - 2]
+                avg_range = np.mean(h[i - 5 : i] - l[i - 5 : i])
+                if gap_size > avg_range * 0.5:  # Significant gap
+                    opportunities.append(
+                        SMCOpportunity(
+                            type="LiquidityGap",
+                            confidence=0.8,
+                            timeframe="1d",  # Assuming daily for now, or need to pass timeframe
+                            level=float(h[i - 2]),  # Support level is top of candle 1
+                            strength=3,
+                            symbol=symbol,
+                        )
+                    )
+
+            # Bearish FVG
+            if h[i] < l[i - 2]:
+                gap_size = l[i - 2] - h[i]
+                avg_range = np.mean(h[i - 5 : i] - l[i - 5 : i])
+                if gap_size > avg_range * 0.5:
+                    opportunities.append(
+                        SMCOpportunity(
+                            type="LiquidityGap",
+                            confidence=0.8,
+                            timeframe="1d",
+                            level=float(
+                                l[i - 2]
+                            ),  # Resistance level is bottom of candle 1
+                            strength=3,
+                            symbol=symbol,
+                        )
+                    )
+
+        # 2. Order Blocks (OB)
+        # Simplified: Last opposing candle before strong displacement
+        # Look for strong moves in last 10 candles
+        for i in range(len(c) - 1, len(c) - 10, -1):
+            if i < 3:
+                continue
+
+            # Identify big move (Displacement)
+            body = abs(c[i] - o[i])
+            avg_body = np.mean([abs(c[k] - o[k]) for k in range(i - 5, i)])
+
+            if body > avg_body * 2.0:  # Strong displacement candle
+                # Bullish Displacement (Green candle) -> Look for Bearish OB before it
+                if c[i] > o[i]:
+                    # Previous candle should be red (down)
+                    if c[i - 1] < o[i - 1]:
+                        opportunities.append(
+                            SMCOpportunity(
+                                type="BullishOB",
+                                confidence=0.75,
+                                timeframe="1d",
+                                level=float(h[i - 1]),  # Entry at high of OB
+                                strength=4,
+                                symbol=symbol,
+                            )
+                        )
+
+                # Bearish Displacement (Red candle) -> Look for Bullish OB before it
+                elif c[i] < o[i]:
+                    # Previous candle should be green (up)
+                    if c[i - 1] > o[i - 1]:
+                        opportunities.append(
+                            SMCOpportunity(
+                                type="BearishOB",
+                                confidence=0.75,
+                                timeframe="1d",
+                                level=float(l[i - 1]),  # Entry at low of OB
+                                strength=4,
+                                symbol=symbol,
+                            )
+                        )
+
+        # 3. Liquidity Hunt (Sweep)
+        # Price takes out a recent swing high/low and closes back inside
+        # Look at last candle
+        curr_h = h[-1]
+        curr_l = l[-1]
+        curr_c = c[-1]
+
+        # Find recent swing high/low (last 20 candles excluding current)
+        recent_high = np.max(h[-20:-1])
+        recent_low = np.min(l[-20:-1])
+
+        # Swept High (Bearish Hunt)
+        if curr_h > recent_high and curr_c < recent_high:
+            opportunities.append(
+                SMCOpportunity(
+                    type="BearishHunt",
+                    confidence=0.85,
+                    timeframe="1d",
+                    level=float(recent_high),
+                    strength=5,
+                    symbol=symbol,
+                )
+            )
+
+        # Swept Low (Bullish Hunt)
+        if curr_l < recent_low and curr_c > recent_low:
+            opportunities.append(
+                SMCOpportunity(
+                    type="BullishHunt",
+                    confidence=0.85,
+                    timeframe="1d",
+                    level=float(recent_low),
+                    strength=5,
+                    symbol=symbol,
+                )
+            )
+        return opportunities
+
     def scan_market(self, market_data: pd.DataFrame) -> List[SmartMoneySignal]:
         """Scan entire market for smart money activity."""
         signals = []
@@ -227,12 +389,22 @@ class SmartMoneyDetector:
 
         for symbol in symbols:
             try:
-                prices = market_data[symbol]["Close"].dropna()
-                volumes = market_data[symbol].get("Volume", pd.Series()).dropna()
+                # Need OHLCV for SMC
+                df = market_data[symbol]
+                prices = df["Close"].dropna()
+                volumes = df.get("Volume", pd.Series()).dropna()
 
+                # Legacy Analysis
                 signal = self.analyze(symbol, prices, volumes)
                 if signal and signal.confidence >= 0.70:
                     signals.append(signal)
+
+                # New SMC Analysis (Logging findings for now, or storing in separate cache?)
+                # For Phase 3 transition, we start using it.
+                # However, this method returns List[SmartMoneySignal].
+                # To support transition, we stick to legacy return for now,
+                # but we could wrap SMC into logic later.
+                # For now, just printing/logging SMC could be useful verification.
 
             except Exception:
                 continue

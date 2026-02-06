@@ -21,6 +21,8 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
+from config.ml_config import MLConfig
+
 logger = logging.getLogger(__name__)
 
 getcontext().prec = 50
@@ -211,18 +213,26 @@ class AutonomousTradingBrain:
         # STEP 1: Analyze market regime
         regime_info = self._analyze_regime(market_data)
 
-        # STEP 2: Gather signals from ALL strategies
-        all_signals = self._gather_all_signals(market_data, fundamentals, regime_info)
+        all_signals = []
 
-        # STEP 3: Detect smart money activity
+        # STEP 2 (NEW): Scan SMC Opportunities (Priority 1)
+        # Goal: 70% of candidates from SMC
+        smc_signals = self._scan_smc_opportunities(market_data)
+        all_signals.extend(smc_signals)
+
+        # STEP 3: Gather signals from ALL strategies (Priority 2)
+        other_signals = self._gather_all_signals(market_data, fundamentals, regime_info)
+        all_signals.extend(other_signals)
+
+        # STEP 4: Detect smart money activity (Legacy Flags)
         smart_money_signals = self._detect_smart_money(market_data)
 
-        # STEP 4: Combine and rank opportunities
+        # STEP 5: Combine and rank opportunities
         candidates = self._rank_opportunities(
             all_signals, smart_money_signals, regime_info, market_data
         )
 
-        # STEP 5: Validate and generate trades
+        # STEP 6: Validate and generate trades
         for candidate in candidates[:10]:  # Top 10 candidates
             trade = self._generate_trade(
                 candidate, market_data, regime_info, portfolio_value
@@ -241,6 +251,77 @@ class AutonomousTradingBrain:
         self.trades_generated += len(trades)
 
         return trades
+
+    def _scan_smc_opportunities(self, market_data: pd.DataFrame) -> List[Dict]:
+        """Scan market for SMC opportunities first."""
+        signals = []
+        if not self._smart_money:
+            return signals
+
+        # Iterate symbols
+        if isinstance(market_data.columns, pd.MultiIndex):
+            symbols = list(market_data.columns.get_level_values(0).unique())
+        else:
+            return signals
+
+        for symbol in symbols:
+            try:
+                df = market_data[symbol]
+                # Ensure we have required columns
+                if not all(
+                    col in df.columns
+                    for col in ["Open", "High", "Low", "Close", "Volume"]
+                ):
+                    continue
+
+                # Call method
+                opps = self._smart_money.detect_smc_opportunities(
+                    symbol, df["Close"], df["Volume"], df["High"], df["Low"], df["Open"]
+                )
+
+                for opp in opps:
+                    # Map to signal schema
+                    action = "NEUTRAL"
+                    if opp.type in ["BullishOB", "BullishHunt"]:
+                        action = "BUY"
+                    elif opp.type in ["BearishOB", "BearishHunt"]:
+                        action = "SELL"
+                    elif opp.type == "LiquidityGap":
+                        # Logic: If price is above gap, it's support (BUY bounce)
+                        # If price is below gap, it's resistance (SELL reject)
+                        curr_price = df["Close"].iloc[-1]
+                        if curr_price > opp.level:
+                            action = "BUY"  # Bounce off FVG support
+                        else:
+                            action = "SELL"  # Reject from FVG resistance
+
+                    signals.append(
+                        {
+                            "source": "SMC_NATIVE",
+                            "strategy": opp.type,
+                            "symbol": opp.symbol,
+                            "action": action,
+                            "entry": Decimal(str(opp.level)),
+                            "stop": (
+                                Decimal(str(opp.level * 0.98))
+                                if action == "BUY"
+                                else Decimal(str(opp.level * 1.02))
+                            ),  # Temp logic
+                            "target": (
+                                Decimal(str(opp.level * 1.05))
+                                if action == "BUY"
+                                else Decimal(str(opp.level * 0.95))
+                            ),
+                            "confidence": opp.confidence,
+                            "reasoning": f"SMC {opp.type} detected on {opp.timeframe} at {opp.level}",
+                            "smart_money_aligned": True,  # By definition
+                        }
+                    )
+
+            except Exception:
+                continue
+
+        return signals
 
     def _analyze_regime(self, market_data: pd.DataFrame) -> Dict[str, Any]:
         """Analyze current market regime."""
@@ -519,27 +600,37 @@ class AutonomousTradingBrain:
                     elif isinstance(market_data, dict) and symbol in market_data:
                         sym_data = market_data[symbol]
 
-                    if not sym_data.empty:
+                    if not sym_data.empty and len(sym_data) > 20:
+                        # Adaptive: Calculate Volatility (20-period std dev of close returns)
+                        returns = sym_data["close"].pct_change()
+                        volatility = returns.rolling(20).std().iloc[-1]
+
+                        # Get Dynamic Thresholds
+                        bull_thresh, bear_thresh = MLConfig.get_adaptive_thresholds(
+                            volatility
+                        )
+
                         forecast = self._predictive_model.get_forecast(sym_data)
                         ml_prob = forecast.get("probability", 0.5)
 
                         # Directional Confluence Logic
                         action = signal.get("action", "BUY")
-                        is_bullish_prediction = ml_prob > 0.60
-                        is_bearish_prediction = ml_prob < 0.40
+                        # Use centralized thresholds
+                        is_bullish_prediction = ml_prob > bull_thresh
+                        is_bearish_prediction = ml_prob < bear_thresh
 
                         # Boost if Aligned
                         if (action == "BUY" and is_bullish_prediction) or (
                             action in ["SELL", "SHORT"] and is_bearish_prediction
                         ):
-                            score *= 1.25
+                            score *= MLConfig.BOOST_MULTIPLIER
                             reasons.append(f"ML BOOST (Aligned Conf={ml_prob:.2f})")
 
                         # Penalize if Divergent
                         elif (action == "BUY" and is_bearish_prediction) or (
                             action in ["SELL", "SHORT"] and is_bullish_prediction
                         ):
-                            score *= 0.70
+                            score *= MLConfig.PENALTY_MULTIPLIER
                             reasons.append(f"ML PENALTY (Divergent Conf={ml_prob:.2f})")
                 except Exception as e:
                     logger.debug(f"ML scoring failed for {symbol}: {e}")

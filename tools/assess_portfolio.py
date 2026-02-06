@@ -14,18 +14,35 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def assess_portfolio():
+import argparse
+import logging
+from datetime import datetime
+
+import numpy as np
+import pandas as pd
+import yfinance as yf
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+
+def assess_portfolio(target="sharpe"):
     print("=" * 70)
-    print("VAST INTELLIGENCE: Portfolio Assessment")
+    print(f"VAST INTELLIGENCE: Portfolio Assessment (Target: {target.upper()})")
     print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
 
-    # Known positions from system
+    # Mocked positions for now (should ideally load from DB)
     positions = [
         {"symbol": "SIRI", "qty": 9057.8359, "cost": 20.60, "priority": "HIGH"},
         {"symbol": "BKNG", "qty": 296.8295, "cost": 5118.60, "priority": "MEDIUM"},
         {"symbol": "AAPL", "qty": 6.0, "cost": 257.86, "priority": "LOW"},
     ]
+
+    # In a real scenario, we would load from database:
+    # positions = db.get_active_positions()
 
     total_invested = 0
     total_current = 0
@@ -79,7 +96,17 @@ def assess_portfolio():
                     f"{pnl_indicator} ${pnl:>12,.2f} {pnl_pct:>9.2f}% {pos['priority']:<8}"
                 )
             else:
-                print(f"{symbol:<8} Data unavailable")
+                print(f"{symbol:<8} Data unavailable (Using Cost basis for estim)")
+                current_price = cost
+                results.append(
+                    {
+                        "symbol": symbol,
+                        "qty": qty,
+                        "current": cost,
+                        "pnl": 0,
+                        "pnl_pct": 0,
+                    }
+                )
 
         except Exception as e:
             logger.error(f"Error fetching {symbol}: {e}")
@@ -102,27 +129,36 @@ def assess_portfolio():
     print(f"Total P&L:           ${total_pnl:>15,.2f} ({total_pnl_pct:.2f}%)")
     print(f"{'='*70}")
 
-    # Position-level recommendations
-    print("\nEXIT PRIORITY ANALYSIS:")
+    # Optimization Suggestions
+    print(f"\nOPTIMIZATION ANALYSIS (Target: {target.upper()})")
     print("-" * 40)
+    suggestions = []
 
-    # Sort by P&L (worst first)
-    sorted_results = sorted(results, key=lambda x: x.get("pnl", 0))
-
-    for i, r in enumerate(sorted_results, 1):
-        action = "EXIT" if r["pnl"] < 0 else "HOLD/TRIM"
-        urgency = (
-            "URGENT"
-            if r["pnl_pct"] < -10
-            else ("MODERATE" if r["pnl_pct"] < 0 else "LOW")
+    # Mock efficient frontier logic
+    if target == "sharpe":
+        # Suggest reducing largest singular risk if correlation is unknown
+        # Suggest diversifying away from SIRI if it dominates
+        siri_weight = (
+            (positions[0]["qty"] * positions[0]["cost"]) / total_invested
+            if total_invested
+            else 0
         )
-        print(f"{i}. {r['symbol']}: {action} ({urgency})")
-        print(f"   P&L: ${r['pnl']:,.2f} ({r['pnl_pct']:.2f}%)")
-        print(f"   Value: ${r['current_val']:,.2f}")
-        print()
+        if siri_weight > 0.5:
+            suggestions.append(f"REDUCE SIRI by 20% (Concentration Risk > 50%)")
+            suggestions.append(f"ALLOCATE to Low-Correlated Assets (e.g., GLD, TLT)")
+        else:
+            suggestions.append("Portfolio is well balanced.")
+    elif target == "volatility":
+        suggestions.append("REDUCE High Volatility Assets (BKNG)")
+
+    for s in suggestions:
+        print(f"» {s}")
 
     return results
 
 
 if __name__ == "__main__":
-    assess_portfolio()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--optimization-target", type=str, default="sharpe")
+    args = parser.parse_args()
+    assess_portfolio(target=args.optimization_target)

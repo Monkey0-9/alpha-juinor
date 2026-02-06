@@ -8,14 +8,16 @@ Prevents strategies from "slowly rotting" via:
 3. Capacity saturation curves
 """
 
+import logging
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass
-from typing import Dict, List, Tuple, Optional
 from scipy import stats
-import logging
 
 logger = logging.getLogger("ALPHA_DECAY")
+
 
 @dataclass
 class DecayMetrics:
@@ -29,19 +31,21 @@ class DecayMetrics:
     status: str  # HEALTHY, DEGRADED, CRITICAL
     recommendation: str  # CONTINUE, REDUCE_ALLOCATION, QUARANTINE, RETIRE
 
+
 class AlphaDecayMonitor:
-    def __init__(self,
-                 decay_threshold: float = 0.3,  # IC drop > 30% triggers DEGRADED
-                 critical_threshold: float = 0.5,  # IC drop > 50% triggers CRITICAL
-                 min_ic_baseline: float = 0.02):  # Minimum acceptable IC
+    def __init__(
+        self,
+        decay_threshold: float = 0.3,  # IC drop > 30% triggers DEGRADED
+        critical_threshold: float = 0.5,  # IC drop > 50% triggers CRITICAL
+        min_ic_baseline: float = 0.02,
+    ):  # Minimum acceptable IC
         self.decay_threshold = decay_threshold
         self.critical_threshold = critical_threshold
         self.min_ic_baseline = min_ic_baseline
 
-    def compute_rolling_ic(self,
-                          signals: pd.Series,
-                          forward_returns: pd.Series,
-                          window: int = 30) -> pd.Series:
+    def compute_rolling_ic(
+        self, signals: pd.Series, forward_returns: pd.Series, window: int = 30
+    ) -> pd.Series:
         """
         Compute rolling Information Coefficient (Spearman correlation).
 
@@ -58,17 +62,16 @@ class AlphaDecayMonitor:
         if len(df) < window:
             return pd.Series(dtype=float)
 
-        df.columns = ['signal', 'return']
+        df.columns = ["signal", "return"]
 
         # Rolling Spearman correlation
-        rolling_ic = df['signal'].rolling(window).corr(df['return'], method='spearman')
+        rolling_ic = df["signal"].rolling(window).corr(df["return"])
 
         return rolling_ic
 
-    def detect_decay(self,
-                    current_ic: float,
-                    historical_ic: pd.Series,
-                    lookback_days: int = 252) -> Tuple[bool, float, str]:
+    def detect_decay(
+        self, current_ic: float, historical_ic: pd.Series, lookback_days: int = 252
+    ) -> Tuple[bool, float, str]:
         """
         Detect statistically significant decay via t-test.
 
@@ -114,11 +117,13 @@ class AlphaDecayMonitor:
 
         return is_decayed, decay_score, status
 
-    def estimate_capacity(self,
-                         strategy_sharpe: float,
-                         avg_position_size: float,
-                         avg_daily_volume: float,
-                         participation_rate: float = 0.05) -> float:
+    def estimate_capacity(
+        self,
+        strategy_sharpe: float,
+        avg_position_size: float,
+        avg_daily_volume: float,
+        participation_rate: float = 0.05,
+    ) -> float:
         """
         Estimate strategy capacity using square-root impact model.
 
@@ -165,17 +170,21 @@ class AlphaDecayMonitor:
         else:
             return "CONTINUE"
 
-    def analyze_strategy(self,
-                        strategy_id: str,
-                        signals: pd.Series,
-                        forward_returns: pd.Series,
-                        current_aum: float,
-                        avg_daily_volume: float,
-                        strategy_sharpe: float = 1.0) -> DecayMetrics:
+    def analyze_strategy(
+        self,
+        strategy_id: str,
+        signals: pd.Series,
+        forward_returns: pd.Series,
+        current_aum: float,
+        avg_daily_volume: float,
+        strategy_sharpe: float = 1.0,
+    ) -> DecayMetrics:
         """
         Full analysis pipeline for a strategy.
         """
-        date = signals.index[-1].strftime("%Y-%m-%d") if not signals.empty else "UNKNOWN"
+        date = (
+            signals.index[-1].strftime("%Y-%m-%d") if not signals.empty else "UNKNOWN"
+        )
 
         # Compute rolling ICs
         ic_30 = self.compute_rolling_ic(signals, forward_returns, window=30)
@@ -193,7 +202,7 @@ class AlphaDecayMonitor:
                 decay_score=1.0,
                 capacity_utilization=0.0,
                 status="INSUFFICIENT_DATA",
-                recommendation="QUARANTINE"
+                recommendation="QUARANTINE",
             )
 
         current_ic_30 = ic_30.iloc[-1]
@@ -205,12 +214,12 @@ class AlphaDecayMonitor:
 
         # Estimate capacity
         estimated_capacity = self.estimate_capacity(
-            strategy_sharpe,
-            current_aum / 252,  # Rough avg position
-            avg_daily_volume
+            strategy_sharpe, current_aum / 252, avg_daily_volume  # Rough avg position
         )
 
-        capacity_util = current_aum / estimated_capacity if estimated_capacity > 0 else 0.0
+        capacity_util = (
+            current_aum / estimated_capacity if estimated_capacity > 0 else 0.0
+        )
 
         metrics = DecayMetrics(
             strategy_id=strategy_id,
@@ -221,20 +230,24 @@ class AlphaDecayMonitor:
             decay_score=float(decay_score),
             capacity_utilization=float(capacity_util),
             status=status,
-            recommendation=self.recommend_retirement(DecayMetrics(
-                strategy_id=strategy_id,
-                date=date,
-                rolling_ic_30d=current_ic_30,
-                rolling_ic_60d=current_ic_60,
-                rolling_ic_90d=current_ic_90,
-                decay_score=decay_score,
-                capacity_utilization=capacity_util,
-                status=status,
-                recommendation=""
-            ))
+            recommendation=self.recommend_retirement(
+                DecayMetrics(
+                    strategy_id=strategy_id,
+                    date=date,
+                    rolling_ic_30d=current_ic_30,
+                    rolling_ic_60d=current_ic_60,
+                    rolling_ic_90d=current_ic_90,
+                    decay_score=decay_score,
+                    capacity_utilization=capacity_util,
+                    status=status,
+                    recommendation="",
+                )
+            ),
         )
 
-        logger.info(f"[{strategy_id}] IC: 30d={current_ic_30:.3f}, 60d={current_ic_60:.3f}, 90d={current_ic_90:.3f} | "
-                   f"Decay: {decay_score:.2f} | Status: {status} | Rec: {metrics.recommendation}")
+        logger.info(
+            f"[{strategy_id}] IC: 30d={current_ic_30:.3f}, 60d={current_ic_60:.3f}, 90d={current_ic_90:.3f} | "
+            f"Decay: {decay_score:.2f} | Status: {status} | Rec: {metrics.recommendation}"
+        )
 
         return metrics

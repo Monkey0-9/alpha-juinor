@@ -17,50 +17,13 @@ except ImportError:
 import logging
 import pickle
 
+from features.ml_feature_engineer import calculate_smc_features
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
-
-
-def calculate_training_features(df):
-    """
-    Vectorized feature calculation for training (calculates features for ALL rows).
-    This mirrors logic in ml_feature_engineer.py but for full history.
-    """
-    df = df.copy()
-    df.columns = [c.lower() for c in df.columns]
-
-    # 1. OFI (Rolling 3 periods)
-    if "buy_volume" in df.columns and "sell_volume" in df.columns:
-        ofi = (df["buy_volume"] - df["sell_volume"]) / df["volume"].replace(0, 1)
-        df["feature_ofi"] = ofi.rolling(3).mean()
-    else:
-        df["feature_ofi"] = 0.0
-
-    # 2. VWAP Deviation
-    cum_pv = (df["close"] * df["volume"]).cumsum()
-    cum_vol = df["volume"].cumsum()
-    df["vwap"] = cum_pv / cum_vol.replace(0, 1)
-    df["feature_vwap_deviation"] = (df["close"] - df["vwap"]) / df["vwap"].replace(0, 1)
-
-    # 3. Liquidity Hunt (Simplified vector)
-    # Replicating "wick > body * 2" and "vol > avg * 1.5" logic
-    body = (df["close"] - df["open"]).abs()
-    lower_wick = df[["open", "close"]].min(axis=1) - df["low"]
-    avg_vol = df["volume"].rolling(20).mean()
-
-    # Boolean conditions converted to float
-    cond_wick = (lower_wick > body * 2).astype(float)
-    cond_vol = (df["volume"] > avg_vol * 1.5).astype(float)
-    cond_bullish = (df["close"] > df["open"]).astype(float)
-
-    df["feature_liquidity_hunt_score"] = (
-        (cond_wick * 0.4) + (cond_vol * 0.4) + (cond_bullish * 0.2)
-    )
-
-    return df.dropna()
 
 
 def create_target(df, horizon_hours=24, threshold=0.01):
@@ -75,14 +38,32 @@ def create_target(df, horizon_hours=24, threshold=0.01):
     return df.dropna()
 
 
+def create_target(df, horizon_hours=24, threshold=0.01):
+    """Target: 1 if future return > threshold, else 0"""
+    # Assuming hourly data? Adjust shift based on data frequency.
+    future_close = df["close"].shift(-horizon_hours)
+    ret = (future_close - df["close"]) / df["close"]
+    df["target"] = (ret > threshold).astype(int)
+    return df.dropna()
+
+
 def train(data_path, model_output, test_size=0.15):
     logger.info(f"Starting pipeline. Loading data from {data_path}")
 
-    # Mock Data Generation if path empty or file not found
-    if not os.path.exists(data_path) or not os.listdir(data_path):
+    # 1. Try Loading Real Data
+    dfs = []
+    if os.path.exists(data_path) and os.listdir(data_path):
+        try:
+            from ml_alpha.data_loader import load_training_data
+
+            dfs = load_training_data(data_path)
+        except ImportError:
+            logger.warning("Could not import data_loader. Fallback to synthetic.")
+
+    # 2. Synthetic Fallback
+    if not dfs:
         logger.warning("Data path invalid or empty. PROCESS SIMULATION MODE.")
         # Create synthetic data for verification of pipeline
-        dates = pd.date_range("2024-01-01", periods=5000, freq="h")
 
         df = pd.DataFrame(
             {
@@ -104,7 +85,9 @@ def train(data_path, model_output, test_size=0.15):
     # Process
     processed_frames = []
     for df in dfs:
-        df_feat = calculate_training_features(df)
+        # Use unified vectorized feature engineer
+        df_feat = calculate_smc_features(df, return_full_history=True)
+        # We need target generation to remain here as it's training-specific
         df_target = create_target(df_feat, horizon_hours=24)
         processed_frames.append(df_target)
 
