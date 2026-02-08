@@ -28,7 +28,7 @@ class PredictiveModel:
         if os.path.exists(self.model_path):
             try:
                 with open(self.model_path, "rb") as f:
-                    self.model = pickle.load(f)
+                     self.model = pickle.load(f)
                 logger.info(
                     f"[ML-ALPHA] Loaded predictive model from {self.model_path}"
                 )

@@ -6,11 +6,11 @@ Decision Audit Trail - Records all trading decisions for compliance.
 
 import json
 import logging
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Dict, Any, Optional, List
-from pathlib import Path
-from dataclasses import dataclass, asdict
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("DECISION_RECORDER")
 
@@ -18,6 +18,7 @@ logger = logging.getLogger("DECISION_RECORDER")
 @dataclass
 class DecisionRecord:
     """Immutable record of a trading decision."""
+
     timestamp: str
     symbol: str
     decision: str  # BUY, SELL, HOLD, ABSTAIN
@@ -37,6 +38,7 @@ class DecisionRecord:
 
 class DecisionType(str, Enum):
     """Types of trading decisions (backward-compatible)."""
+
     BUY = "BUY"
     SELL = "SELL"
     HOLD = "HOLD"
@@ -56,18 +58,18 @@ class DecisionType(str, Enum):
         }
         try:
             return cls(v)
-        except ValueError: # Changed from generic Exception to ValueError for precision
+        except ValueError:  # Changed from generic Exception to ValueError for precision
             return mapping.get(v, cls.HOLD)
 
 
 @dataclass
 class AlphaContribution:
     """Alpha source contribution to a decision."""
+
     source: str
     signal: float
     confidence: float
     weight: float
-
 
 
 class DecisionRecorder:
@@ -98,7 +100,7 @@ class DecisionRecorder:
         regime: str = "UNKNOWN",
         execution_tactic: str = "NORMAL",
         rationale: str = "",
-        meta: Optional[Dict[str, Any]] = None
+        meta: Optional[Dict[str, Any]] = None,
     ) -> DecisionRecord:
         """Record a trading decision."""
         record = DecisionRecord(
@@ -113,7 +115,7 @@ class DecisionRecorder:
             regime=regime,
             execution_tactic=execution_tactic,
             rationale=rationale,
-            meta=meta or {}
+            meta=meta or {},
         )
 
         # Append to buffer
@@ -127,11 +129,25 @@ class DecisionRecorder:
 
     def _write_to_file(self, record: DecisionRecord):
         """Write decision to daily log file."""
-        today = datetime.utcnow().strftime("%Y-%m-%d")
-        filepath = self.log_dir / f"decisions_{today}.jsonl"
+        import re
 
-        with open(filepath, "a") as f:
-            f.write(json.dumps(record.to_dict()) + "\n")
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        # Sanitize filename for Windows compatibility (remove illegal chars)
+        safe_today = re.sub(r'[<>:"/\\|?*]', "_", today)
+        filepath = self.log_dir / f"decisions_{safe_today}.jsonl"
+
+        try:
+            with open(filepath, "a") as f:
+                f.write(json.dumps(record.to_dict()) + "\n")
+        except OSError as e:
+            logger.error(f"[DECISION_RECORDER] Failed to write: {e}")
+            # Fallback with fully sanitized filename
+            fallback = (
+                self.log_dir
+                / f"decisions_fallback_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.jsonl"
+            )
+            with open(fallback, "a") as f:
+                f.write(json.dumps(record.to_dict()) + "\n")
 
     def get_recent(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Get recent decisions from buffer."""
