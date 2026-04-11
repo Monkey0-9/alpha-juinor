@@ -789,6 +789,12 @@ class AutonomousTradingBrain:
         }
 
 
+# Backward compatibility alias
+class AutonomousBrain(AutonomousTradingBrain):
+    """Alias for AutonomousTradingBrain for backward compatibility."""
+    pass
+
+
 # Singleton
 _brain: Optional[AutonomousTradingBrain] = None
 

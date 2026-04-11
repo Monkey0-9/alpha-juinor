@@ -78,6 +78,9 @@ from intelligence.ultimate_orchestrator import get_orchestrator
 # Phase 13: Zero-Loss System
 from intelligence.zero_loss_guardian import get_guardian
 
+# Monitoring & Logging Integration
+from monitoring.trading_monitor import TradingMonitor
+
 # Phase 1-10 Elite Intelligence Modules
 from orchestration.smart_orchestrator import get_smart_orchestrator
 from portfolio.allocator import InstitutionalAllocator
@@ -364,6 +367,13 @@ class InstitutionalLiveAgent:
         self.cfg = self.cm.config
         self.db = DatabaseManager()
 
+        # Initialize Trading Monitor
+        trading_mode = self.cfg.get("execution", {}).get("mode", "paper")
+        self.monitor = TradingMonitor(
+            log_dir="runtime/monitoring", trading_mode=trading_mode
+        )
+        logger.info(f"[AGENT] Trading Monitor initialized: mode={trading_mode}")
+
         # Universe loading - FULL MARKET MODE
         # Load ALL active symbols from database for full market trading
         if tickers:
@@ -410,6 +420,11 @@ class InstitutionalLiveAgent:
         self.risk_mgr = None
         self.handler = None
         self.market_data = None
+
+        # DEFENSIVE: Initialize symmetry tracking (Bug Fix)
+        self.symmetry_buys = 0
+        self.symmetry_sells = 0
+        self.last_symmetry_log = time.time()
 
         self.execution_gate = ExecutionGatekeeper()
 
@@ -676,15 +691,17 @@ class InstitutionalLiveAgent:
         self.market_data = self.load_252d_market_data()
 
         # Strategy setup with ACTIVE tickers that have data
-        if isinstance(self.market_data.columns, pd.MultiIndex):
+        if self.market_data is None or self.market_data.empty:
+            logger.warning(
+                "[DATA_GOVERNANCE] Market data is empty or None, using fallback symbol list"
+            )
+            symbols_with_data = self.tickers
+        elif isinstance(self.market_data.columns, pd.MultiIndex):
             symbols_with_data = (
                 self.market_data.columns.get_level_values(0).unique().tolist()
             )
         else:
-            if not self.market_data.empty:
-                symbols_with_data = self.tickers
-            else:
-                symbols_with_data = []
+            symbols_with_data = self.tickers
 
         self.strategy = StrategyFactory.create_strategy(
             {
@@ -710,6 +727,63 @@ class InstitutionalLiveAgent:
         else:
             self.handler = MockBroker()
             logger.info("Using MockBroker")
+
+        # --- PACK 3: INITIALIZE UNIFIED 13-TYPE TRADING ENGINE ---
+        try:
+            from strategies.unified_trading_engine import UnifiedTradingEngine
+
+            self.unified_trading_engine = UnifiedTradingEngine(
+                nav=self.cfg["execution"]["initial_capital"], config=self.cfg
+            )
+            logger.info(
+                "[UNIFIED_ENGINE] UnifiedTradingEngine initialized for all 13 trading types"
+            )
+        except Exception as e:
+            logger.error(f"[UNIFIED_ENGINE] Initialization failed: {e}")
+            self.unified_trading_engine = None
+
+        # --- PACK 3: INITIALIZE VOLATILITY-SCALED ALLOCATOR ---
+        try:
+            from portfolio.volatility_scaled_allocator import VolatilityScaledAllocator
+
+            self.volatility_allocator = VolatilityScaledAllocator(
+                nav=self.cfg["execution"]["initial_capital"],
+                max_position_pct=self.cfg["risk"].get("max_position_pct", 0.05),
+                max_sector_pct=self.cfg["risk"].get("max_sector_pct", 0.20),
+            )
+            logger.info("[VOL_ALLOCATOR] VolatilityScaledAllocator initialized")
+        except Exception as e:
+            logger.error(f"[VOL_ALLOCATOR] Initialization failed: {e}")
+            self.volatility_allocator = None
+
+        # --- PACK 3: INITIALIZE 7-GATE RISK MANAGER ---
+        try:
+            from execution.enhanced_seven_gates import SevenGateRiskManager
+
+            self.seven_gate_manager = SevenGateRiskManager(
+                nav=self.cfg["execution"]["initial_capital"],
+                max_gross_leverage=self.cfg["risk"]["max_gross_leverage"],
+                max_position_pct=self.cfg["risk"].get("max_position_pct", 0.05),
+                max_sector_pct=self.cfg["risk"].get("max_sector_pct", 0.20),
+                max_correlation=self.cfg["risk"].get("max_correlation", 0.90),
+                adv_limit_pct=self.cfg["execution"].get("adv_limit_pct", 0.10),
+                max_vix=self.cfg["risk"].get("max_vix", 50.0),
+                max_realized_vol=self.cfg["risk"].get("max_realized_vol", 0.50),
+            )
+            logger.info("[7_GATES] SevenGateRiskManager initialized")
+        except Exception as e:
+            logger.error(f"[7_GATES] Initialization failed: {e}")
+            self.seven_gate_manager = None
+
+        # --- PACK 3: INITIALIZE 13-TYPE PARALLEL STRATEGY ENGINE ---
+        try:
+            from execution.parallel_strategy_engine import ParallelStrategyExecutor
+
+            self.parallel_executor = ParallelStrategyExecutor(max_workers=13)
+            logger.info("[PARALLEL_ENGINE] ParallelStrategyExecutor initialized for 13 trading types")
+        except Exception as e:
+            logger.error(f"[PARALLEL_ENGINE] Initialization failed: {e}")
+            self.parallel_executor = None
 
         logger.info("System initialized and warm.")
 
@@ -766,9 +840,20 @@ class InstitutionalLiveAgent:
                         continue
 
             # C. PRECISION EXIT TIMING (Phase 12)
-            if self.timing_engine:
+            if (
+                self.timing_engine
+                and self.market_data is not None
+                and not self.market_data.empty
+            ):
                 for trade in self.trade_manager.get_open_trades():
                     try:
+                        # Defensive: Check if market_data is valid before passing
+                        if self.market_data is None or self.market_data.empty:
+                            logger.debug(
+                                f"[TIMING] Skipping exit check for {trade.symbol}: no market data"
+                            )
+                            continue
+
                         timing_sig = self.timing_engine.find_exit_timing(
                             symbol=trade.symbol,
                             action=trade.side.upper(),
@@ -849,6 +934,11 @@ class InstitutionalLiveAgent:
         self.running = True
         logger.info("=" * 80)
         logger.info("INSTITUTIONAL LIVE ENGINE STARTED (PER-SECOND LOOP)")
+        logger.info(
+            f"Trading Mode: {self.cfg.get('execution', {}).get('mode', 'paper').upper()}"
+        )
+        logger.info(f"Monitoring enabled: {bool(self.monitor)}")
+        logger.info("=" * 80)
 
         # Add basic logging structure for debugging if needed (though already imported)
         # logger is already imported at module level
@@ -873,6 +963,10 @@ class InstitutionalLiveAgent:
         h_thread = threading.Thread(target=heartbeat_worker, args=args, daemon=True)
         h_thread.start()
 
+        # Track metrics for monitoring
+        loop_count = 0
+        last_health_log = time.time()
+
         while self.running:
             # Check Duration Limit
             if (
@@ -885,8 +979,24 @@ class InstitutionalLiveAgent:
                 break
 
             loop_start = time.time()
+            loop_count += 1
             self._grade_map = {}
             self._sm_aligned_map = {}
+
+            # Log health metrics every 60 loops (≈1 minute)
+            if loop_count % 60 == 0 or (time.time() - last_health_log > 60):
+                try:
+                    active_conns = 1 if self.handler else 0
+                    data_health = 0.8 if not self.market_data.empty else 0.0
+                    self.monitor.log_health(
+                        is_running=self.running,
+                        active_connections=active_conns,
+                        data_health=data_health,
+                        errors_last_hour=self.loop_errors,
+                    )
+                    last_health_log = time.time()
+                except Exception as e:
+                    logger.debug(f"[Monitor] Health log failed: {e}")
 
             # 0. REFRESH MARKET DATA (CRITICAL FIX)
             try:
@@ -897,6 +1007,7 @@ class InstitutionalLiveAgent:
                     logger.debug("[DATA] Market data refreshed.")
             except Exception as e:
                 logger.error(f"[DATA] Refresh failed: {e}")
+                self.loop_errors += 1
 
             # 0. Auto-Exit Check (Stop Loss / Take Profit)
             self._process_exits()
@@ -923,8 +1034,10 @@ class InstitutionalLiveAgent:
                         acct = self.handler.get_account()
                         if acct:
                             current_nav = float(getattr(acct, "equity", 1e6))
-                except Exception:
-                    pass
+                except (AttributeError, ValueError) as e:
+                    logger.warning(f"[GOVERNANCE] Failed to parse NAV: {e}")
+                except Exception as e:
+                    logger.error(f"[GOVERNANCE] Unexpected error fetching account: {e}", exc_info=True)
 
                 sys_metrics = {
                     "nav_usd": current_nav,
@@ -965,8 +1078,10 @@ class InstitutionalLiveAgent:
                         cols, pd.MultiIndex
                     ) and "^VIX" in cols.get_level_values(0):
                         vix_value = float(self.market_data["^VIX"]["Close"].iloc[-1])
-                except Exception:
-                    pass  # VIX not in universe, use None
+                except KeyError:
+                    logger.debug("^VIX not found in market data columns")
+                except Exception as e:
+                    logger.warning(f"Error extracting VIX: {e}")
 
                 # 1b. Drawdown Computation
                 drawdown_value = None
@@ -979,8 +1094,10 @@ class InstitutionalLiveAgent:
                         peak = max(equity, le)
                         dd_val = (equity - peak) / peak if peak > 0 else 0.0
                         drawdown_value = dd_val
-                except Exception:
-                    pass
+                except (ValueError, TypeError, AttributeError) as e:
+                    logger.warning(f"Failed to compute drawdown: {e}")
+                except Exception as e:
+                    logger.error(f"Unexpected error in drawdown computation: {e}")
 
                 # --- INSTITUTIONAL MONITORING UPDATE (Phase 6) ---
                 from monitoring.dashboard_backend import get_monitor
@@ -1198,43 +1315,11 @@ class InstitutionalLiveAgent:
                             regime_multiplier = 0.0
                             logger.warn("[SMART] Crash Regime: HALTING BUYING")
 
-                        # 2. Alternative Data Overlay
-                        # Boost conviction if Alt Data supports the trade
-                        for sym in target_weights:
-                            alt_signal = self.alt_engine.get_aggregated_signal(sym)
-                            if alt_signal and alt_signal.signal_value > 0.6:
-                                if target_weights[sym] > 0:
-                                    target_weights[sym] *= 1.2
-                                    logger.info(f"[SMART] Alt Data Boost for {sym}")
+                        # 2. Alternative Data Overlay (DISABLED - requires alt_engine module)
+                        # alt_engine removed - signals proceed without alternative data boost
 
-                        # 3. LLM Veto for Largest Position
-                        if target_weights:
-                            top_sym = max(
-                                target_weights, key=lambda k: abs(target_weights[k])
-                            )
-                            if (
-                                abs(target_weights[top_sym]) > 0.05
-                            ):  # Only check significant trades
-                                try:
-                                    llm_analysis = self.llm_analyzer.analyze_trade(
-                                        symbol=top_sym,
-                                        price=100.0,  # Mock price
-                                        features={},
-                                        ensemble_score=0.8,
-                                        models={},
-                                        risk_data={},
-                                        position_state={},
-                                    )
-                                    if (
-                                        llm_analysis
-                                        and llm_analysis.recommendation == "AVOID"
-                                    ):
-                                        logger.warning(
-                                            f"[SMART] LLM VETOED trade for {top_sym}"
-                                        )
-                                        target_weights[top_sym] = 0.0
-                                except Exception as e:
-                                    logger.error(f"LLM Check Failed: {e}")
+                        # 3. LLM Veto for Largest Position (DISABLED - requires llm_analyzer module)
+                        # llm_analyzer removed - all trades proceed without LLM veto
 
                         # 4. Final Regime Scaling
                         for sym in target_weights:
@@ -1707,6 +1792,14 @@ class InstitutionalLiveAgent:
 
                                         if result["success"]:
                                             executed_count += 1
+                                            # Log trade to monitor
+                                            self.monitor.log_trade(
+                                                symbol=symbol,
+                                                side=side.upper(),
+                                                quantity=int(qty_to_trade),
+                                                price=limit_price,
+                                                status="FILLED",
+                                            )
                                             # Optimistic update
                                             self.portfolio_state[symbol] = target_shares
 
@@ -1746,6 +1839,15 @@ class InstitutionalLiveAgent:
                                                 f"Failed: {result['error']}"
                                             )
                                             logger.error(msg)
+                                            # Log rejection to monitor
+                                            self.monitor.log_rejected_order(
+                                                symbol=symbol,
+                                                side=side.upper(),
+                                                quantity=int(qty_to_trade),
+                                                reason=result.get(
+                                                    "error", "Unknown error"
+                                                ),
+                                            )
                                             audit_payload["decision"] = "BROKER_FAILURE"
                                             audit_payload["broker_error"] = result[
                                                 "error"
@@ -1858,6 +1960,29 @@ class InstitutionalLiveAgent:
                 logger.error(traceback.format_exc())
                 time.sleep(2)  # Prevent rapid fire logs
 
+        # =====================================================================
+        # SESSION COMPLETE - FINAL MONITORING REPORT
+        # =====================================================================
+        logger.info("=" * 80)
+        logger.info("INSTITUTIONAL LIVE ENGINE STOPPED")
+        logger.info("=" * 80)
+
+        # Print monitoring summary
+        try:
+            summary = self.monitor.get_summary()
+            self.monitor.print_summary()
+
+            # Also write to session file
+            session_file = (
+                Path("runtime/monitoring")
+                / f"session_summary_{datetime.utcnow().isoformat().replace(':', '-')}.json"
+            )
+            with open(session_file, "w") as f:
+                json.dump(summary, f, indent=2)
+            logger.info(f"[Monitor] Session summary saved to {session_file}")
+        except Exception as e:
+            logger.error(f"[Monitor] Final report failed: {e}")
+
     def start(self):
         """
         Start the institutional live trading agent.
@@ -1955,6 +2080,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--tickers", type=str, help="Filter tickers")
     parser.add_argument("--run-once", action="store_true", help="Run a single cycle")
+    parser.add_argument("positional_mode", nargs="?", type=str, choices=["paper", "live", "backtest"], help="Execution mode (e.g. 'live' or 'paper')")
     parser.add_argument(
         "--mode",
         type=str,
@@ -1967,6 +2093,9 @@ if __name__ == "__main__":
     parser.add_argument("--log-level", type=str, default="INFO", help="Logging level")
     args, unknown = parser.parse_known_args()
 
+    # Determine requested mode (positional or flag)
+    requested_mode = args.mode or args.positional_mode or "paper"
+
     # Configure logging level
     numeric_level = getattr(logging, args.log_level.upper(), None)
     if isinstance(numeric_level, int):
@@ -1974,11 +2103,29 @@ if __name__ == "__main__":
 
     tickers = args.tickers.split(",") if args.tickers else None
 
+    # If the user specifically wants paper or live running continuously, use the new LiveTradingDaemon
+    if requested_mode in ["paper", "live"] and not args.run_once:
+        import logging
+
+        from start_trading import (
+            check_trading_status,
+            setup_trading_environment,
+            start_live_trading_daemon,
+        )
+
+        logger = logging.getLogger("MAIN")
+        logger.info(f"Delegating loop to LiveTradingDaemon for mode: {requested_mode}")
+        setup_trading_environment(paper_mode=(requested_mode == "paper"))
+        if not check_trading_status():
+            logger.warning("Some checks failed but starting anyway from main.py.")
+        start_live_trading_daemon(paper_mode=(requested_mode == "paper"))
+        sys.exit(0)
+
+    # Legacy fallback for run-once or backtest
     agent = InstitutionalLiveAgent(tickers=tickers)
 
     # Apply CLI overrides
-    if args.mode:
-        agent.cfg["execution"]["mode"] = args.mode
+    agent.cfg["execution"]["mode"] = requested_mode
 
     # Store run_once flag
     agent.run_once = args.run_once

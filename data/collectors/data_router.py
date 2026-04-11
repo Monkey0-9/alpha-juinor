@@ -519,6 +519,29 @@ class DataRouter:
         logger.info(f"[DATA_LOADER] Loaded 252 bars for {len(results)} symbols")
         return results
 
+    def get_daily_prices(self, symbol: str, limit: int = 252) -> pd.DataFrame:
+        """
+        Get daily price data for a symbol.
+        This method is used by the lifecycle manager.
+        """
+        # Try to load from database first
+        try:
+            from database.manager import DatabaseManager
+            db = DatabaseManager()
+            return db.get_daily_prices(symbol, limit=limit)
+        except:
+            # Fallback to Yahoo Finance
+            try:
+                provider = self.providers["yahoo"]
+                df = provider.get_daily_data(symbol, limit=limit)
+                if df is not None and not df.empty:
+                    return df
+            except Exception as e:
+                logger.error(f"[DATA_ROUTER] Failed to get daily prices for {symbol}: {e}")
+
+        # Return empty DataFrame if all fails
+        return pd.DataFrame()
+
 
 # =============================================================================
 # Data Purpose Provider Map (ABSOLUTE)

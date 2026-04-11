@@ -148,7 +148,7 @@ class AlphaNormalizer:
 
         # Handle nan/inf immediately
         if not np.isfinite(mu): mu = 0.0
-        if not np.isfinite(sigma): sigma = 0.1
+        if not np.isfinite(sigma) or sigma <= 0: sigma = 0.1
         if not np.isfinite(cvar): cvar = -0.05
 
         # 1. Heuristic Normalization: Detect Price Deltas vs Returns

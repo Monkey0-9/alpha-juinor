@@ -34,6 +34,7 @@ class RiskBudget:
     take_profit_level: float
     hedge_trigger_dd: float
     current_risk_utilization: float
+    leverage_cap: float = 1.0  # Maximum leverage allowed (default 1x = no leverage)
 
 
 class AdaptiveRiskManager:
@@ -145,6 +146,11 @@ class AdaptiveRiskManager:
         # Current utilization (placeholder)
         utilization = min(1.0, correlation_avg + abs(self.current_dd))
 
+        # Calculate leverage cap based on market conditions
+        leverage_cap = min(2.0, 1.0 / (market_volatility * 5 + 0.5))
+        if self.in_recovery_mode:
+            leverage_cap *= 0.5  # Reduce leverage in recovery
+
         return RiskBudget(
             max_leverage=min(1.5, 1.0 / (market_volatility * 10 + 0.5)),
             max_position_size=max_position,
@@ -153,7 +159,8 @@ class AdaptiveRiskManager:
             stop_loss_level=stop_loss,
             take_profit_level=take_profit,
             hedge_trigger_dd=hedge_trigger,
-            current_risk_utilization=utilization
+            current_risk_utilization=utilization,
+            leverage_cap=leverage_cap
         )
 
     def should_reduce_exposure(self) -> bool:

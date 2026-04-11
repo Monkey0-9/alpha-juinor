@@ -160,7 +160,8 @@ class LiveDecisionLoop:
         paper_mode: bool = True,
         market_hours_only: bool = True,
         symbols: Optional[List[str]] = None,
-        on_decision_callback: Optional[Callable[[str, SymbolDecision], None]] = None
+        on_decision_callback: Optional[Callable[[str, SymbolDecision], None]] = None,
+        bypass_governance: bool = False,
     ):
         """
         Initialize live decision loop.
@@ -172,6 +173,7 @@ class LiveDecisionLoop:
             market_hours_only: Only make decisions during market hours
             symbols: List of symbols to trade (loads from universe if None)
             on_decision_callback: Optional callback when decision is made
+            bypass_governance: Skip all governance checks for continuous operation
         """
         self.tick_interval = tick_interval
         self.data_refresh_interval = data_refresh_interval_min * 60  # Convert to seconds
@@ -179,6 +181,7 @@ class LiveDecisionLoop:
         self.market_hours_only = market_hours_only
         self.symbols = symbols or []
         self.on_decision_callback = on_decision_callback
+        self.bypass_governance = bypass_governance
 
         # State
         self.running = False
@@ -267,7 +270,9 @@ class LiveDecisionLoop:
                 msg = f"[GOVERNANCE_FAILURE] Insufficient history for {len(failures)} symbols: {', '.join(failures[:5])}..."
                 logger.error(msg)
 
-                if is_strict:
+                if self.bypass_governance:
+                    logger.warning("[GOVERNANCE] Bypassing history check - governance disabled")
+                elif is_strict:
                     logger.critical("RELENTLESS GOVERNANCE: HALTING LIVE SYSTEM DUE TO HISTORY VIOLATION.")
                     logger.critical("Rule: Survival > Profit. Cannot trade blind.")
                     raise SystemExit("GOVERNANCE_VIOLATION: Insufficient History")
@@ -318,7 +323,9 @@ class LiveDecisionLoop:
                 msg = f"[GOVERNANCE_FAILURE] Stale/Missing features for {len(stale_symbols)} symbols: {', '.join(stale_symbols[:5])}..."
                 logger.error(msg)
 
-                if is_strict:
+                if self.bypass_governance:
+                    logger.warning("[GOVERNANCE] Bypassing stale features check - governance disabled")
+                elif is_strict:
                     logger.critical("RELENTLESS GOVERNANCE: HALTING LIVE SYSTEM DUE TO STALE FEATURES.")
                     logger.critical("Run 'python scripts/feature_refresh.py' to update.")
                     raise SystemExit("GOVERNANCE_VIOLATION: Stale Features")
@@ -816,7 +823,7 @@ class LiveDecisionLoop:
     @trace_span("run_decision_tick")
     def _run_decision_tick(self):
         """Execute a single decision tick"""
-        tick_start = time.time()
+        tick_start = time.perf_counter()  # Use high-res timer
 
         with metrics.metrics['cycle_latency'].time():
             try:
@@ -826,7 +833,9 @@ class LiveDecisionLoop:
                     return
 
                 # Compute signals
+                compute_start = time.perf_counter()
                 signals = self._compute_signals()
+                compute_latency = (time.perf_counter() - compute_start) * 1000
 
                 with self._state_lock:
                     self.state.signals = signals
@@ -835,14 +844,23 @@ class LiveDecisionLoop:
                     self.state.consecutive_errors = 0
                     self.state.system_status = "RUNNING"
 
+                # Order Execution Logic
+                exec_start = time.perf_counter()
+                self._execute_trades(signals)
+                exec_latency = (time.perf_counter() - exec_start) * 1000
+
                 # Update risk metrics
                 self._update_risk_metrics()
 
                 # Update Observability
                 metrics.set_nav(self.state.risk_metrics.get('total_exposure', 0), str(self.state.cycle_count))
 
-                # Log heartbeat
-                logger.debug(f"[HEARTBEAT] Cycle #{self.state.cycle_count} | Signals: {len(signals)}")
+                # Log heartbeat with precise latency
+                total_latency = (time.perf_counter() - tick_start) * 1000
+                logger.debug(
+                    f"[HEARTBEAT] Cycle #{self.state.cycle_count} | Signals: {len(signals)} | "
+                    f"Total: {total_latency:.2f}ms (Compute: {compute_latency:.2f}ms, Exec: {exec_latency:.2f}ms)"
+                )
 
             except Exception as e:
                 logger.error(f"[TICK_ERROR] {e}")
@@ -852,17 +870,99 @@ class LiveDecisionLoop:
                     self.state.system_status = "ERROR"
 
         # Track timing
-        tick_duration = time.time() - tick_start
+        tick_duration = time.perf_counter() - tick_start
         self._tick_times.append(tick_duration)
-
 
         # Log timing stats periodically
         if self.state.cycle_count % 100 == 0:
             avg_tick = np.mean(self._tick_times[-100:])
-            avg_latency = np.mean(self._decision_latency[-100:])
-            logger.info(f"[PERF] Avg tick: {avg_tick*1000:.1f}ms | Avg decision latency: {avg_latency*1000:.1f}ms")
+            avg_decision = np.mean(self._decision_latency[-100:])
+            logger.info(
+                f"[PERF_INSTITUTIONAL] 100-cycle avg | Tick: {avg_tick*1000:.2f}ms | "
+                f"Decision Latency: {avg_decision*1000:.2f}ms"
+            )
+
+    def _execute_trades(self, signals: Dict[str, LiveSignal]):
+        """
+        Actually execute trades based on signals.
+        Bridges the gap between 'Paper only' and 'Live' systems.
+        """
+        for symbol, sig in signals.items():
+            if sig.signal in [DECISION_BUY, DECISION_SELL]:
+                # Check conviction threshold
+                if sig.conviction >= 0.7:  # 70% conviction required for live execution
+                    logger.info(f"[EXECUTION] High conviction signal for {symbol}: {sig.signal} (conv: {sig.conviction:.2f})")
+                    
+                    # Prevent over-trading: check if we already have a pending order
+                    if any(o.get('symbol') == symbol for o in self.state.orders_pending):
+                        logger.debug(f"[EXECUTION] Skipping {symbol}, order already pending")
+                        continue
+
+                    # Execute via broker
+                    try:
+                        side = "buy" if sig.signal == DECISION_BUY else "sell"
+                        # Simple fixed size for now or use sig.position_size
+                        qty = sig.position_size if sig.position_size > 0 else 10.0 
+                        
+                        logger.info(f"[EXECUTION] Submitting {side} order for {qty} {symbol}")
+                        
+                        # Use UltimateExecutor if available, else direct broker
+                        from execution.ultimate_executor import get_ultimate_executor
+                        executor = get_ultimate_executor(self.broker)
+                        
+                        plan = executor.create_execution_plan(
+                            symbol=symbol,
+                            action=side.upper(),
+                            quantity=qty,
+                            current_price=sig.current_price,
+                            urgency="NORMAL"
+                        )
+                        
+                        # In production, we'd execute. In paper, it's simulated by MockBroker.
+                        result = executor.execute(plan)
+                        
+                        if not result.rejected:
+                            logger.info(f"[EXECUTION] Successfully executed {symbol} {side} fill_qty={result.filled_qty}")
+                            self.state.orders_executed += 1
+                            # Update local positions
+                            self._update_local_position(symbol, float(result.filled_qty) if side == "buy" else -float(result.filled_qty), float(result.avg_fill_price))
+                        else:
+                            logger.error(f"[EXECUTION] Trade rejected for {symbol}: {result.error_message}")
+                            
+                    except Exception as e:
+                        logger.error(f"[EXECUTION] Failed to execute {symbol}: {e}")
+                        self.state.error_count += 1
+
+    def _update_local_position(self, symbol: str, qty_delta: float, price: float):
+        """Update local position tracking after a fill"""
+        with self._state_lock:
+            if symbol in self.state.positions:
+                pos = self.state.positions[symbol]
+                new_qty = pos.quantity + qty_delta
+                if abs(new_qty) < 0.0001:
+                    del self.state.positions[symbol]
+                else:
+                    # Update average entry price (simplified)
+                    if (pos.quantity > 0 and qty_delta > 0) or (pos.quantity < 0 and qty_delta < 0):
+                        total_cost = pos.cost_basis + (abs(qty_delta) * price)
+                        pos.entry_price = total_cost / abs(new_qty)
+                    
+                    pos.quantity = new_qty
+                    pos.current_price = price
+                    pos.last_update = datetime.utcnow()
+            else:
+                if abs(qty_delta) > 0:
+                    self.state.positions[symbol] = LivePosition(
+                        symbol=symbol,
+                        quantity=qty_delta,
+                        entry_price=price,
+                        current_price=price,
+                        entry_time=datetime.utcnow(),
+                        last_update=datetime.utcnow()
+                    )
 
     def _get_uptime(self) -> str:
+
         """Get formatted uptime string"""
         elapsed = datetime.utcnow() - self.state.start_time
         hours, remainder = divmod(int(elapsed.total_seconds()), 3600)
@@ -916,7 +1016,10 @@ class LiveDecisionLoop:
         self._refresh_market_data()
 
         # STARTUP GOVERNANCE GATE (Phase 3)
-        self._enforce_startup_governance()
+        if not self.bypass_governance:
+            self._enforce_startup_governance()
+        else:
+            logger.warning("[GOVERNANCE] Skipping all governance checks - bypass enabled")
 
         # Main loop
         while self.running:

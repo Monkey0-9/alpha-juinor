@@ -1,7 +1,8 @@
-import os
-import requests
 import logging
+import os
 from dataclasses import asdict
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,9 @@ class AlpacaExecutionHandler:
     def __init__(self, paper=True):
         self.api_key = os.getenv("ALPACA_API_KEY")
         self.secret_key = os.getenv("ALPACA_SECRET_KEY")
+        if not self.api_key or not self.secret_key:
+            logger.warning("Alpaca execution requires ALPACA_API_KEY and ALPACA_SECRET_KEY in environment variables.")
+            self.api_key = self.secret_key = None
 
         if paper:
             self.base_url = os.getenv(
@@ -28,18 +32,18 @@ class AlpacaExecutionHandler:
         self.headers = {
             "APCA-API-KEY-ID": self.api_key,
             "APCA-API-SECRET-KEY": self.secret_key,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         if not self.api_key:
-            logger.warning(
-                "Alpaca execution disabled: API keys not configured"
-            )
+            msg = "Alpaca execution disabled: API keys not configured"
+            logger.warning(msg)
 
         # Safety Integration
         try:
-            from safety.circuit_breaker import CircuitBreaker, CircuitConfig
             import yaml
+
+            from safety.circuit_breaker import CircuitBreaker, CircuitConfig
 
             # Load safety config
             safety_conf_path = "configs/safety_config.yaml"
@@ -57,29 +61,25 @@ class AlpacaExecutionHandler:
 
             # Initialize with config or defaults
             cc = CircuitConfig(
-                nav_usd=float(
-                    circuit_params.get("nav_usd", 1_000_000.0)
-                ),
+                nav_usd=float(circuit_params.get("nav_usd", 1_000_000.0)),
                 max_single_trade_loss_pct=float(
                     limits.get("max_single_trade_loss_pct", 0.01)
                 ),
-                max_daily_loss_pct=float(
-                    limits.get("max_daily_loss_pct", 0.02)
-                ),
-                max_weekly_loss_pct=float(
-                    limits.get("max_weekly_loss_pct", 0.05)
-                )
+                max_daily_loss_pct=float(limits.get("max_daily_loss_pct", 0.02)),
+                max_weekly_loss_pct=float(limits.get("max_weekly_loss_pct", 0.05)),
             )
             self.circuit_breaker = CircuitBreaker(cc)
-            logger.info(
-                f"Circuit Breaker initialized with limits: {asdict(cc)}"
-            )
+            cb_limits = asdict(cc)
+            logger.info(f"Circuit Breaker initialized with limits: {cb_limits}")
         except ImportError:
             logger.warning("Safety module not found, circuit breaker disabled")
             self.circuit_breaker = None
 
     def submit_order(
-        self, ticker: str, quantity: float, order_type: str = "market"
+        self,
+        ticker: str,
+        quantity: float,
+        order_type: str = "market",
     ):
         """
         Submit order to Alpaca.
@@ -110,7 +110,7 @@ class AlpacaExecutionHandler:
                 "qty": qty,
                 "side": side,
                 "type": order_type,
-                "time_in_force": "day"
+                "time_in_force": "day",
             }
 
             url = f"{self.base_url}/v2/orders"
@@ -161,9 +161,10 @@ class AlpacaExecutionHandler:
 
             # Simple object wrapper to match expected 'pos.qty' usage
             from collections import namedtuple
+
             data = response.json()
-            Position = namedtuple('Position', ['qty', 'symbol'])
-            return Position(qty=float(data.get('qty', 0)), symbol=symbol)
+            Position = namedtuple("Position", ["qty", "symbol"])
+            return Position(qty=float(data.get("qty", 0)), symbol=symbol)
 
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
@@ -202,12 +203,10 @@ class AlpacaExecutionHandler:
 
     def record_fill(self, pnl_usd: float, notional_usd: float):
         """Record a fill result to the circuit breaker."""
-        if hasattr(self, 'circuit_breaker'):
-            res = self.circuit_breaker.record_trade_result(
-                pnl_usd, notional_usd
-            )
+        # Ensure circuit_breaker is initialized properly
+        if self.circuit_breaker:
+            res = self.circuit_breaker.record_trade_result(pnl_usd, notional_usd)
             if res.get("halt"):
-                logger.critical(
-                    f"CIRCUIT BREAKER HALT TRIGGERED: {res.get('reason')}"
-                )
-
+                logger.critical(f"CIRCUIT BREAKER HALT TRIGGERED: {res.get('reason')}")
+        else:
+            logger.error("Circuit breaker is not initialized.")

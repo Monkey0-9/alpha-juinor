@@ -370,3 +370,7 @@ def create_mc_mean_reversion_strategy(
     """Factory function to create configured strategy instance."""
     config = MCMRConfig(n_simulations=n_simulations, lookback_period=lookback)
     return MonteCarloMeanReversionStrategy(config)
+
+
+# Backward compatibility alias
+MCMRStrategy = MonteCarloMeanReversionStrategy

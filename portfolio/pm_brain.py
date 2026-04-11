@@ -5,16 +5,17 @@ Portfolio Manager Brain - Capital Competition Engine
 Implements Mean-Variance optimization with CVaR blocking.
 """
 
-import numpy as np
 import logging
-from typing import List, Dict, Tuple, Optional
-import pandas as pd
-from contracts.alpha_model import AlphaOutput
-from alpha_families.normalization import AlphaNormalizer
-from risk.quantum.state_space import RegimeStateSpace
-from risk.quantum.entanglement_detector import EntanglementDetector
-from contracts.allocation import RejectedAsset
+from typing import Any, Dict, List, Optional, Tuple
 
+import numpy as np
+import pandas as pd
+
+from alpha_families.normalization import AlphaNormalizer
+from contracts.allocation import RejectedAsset
+from contracts.alpha_model import AlphaOutput
+from risk.quantum.entanglement_detector import EntanglementDetector
+from risk.quantum.state_space import RegimeStateSpace
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ normalizer = AlphaNormalizer()
 
 # Try optional optimizer import
 try:
-    from portfolio.optimizer import PortfolioOptimizer, Constraint
+    from portfolio.optimizer import Constraint, PortfolioOptimizer
 except ImportError:
     PortfolioOptimizer = None
     Constraint = None
@@ -59,7 +60,7 @@ class PMBrain:
         current_positions: Dict[str, float],
         cov: np.array = None,
         liquidity: Dict[str, float] = None,
-        prices: Optional[pd.DataFrame] = None
+        prices: Optional[pd.DataFrame] = None,
     ) -> Tuple[Dict[str, float], List[RejectedAsset]]:
         """
         Institutional Allocation using Constrained Optimizer & Quantum Modules.
@@ -88,13 +89,15 @@ class PMBrain:
             regime_compatible_mus.append(adj_mu)
 
             if adj_mu <= 0:
-                rejected_assets.append(RejectedAsset(
-                    symbol=t,
-                    reason="Negative Expectancy after Regime Adj",
-                    mu=alphas[t].mu,
-                    sigma=alphas[t].sigma,
-                    score=adj_mu
-                ))
+                rejected_assets.append(
+                    RejectedAsset(
+                        symbol=t,
+                        reason="Negative Expectancy after Regime Adj",
+                        mu=alphas[t].mu,
+                        sigma=alphas[t].sigma,
+                        score=adj_mu,
+                    )
+                )
 
         # B. Entanglement Gating (Updates w_max)
         # Dynamic cap: Ensure we can reach 100% exposure even with few assets
@@ -104,8 +107,10 @@ class PMBrain:
         if prices is not None and not prices.empty:
             ent_report = self.entanglement.compute_metric(prices)
             if ent_report.threshold_breach:
-                msg = f"[QUANTUM] Entanglement Breach: " \
-                      f"{ent_report.global_index:.2f} > 0.7"
+                msg = (
+                    f"[QUANTUM] Entanglement Breach: "
+                    f"{ent_report.global_index:.2f} > 0.7"
+                )
                 logger.warning(msg)
 
                 for t in tickers:
@@ -115,15 +120,16 @@ class PMBrain:
                     w_max_map[t] = max(0.01, new_max)
 
                     if new_max < 0.02:
-                        reason = f"Entanglement Gating " \
-                                 f"(Cap {new_max:.2%} < 2%)"
-                        rejected_assets.append(RejectedAsset(
-                            symbol=t,
-                            reason=reason,
-                            mu=alphas[t].mu,
-                            sigma=alphas[t].sigma,
-                            score=ent_report.global_index
-                        ))
+                        reason = f"Entanglement Gating " f"(Cap {new_max:.2%} < 2%)"
+                        rejected_assets.append(
+                            RejectedAsset(
+                                symbol=t,
+                                reason=reason,
+                                mu=alphas[t].mu,
+                                sigma=alphas[t].sigma,
+                                score=ent_report.global_index,
+                            )
+                        )
 
         # 4. Optimization Setup
         # Filter out rejected
@@ -140,13 +146,11 @@ class PMBrain:
         # Handle COV
         if cov is None:
             sigmas = np.array([alphas[t].sigma for t in active_tickers])
-            sub_cov = np.diag(sigmas ** 2)
+            sub_cov = np.diag(sigmas**2)
         else:
             sub_cov = cov[np.ix_(active_indices, active_indices)]
 
-        current_w = np.array(
-            [current_positions.get(t, 0.0) for t in active_tickers]
-        )
+        current_w = np.array([current_positions.get(t, 0.0) for t in active_tickers])
 
         # Generate Scenarios (Monte Carlo) for CVaR optimizer
         # N_scenarios = 1000
@@ -157,20 +161,14 @@ class PMBrain:
         except Exception:
             # Fallback to diagonal
             sigmas = np.sqrt(np.diag(sub_cov))
-            scenarios = np.random.normal(
-                mu_vec, sigmas, (1000, len(active_tickers))
-            )
+            scenarios = np.random.normal(mu_vec, sigmas, (1000, len(active_tickers)))
 
         # Bounds
         w_min = np.zeros(len(active_tickers))
         w_max = np.array([w_max_map[t] for t in active_tickers])
 
         # Params
-        opt_params = {
-            "lambda": 1.0,
-            "gamma": 5.0,  # CVaR aversion
-            "alpha": 0.95
-        }
+        opt_params = {"lambda": 1.0, "gamma": 5.0, "alpha": 0.95}  # CVaR aversion
 
         # Run Optimization
         if PortfolioOptimizer:
@@ -185,7 +183,7 @@ class PMBrain:
                 w_min=w_min,
                 w_max=w_max,
                 sector_map=None,
-                params=opt_params
+                params=opt_params,
             )
 
             if isinstance(res, dict) and "w" in res:
@@ -200,28 +198,26 @@ class PMBrain:
                 # Log non-selected opportunity cost
                 for t in active_tickers:
                     if t not in final_weights:
-                        rejected_assets.append(RejectedAsset(
-                            symbol=t,
-                            reason="Optimizer Zero Weight",
-                            mu=alphas[t].mu,
-                            sigma=alphas[t].sigma,
-                            score=0.0
-                        ))
+                        rejected_assets.append(
+                            RejectedAsset(
+                                symbol=t,
+                                reason="Optimizer Zero Weight",
+                                mu=alphas[t].mu,
+                                sigma=alphas[t].sigma,
+                                score=0.0,
+                            )
+                        )
                 return final_weights, rejected_assets
             else:
                 msg = f"Optimizer failed ({res.status}), using fallback."
                 logger.warning(msg)
 
         # Fallback
-        res_fallback = self.allocate_capital(
-            {t: alphas[t] for t in active_tickers}
-        )
+        res_fallback = self.allocate_capital({t: alphas[t] for t in active_tickers})
         return res_fallback, rejected_assets
 
     def allocate_capital(
-        self,
-        alphas: Dict[str, AlphaOutput],
-        total_capital: float = 1.0
+        self, alphas: Dict[str, AlphaOutput], total_capital: float = 1.0
     ) -> Dict[str, float]:
         """Heuristic Fallback Allocation."""
         # Simple risk-parity-like or mu-weighted
@@ -238,14 +234,10 @@ class PMBrain:
         if total_score <= 0:
             return {}
 
-        return {
-            sym: (s / total_score) * total_capital
-            for sym, s in valid
-        }
+        return {sym: (s / total_score) * total_capital for sym, s in valid}
 
     def enforce_alpha_contract(
-        self,
-        alphas: Dict[str, AlphaOutput]
+        self, alphas: Dict[str, AlphaOutput]
     ) -> Dict[str, AlphaOutput]:
         """Enforce strict contract."""
         clean = {}
@@ -255,10 +247,42 @@ class PMBrain:
             # But let's check basic sanity if something slipped or if we want
             # to filter specific anomalies.
             if alpha.confidence < 0.2:
-                msg = f"Rejecting {sym} due to low confidence " \
-                      f"{alpha.confidence}"
+                msg = f"Rejecting {sym} due to low confidence " f"{alpha.confidence}"
                 logger.debug(msg)
                 continue
 
             clean[sym] = alpha
         return clean
+
+
+def pm_brain_run(
+    alphas: Dict[str, Any],
+    current_positions: Dict[str, float] = None,
+    cov: np.ndarray = None,
+    liquidity: Dict[str, float] = None,
+    prices: Optional[pd.DataFrame] = None,
+    cvar_limit: float = -0.05,
+) -> Tuple[Dict[str, float], List]:
+    """
+    Convenience function to run Portfolio Manager Brain allocation.
+
+    Args:
+        alphas: Dictionary of alpha outputs
+        current_positions: Current portfolio positions
+        cov: Covariance matrix
+        liquidity: Asset liquidity constraints
+        prices: Historical price data
+        cvar_limit: Conditional Value at Risk limit
+
+    Returns:
+        Tuple of (weights, rejected_assets)
+    """
+    pm = PMBrain(cvar_limit=cvar_limit)
+    weights, rejected = pm.allocate(
+        alphas=alphas,
+        current_positions=current_positions or {},
+        cov=cov,
+        liquidity=liquidity,
+        prices=prices,
+    )
+    return weights, rejected

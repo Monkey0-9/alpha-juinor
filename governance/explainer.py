@@ -6,8 +6,8 @@ Generates human-readable explanations for trading decisions.
 """
 
 import logging
-from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("EXPLAINER")
 
@@ -15,6 +15,7 @@ logger = logging.getLogger("EXPLAINER")
 @dataclass
 class Explanation:
     """Structured explanation for a decision."""
+
     symbol: str
     decision: str
     summary: str
@@ -22,6 +23,10 @@ class Explanation:
     confidence_breakdown: Dict[str, float]
     risk_flags: List[str]
     regime_context: str
+
+
+# Alias for backward compatibility
+DecisionExplanation = Explanation
 
 
 class DecisionExplainer:
@@ -40,7 +45,7 @@ class DecisionExplainer:
         "mean_reversion": 0.20,
         "sentiment": 0.15,
         "ml_signal": 0.25,
-        "regime": 0.15
+        "regime": 0.15,
     }
 
     def __init__(self):
@@ -52,7 +57,7 @@ class DecisionExplainer:
         decision: str,
         alpha_outputs: Dict[str, Any],
         regime: str = "UNKNOWN",
-        risk_checks: Optional[Dict[str, bool]] = None
+        risk_checks: Optional[Dict[str, bool]] = None,
     ) -> Explanation:
         """Generate explanation for a trading decision."""
         factors = []
@@ -67,12 +72,14 @@ class DecisionExplainer:
                 mu = getattr(output, "mu", 0.0)
                 conf = getattr(output, "confidence", 0.0)
 
-            factors.append({
-                "source": source,
-                "signal": mu,
-                "confidence": conf,
-                "contribution": mu * conf
-            })
+            factors.append(
+                {
+                    "source": source,
+                    "signal": mu,
+                    "confidence": conf,
+                    "contribution": mu * conf,
+                }
+            )
             conf_breakdown[source] = conf
 
         # Identify risk flags
@@ -83,9 +90,7 @@ class DecisionExplainer:
                     risk_flags.append(f"FAILED: {check}")
 
         # Generate summary
-        summary = self._generate_summary(
-            symbol, decision, factors, regime, risk_flags
-        )
+        summary = self._generate_summary(symbol, decision, factors, regime, risk_flags)
 
         return Explanation(
             symbol=symbol,
@@ -94,7 +99,7 @@ class DecisionExplainer:
             factors=factors,
             confidence_breakdown=conf_breakdown,
             risk_flags=risk_flags,
-            regime_context=f"Market regime: {regime}"
+            regime_context=f"Market regime: {regime}",
         )
 
     def _generate_summary(
@@ -103,7 +108,7 @@ class DecisionExplainer:
         decision: str,
         factors: List[Dict],
         regime: str,
-        risk_flags: List[str]
+        risk_flags: List[str],
     ) -> str:
         """Generate human-readable summary."""
         if not factors:

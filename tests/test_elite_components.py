@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from risk.kill_switch import DistributedKillSwitch, KillSwitchReason
-from data.quality_engine import DataQualityEngine
+from data.governance.quality_engine import DataQualityEngine
 from execution.gates import ExecutionGatekeeper
 from database.manager import DatabaseManager
 

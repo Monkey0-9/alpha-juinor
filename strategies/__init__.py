@@ -15,6 +15,7 @@ from .composite_alpha import CompositeAlphaStrategy
 from .factory import StrategyFactory
 from .base import BaseStrategy
 from .institutional_strategy import InstitutionalStrategy
+from .monte_carlo_mean_reversion import MCMRStrategy, MCMRConfig
 # Note: MLAlpha is in ml_models subpackage, import via:
 # from strategies.ml_models.ml_alpha import MLAlpha
 
@@ -27,5 +28,7 @@ __all__ = [
     'StrategyFactory',
     'BaseStrategy',
     'InstitutionalStrategy',
+    'MCMRStrategy',
+    'MCMRConfig',
 ]
 

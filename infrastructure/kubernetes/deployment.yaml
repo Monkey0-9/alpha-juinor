@@ -1,0 +1,732 @@
+# Production-Ready Kubernetes Deployment for Mini Quant Fund
+# Using entirely open-source tools and cloud-native technologies
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: quant-fund
+  labels:
+    name: quant-fund
+    environment: production
+---
+# ConfigMap for application configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quant-config
+  namespace: quant-fund
+data:
+  DATABASE_URL: "postgresql://user:password@postgres:5432/quantfund"
+  REDIS_URL: "redis://redis:6379"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  PROMETHEUS_ENABLED: "true"
+  LOG_LEVEL: "INFO"
+  TRADING_MODE: "production"
+  GOVERNANCE_BYPASS: "false"
+---
+# Secret for sensitive data
+apiVersion: v1
+kind: Secret
+metadata:
+  name: quant-secrets
+  namespace: quant-fund
+type: Opaque
+data:
+  # Base64 encoded values
+  ALPACA_API_KEY: "QUFQQVBJX0tFWQ=="  # Replace with actual base64
+  ALPACA_SECRET_KEY: "QUFQQVBB_1NFQ1JFVA=="
+  DEEPSEEK_API_KEY: "REVFRFNFVUtfQVBJX0tFWQ=="
+  JWT_SECRET: "and0X3NlY3JldF9rZXk="
+
+---
+# PostgreSQL StatefulSet for TimescaleDB
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: quant-fund
+spec:
+  serviceName: postgres
+  replicas: 3
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: timescale/timescaledb:latest-pg15
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          value: quantfund
+        - name: POSTGRES_USER
+          value: quantuser
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: quant-secrets
+              key: POSTGRES_PASSWORD
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "8Gi"
+            cpu: "2000m"
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: "fast-ssd"
+      resources:
+        requests:
+          storage: 500Gi
+---
+# Redis Cluster for distributed caching
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: quant-fund
+spec:
+  serviceName: redis
+  replicas: 6
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        command:
+        - redis-server
+        - --cluster-enabled
+        - "yes"
+        - --cluster-config-file
+        - nodes.conf
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "1000m"
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: "fast-ssd"
+      resources:
+        requests:
+          storage: 100Gi
+---
+# Apache Kafka Cluster for event streaming
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: quant-fund
+spec:
+  serviceName: kafka
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+      - name: kafka
+        image: confluentinc/cp-kafka:latest
+        ports:
+        - containerPort: 9092
+        env:
+        - name: KAFKA_BROKER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: KAFKA_ZOOKEEPER_CONNECT
+          value: "zookeeper:2181"
+        - name: KAFKA_ADVERTISED_LISTENERS
+          value: "PLAINTEXT://$(POD_NAME).kafka:9092"
+        - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+          value: "3"
+        - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+          value: "true"
+        volumeMounts:
+        - name: kafka-storage
+          mountPath: /var/lib/kafka/data
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "8Gi"
+            cpu: "2000m"
+  volumeClaimTemplates:
+  - metadata:
+      name: kafka-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: "fast-ssd"
+      resources:
+        requests:
+          storage: 1Ti
+---
+# Zookeeper for Kafka
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zookeeper
+  namespace: quant-fund
+spec:
+  serviceName: zookeeper
+  replicas: 3
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      containers:
+      - name: zookeeper
+        image: confluentinc/cp-zookeeper:latest
+        ports:
+        - containerPort: 2181
+        env:
+        - name: ZOOKEEPER_CLIENT_PORT
+          value: "2181"
+        - name: ZOOKEEPER_TICK_TIME
+          value: "2000"
+        - name: ZOOKEEPER_SERVER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        volumeMounts:
+        - name: zookeeper-storage
+          mountPath: /var/lib/zookeeper/data
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "500m"
+  volumeClaimTemplates:
+  - metadata:
+      name: zookeeper-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: "fast-ssd"
+      resources:
+        requests:
+          storage: 10Gi
+---
+# Trading Engine Microservice
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trading-engine
+  namespace: quant-fund
+  labels:
+    app: trading-engine
+    component: core
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: trading-engine
+  template:
+    metadata:
+      labels:
+        app: trading-engine
+        component: core
+    spec:
+      containers:
+      - name: trading-engine
+        image: quant-fund/trading-engine:latest
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: quant-config
+        - secretRef:
+            name: quant-secrets
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+# Risk Management Microservice
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: risk-manager
+  namespace: quant-fund
+  labels:
+    app: risk-manager
+    component: core
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: risk-manager
+  template:
+    metadata:
+      labels:
+        app: risk-manager
+        component: core
+    spec:
+      containers:
+      - name: risk-manager
+        image: quant-fund/risk-manager:latest
+        ports:
+        - containerPort: 8001
+        envFrom:
+        - configMapRef:
+            name: quant-config
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "8Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+# Data Processing Microservice
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-processor
+  namespace: quant-fund
+  labels:
+    app: data-processor
+    component: data
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: data-processor
+  template:
+    metadata:
+      labels:
+        app: data-processor
+        component: data
+    spec:
+      containers:
+      - name: data-processor
+        image: quant-fund/data-processor:latest
+        ports:
+        - containerPort: 8002
+        envFrom:
+        - configMapRef:
+            name: quant-config
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2000m"
+          limits:
+            memory: "16Gi"
+            cpu: "4000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8002
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+# Alternative Data Microservice
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alternative-data
+  namespace: quant-fund
+  labels:
+    app: alternative-data
+    component: data
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: alternative-data
+  template:
+    metadata:
+      labels:
+        app: alternative-data
+        component: data
+    spec:
+      containers:
+      - name: alternative-data
+        image: quant-fund/alternative-data:latest
+        ports:
+        - containerPort: 8003
+        envFrom:
+        - configMapRef:
+            name: quant-config
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "4000m"
+          limits:
+            memory: "32Gi"
+            cpu: "8000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8003
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8003
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+# Quantum Computing Microservice
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quantum-engine
+  namespace: quant-fund
+  labels:
+    app: quantum-engine
+    component: advanced
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quantum-engine
+  template:
+    metadata:
+      labels:
+        app: quantum-engine
+        component: advanced
+    spec:
+      containers:
+      - name: quantum-engine
+        image: quant-fund/quantum-engine:latest
+        ports:
+        - containerPort: 8004
+        envFrom:
+        - configMapRef:
+            name: quant-config
+        resources:
+          requests:
+            memory: "16Gi"
+            cpu: "8000m"
+          limits:
+            memory: "64Gi"
+            cpu: "16000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8004
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8004
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+# Hardware Acceleration Microservice
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hardware-accelerator
+  namespace: quant-fund
+  labels:
+    app: hardware-accelerator
+    component: advanced
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hardware-accelerator
+  template:
+    metadata:
+      labels:
+        app: hardware-accelerator
+        component: advanced
+    spec:
+      containers:
+      - name: hardware-accelerator
+        image: quant-fund/hardware-accelerator:latest
+        ports:
+        - containerPort: 8005
+        envFrom:
+        - configMapRef:
+            name: quant-config
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "4000m"
+          limits:
+            memory: "32Gi"
+            cpu: "8000m"
+          # GPU resources (if available)
+          # nvidia.com/gpu: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8005
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8005
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+# Services for microservices
+apiVersion: v1
+kind: Service
+metadata:
+  name: trading-engine-service
+  namespace: quant-fund
+spec:
+  selector:
+    app: trading-engine
+  ports:
+  - port: 80
+    targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: risk-manager-service
+  namespace: quant-fund
+spec:
+  selector:
+    app: risk-manager
+  ports:
+  - port: 80
+    targetPort: 8001
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-processor-service
+  namespace: quant-fund
+spec:
+  selector:
+    app: data-processor
+  ports:
+  - port: 80
+    targetPort: 8002
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alternative-data-service
+  namespace: quant-fund
+spec:
+  selector:
+    app: alternative-data
+  ports:
+  - port: 80
+    targetPort: 8003
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: quantum-engine-service
+  namespace: quant-fund
+spec:
+  selector:
+    app: quantum-engine
+  ports:
+  - port: 80
+    targetPort: 8004
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hardware-accelerator-service
+  namespace: quant-fund
+spec:
+  selector:
+    app: hardware-accelerator
+  ports:
+  - port: 80
+    targetPort: 8005
+  type: ClusterIP
+---
+# Ingress for external access
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: quant-fund-ingress
+  namespace: quant-fund
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - api.quantfund.com
+    secretName: quantfund-tls
+  rules:
+  - host: api.quantfund.com
+    http:
+      paths:
+      - path: /trading
+        pathType: Prefix
+        backend:
+          service:
+            name: trading-engine-service
+            port:
+              number: 80
+      - path: /risk
+        pathType: Prefix
+        backend:
+          service:
+            name: risk-manager-service
+            port:
+              number: 80
+      - path: /data
+        pathType: Prefix
+        backend:
+          service:
+            name: data-processor-service
+            port:
+              number: 80
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: trading-engine-hpa
+  namespace: quant-fund
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: trading-engine
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+---
+# Resource Limits for namespace
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: quant-fund-limits
+  namespace: quant-fund
+spec:
+  limits:
+  - default:
+      cpu: "1000m"
+      memory: "2Gi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+    type: Container
+---
+# Network Policy for security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: quant-fund-network-policy
+  namespace: quant-fund
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: quant-fund
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: quant-fund
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53

@@ -1,17 +1,19 @@
 # configs/config_manager.py
-import yaml
 import hashlib
 import logging
-from pathlib import Path
-from typing import Dict, Any
-import sys
 import os
+import sys
+from pathlib import Path
+from typing import Any, Dict
+
+import yaml
 
 # Ensure project root is in path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 logger = logging.getLogger(__name__)
+
 
 class ConfigManager:
     """
@@ -42,6 +44,8 @@ class ConfigManager:
         with open(path_obj, "r") as f:
             self._config = yaml.safe_load(f)
 
+        # Resolve ${ENV_VAR} patterns in config values
+        self._resolve_env_vars(self._config)
 
         logger.info(f"Loaded Golden Config: {path}")
         logger.info(f"Config SHA256 Hash: {self._config_hash}")
@@ -52,6 +56,29 @@ class ConfigManager:
         # Deep Freeze would be ideal, but for now we just restrict access
         self._lock = True
 
+    def _resolve_env_vars(self, obj):
+        """Recursively resolve ${ENV_VAR} patterns in config."""
+        import re
+
+        pattern = re.compile(r"\$\{(\w+)\}")
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                if isinstance(value, str):
+                    match = pattern.fullmatch(value)
+                    if match:
+                        env_val = os.environ.get(match.group(1), "")
+                        obj[key] = env_val
+                elif isinstance(value, (dict, list)):
+                    self._resolve_env_vars(value)
+        elif isinstance(obj, list):
+            for i, item in enumerate(obj):
+                if isinstance(item, str):
+                    match = pattern.fullmatch(item)
+                    if match:
+                        obj[i] = os.environ.get(match.group(1), "")
+                elif isinstance(item, (dict, list)):
+                    self._resolve_env_vars(item)
+
     def _inject_secrets(self):
         """Inject secrets from Vault/Env into config."""
         from utils.secrets_vault import vault
@@ -59,16 +86,15 @@ class ConfigManager:
         # Mapping: Config Key -> (Vault Path, Secret Key)
         # Assuming config structure matches loose expectation or we just update specific top-level/nested keys
         # For this refactor, we focus on specific critical keys.
-
         # Example: Updating 'api_keys' section if exists
-        if 'api_keys' not in self._config:
-            self._config['api_keys'] = {}
+        if "api_keys" not in self._config:
+            self._config["api_keys"] = {}
 
         secret_map = {
-            'alpaca_api_key': ('quant-fund/api-keys', 'ALPACA_API_KEY'),
-            'alpaca_secret_key': ('quant-fund/api-keys', 'ALPACA_SECRET_KEY'),
-            'postgres_password': ('quant-fund/database', 'POSTGRES_PASSWORD'),
-            'db_connection_string': ('quant-fund/database', 'DB_CONNECTION_STRING')
+            "alpaca_api_key": ("quant-fund/api-keys", "ALPACA_API_KEY"),
+            "alpaca_secret_key": ("quant-fund/api-keys", "ALPACA_SECRET_KEY"),
+            "postgres_password": ("quant-fund/database", "POSTGRES_PASSWORD"),
+            "db_connection_string": ("quant-fund/database", "DB_CONNECTION_STRING"),
         }
 
         for config_key, (v_path, v_key) in secret_map.items():
@@ -78,7 +104,7 @@ class ConfigManager:
                 # For safety, we put them in a dedicated 'secrets' section or merge appropriate place
                 # Here we just set them in 'env' or similar if logic requires
                 # But let's assume 'api_keys' dict for now or root
-                self._config['api_keys'][config_key] = val
+                self._config["api_keys"][config_key] = val
                 # Also set in root for legacy compatibility if needed, or specific sections
                 self._config[config_key] = val
 
@@ -86,6 +112,7 @@ class ConfigManager:
     def config(self) -> Dict[str, Any]:
         """Returns a copy of the config to prevent direct mutation."""
         import copy
+
         return copy.deepcopy(self._config)
 
     @property
@@ -98,8 +125,10 @@ class ConfigManager:
         # For now, we just ensure the hash is logged/tracked.
         pass
 
+
 def get_config() -> Dict[str, Any]:
     return ConfigManager().config
+
 
 def get_config_hash() -> str:
     return ConfigManager().config_hash

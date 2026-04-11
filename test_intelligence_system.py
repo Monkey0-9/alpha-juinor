@@ -1,53 +1,83 @@
 #!/usr/bin/env python3
 """
-Comprehensive Trading Intelligence Test
-========================================
+Advanced Intelligence System Verification
+==========================================
 
-Tests if the AI system is smart enough to beat the market.
-Analyzes:
-1. Signal quality and confidence
-2. Risk management effectiveness
-3. Expected returns vs market
-4. Decision-making speed
+Comprehensive test of the new advanced ML intelligence system.
+Tests all components to ensure they're operational.
 """
 
+import logging
+import os
 import sys
-import time
+from datetime import datetime, timedelta
+
 import numpy as np
-from datetime import datetime
+import pandas as pd
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 print("=" * 70)
-print("      TRADING INTELLIGENCE VERIFICATION TEST")
+print("      ADVANCED INTELLIGENCE SYSTEM VERIFICATION")
 print("      " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 print("=" * 70)
 
-# Test 1: Load all intelligence modules
-print("\n[TEST 1] Loading Intelligence Modules...")
-print("-" * 50)
+# Test 1: Load all required modules
+print("\n[TEST 1] Loading Required Modules...")
+print("-" * 70)
 
 modules_loaded = 0
 modules_failed = 0
 
 try:
-    from intelligence import get_ultimate_controller
-    controller = get_ultimate_controller()
-    status = controller.get_status()
-    modules_loaded = status.get("active_components", 0)
-    print(f"  ✓ Ultimate Controller: {status['status']}")
-    print(f"  ✓ Active Components: {modules_loaded}/{status['total_components']}")
-except Exception as e:
-    print(f"  ✗ Controller failed: {e}")
+    import lightgbm as lgb
+    print(f"  ✓ LightGBM {lgb.__version__}: Available")
+    modules_loaded += 1
+except ImportError as e:
+    print(f"  ✗ LightGBM: FAILED - {e}")
     modules_failed += 1
 
-# Test 2: Test signal generation
-print("\n[TEST 2] Signal Generation Quality...")
-print("-" * 50)
-
-test_symbols = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"]
-signals = []
+try:
+    import xgboost as xgb
+    print(f"  ✓ XGBoost {xgb.__version__}: Available")
+    modules_loaded += 1
+except ImportError as e:
+    print(f"  ⚠ XGBoost: OPTIONAL - {e}")
 
 try:
-    for symbol in test_symbols:
+    import catboost as cb
+    print(f"  ✓ CatBoost: Available")
+    modules_loaded += 1
+except ImportError as e:
+    print(f"  ⚠ CatBoost: OPTIONAL - {e}")
+
+try:
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.model_selection import cross_val_score
+    print(f"  ✓ Scikit-learn: Available")
+    modules_loaded += 1
+except ImportError as e:
+    print(f"  ✗ Scikit-learn: FAILED - {e}")
+    modules_failed += 1
+
+try:
+    from ml_alpha.advanced_intelligence_engine import get_intelligence_system
+    print(f"  ✓ Advanced Intelligence Engine: Available")
+    modules_loaded += 1
+except ImportError as e:
+    print(f"  ✗ Intelligence Engine: FAILED - {e}")
+    modules_failed += 1
+
+print(f"\n  Total: {modules_loaded} loaded, {modules_failed} failed")
+
+# Test 2: Test Advanced Features
+print("\n[TEST 2] Advanced Feature Engineering...")
+print("-" * 70)
         # Create test features
         features = {
             "momentum_1m": np.random.uniform(-0.1, 0.15),

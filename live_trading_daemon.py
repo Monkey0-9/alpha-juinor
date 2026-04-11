@@ -16,34 +16,34 @@ Usage:
     python live_trading_daemon.py --status
 """
 
-import os
-import sys
-import time
+import argparse
 import json
 import logging
+import os
 import signal
+import sys
 import threading
-import argparse
+import time
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Union
-from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Union
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from orchestration.live_decision_loop import LiveDecisionLoop, LivePosition, LiveSignal
-from database.manager import DatabaseManager
 from configs.config_manager import ConfigManager
+from database.manager import DatabaseManager
+from orchestration.live_decision_loop import LiveDecisionLoop, LivePosition, LiveSignal
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s',
+    format="[%(asctime)s] [%(levelname)s] %(name)s: %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('logs/live_trading_daemon.log')
-    ]
+        logging.FileHandler("logs/live_trading_daemon.log"),
+    ],
 )
 logger = logging.getLogger("LIVE_TRADING_DAEMON")
 
@@ -51,6 +51,7 @@ logger = logging.getLogger("LIVE_TRADING_DAEMON")
 @dataclass
 class TerminalDashboard:
     """Real-time terminal dashboard for live trading status"""
+
     def __init__(self):
         self.last_render_time = None
         self.render_interval = 1.0  # Update every second
@@ -65,13 +66,16 @@ class TerminalDashboard:
         last_decision_time: Optional[datetime],
         last_data_refresh: Optional[datetime],
         risk_metrics: Dict[str, float],
-        error_count: int
+        error_count: int,
     ):
         """Render the terminal dashboard"""
         now = datetime.utcnow()
 
         # Rate limit rendering
-        if self.last_render_time and (now - self.last_render_time).total_seconds() < self.render_interval:
+        if (
+            self.last_render_time
+            and (now - self.last_render_time).total_seconds() < self.render_interval
+        ):
             return
 
         self.last_render_time = now
@@ -79,81 +83,125 @@ class TerminalDashboard:
         # Clear screen ( ANSI escape )
         print("\033[2J\033[H", end="")
 
-        # Header
-        print("=" * 100)
-        print(f"🔴 24/7 LIVE TRADING DAEMON - CYCLE #{cycle_count}")
-        print(f"⏱️  UPTIME: {uptime} | 🟢 STATUS: {system_status.upper()} | 📊 POSITIONS: {len(positions)} | 📡 SIGNALS: {len(signals)}")
-        print("=" * 100)
+        HEADER_STR = "════════════════════════════════════════════════════════════════════════════════════════════════════"
+        DIVIDER_STR = "────────────────────────────────────────────────────────────────────────────────────────────────────"
 
-        # Data Status
-        last_refresh_str = last_data_refresh.strftime("%Y-%m-%d %H:%M:%S UTC") if last_data_refresh else "NEVER"
-        next_refresh = (last_data_refresh + timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S UTC") if last_data_refresh else "IMMEDIATE"
-        print(f"\n📡 DATA STATUS:")
-        print(f"   Last Refresh: {last_refresh_str}")
-        print(f"   Next Refresh: {next_refresh}")
+        print(HEADER_STR)
+        print(
+            f"  QUANTITATIVE TRADING ENGINE v7.1.0-RC1  |  INSTITUTIONAL TIER  |  CYCLE: {cycle_count:08d}"
+        )
+        print(HEADER_STR)
 
-        # Positions Table
+        # 1. CORE SYSTEM STATUS
+        print(" [ SYSTEM CORE ]")
+        state_color = "\033[92m" if system_status.upper() == "RUNNING" else "\033[93m"
+        reset_color = "\033[0m"
+        print(f"   UPTIME     : {uptime:<20}    EXEC_MODE: {system_status.upper()}")
+        print(f"   ALLOCATION : {len(positions):<20}    SIGNALS  : {len(signals)}")
+        print(DIVIDER_STR)
+
+        # 2. MARKET DATA FEED
+        last_refresh_str = (
+            last_data_refresh.strftime("%Y-%m-%d %H:%M:%S UTC")
+            if last_data_refresh
+            else "WAITING DATA"
+        )
+        next_refresh = (
+            (last_data_refresh + timedelta(minutes=30)).strftime(
+                "%Y-%m-%d %H:%M:%S UTC"
+            )
+            if last_data_refresh
+            else "IMMEDIATE"
+        )
+        print(" [ MARKET FEED SYNCHRONIZATION ]")
+        print(f"   LAST SYNC  : {last_refresh_str:<25} NEXT SYNC: {next_refresh}")
+
+        if error_count > 0:
+            print(f"   FEED STATE : [WARN] {error_count} EXCEPTIONS LOGGED")
+        else:
+            print(f"   FEED STATE : [OK] NOMINAL")
+        print(DIVIDER_STR)
+
+        # 3. PORTFOLIO
         if positions:
-            print(f"\n📈 POSITIONS ({len(positions)} symbols):")
-            print("-" * 100)
-            print(f"{'Symbol':<10} | {'Qty':>10} | {'Entry':>10} | {'Current':>10} | {'P&L $':>12} | {'P&L %':>10} | {'Conviction':>10}")
-            print("-" * 100)
+            print(f" [ PORTFOLIO ALLOCATION ]  ({len(positions)} ASSETS)")
+            print(
+                f"   {'TICKER':<8} | {'EXPOSURE':>12} | {'ENTRY':>10} | {'LAST_PX':>10} | {'UNREAL_PNL':>12} | {'RETURN':>9} | {'CNVCTN':>8}"
+            )
+            print(
+                f"   {'':-<8}-+-{'-':-<12}-+-{'-':-<10}-+-{'-':-<10}-+-{'-':-<12}-+-{'-':-<9}-+-{'-':-<8}"
+            )
 
             for symbol, pos in sorted(positions.items()):
                 signal = signals.get(symbol)
                 conviction = f"{signal.conviction:.2f}" if signal else "N/A"
-                pnl_emoji = "🟢" if pos.unrealized_pnl >= 0 else "🔴"
-                print(f"{symbol:<10} | {pos.quantity:>10.2f} | ${pos.entry_price:>9.2f} | ${pos.current_price:>9.2f} | {pnl_emoji} ${abs(pos.unrealized_pnl):>10.2f} | {pos.pnl_pct:>9.2f}% | {conviction:>10}")
-            print("-" * 100)
+                pnl_prefix = "+" if pos.unrealized_pnl >= 0 else ""
+                print(
+                    f"   {symbol:<8} | {pos.quantity:>12.4f} | {pos.entry_price:>10.2f} | {pos.current_price:>10.2f} | {pnl_prefix}{pos.unrealized_pnl:>12.2f} | {pos.pnl_pct:>8.2f}% | {conviction:>8}"
+                )
 
             total_pnl = sum(pos.unrealized_pnl for pos in positions.values())
             total_value = sum(pos.market_value for pos in positions.values())
-            print(f"{'TOTAL':<10} | {'':<10} | {'':<10} | {'':<10} | ${total_pnl:>10.2f} | {total_pnl/total_value*100 if total_value > 0 else 0:>9.2f}% |")
+            ret_pct = (total_pnl / total_value * 100) if total_value > 0 else 0
+            print(
+                f"   {'':-<8}-+-{'-':-<12}-+-{'-':-<10}-+-{'-':-<10}-+-{'-':-<12}-+-{'-':-<9}-+-{'-':-<8}"
+            )
+            print(
+                f"   {'AGG':<8} | {' ':>12} | {' ':>10} | {' ':>10} | {total_pnl:>12.2f} | {ret_pct:>8.2f}% | {' ':>8}"
+            )
         else:
-            print("\n📈 POSITIONS: No active positions")
+            print(" [ PORTFOLIO ALLOCATION ]")
+            print("   STATUS: NO CAPITAL DEPLOYED")
 
-        # Live Signals Table
-        print(f"\n🎯 LIVE SIGNALS ({len(signals)} symbols):")
-        print("-" * 100)
-        print(f"{'Symbol':<10} | {'Signal':>8} | {'μ̂':>10} | {'σ̂':>10} | {'Conviction':>10} | {'Data Q':>8}")
-        print("-" * 100)
+        print(DIVIDER_STR)
+
+        # 4. LIVE SIGNALS (ALPHA)
+        print(f" [ ALPHA GENERATION ARRAY ]  ({len(signals)} VECTORS)")
+        print(
+            f"   {'TICKER':<8} | {'DIRECTIVE':>10} | {'MU_EST':>10} | {'VOL_EST':>10} | {'CNVCTN':>10} | {'DATA_Q':>8}"
+        )
+        print(
+            f"   {'':-<8}-+-{'-':-<10}-+-{'-':-<10}-+-{'-':-<10}-+-{'-':-<10}-+-{'-':-<8}"
+        )
 
         for symbol, sig in sorted(signals.items()):
-            signal_emoji = "⬆️ BUY" if sig.signal == "EXECUTE_BUY" else ("⬇️ SELL" if sig.signal == "EXECUTE_SELL" else ("HOLD ➡️" if sig.signal == "HOLD" else "❌ REJECT"))
-            print(f"{symbol:<10} | {signal_emoji:>8} | {sig.mu_hat:>10.4f} | {sig.sigma_hat:>10.4f} | {sig.conviction:>10.2f} | {sig.data_quality:>8.2f}")
-        print("-" * 100)
+            signal_str = (
+                "EXEC_BUY"
+                if sig.signal == "EXECUTE_BUY"
+                else (
+                    "EXEC_SELL"
+                    if sig.signal == "EXECUTE_SELL"
+                    else ("HOLD" if sig.signal == "HOLD" else "REJECTED")
+                )
+            )
+            print(
+                f"   {symbol:<8} | {signal_str:>10} | {sig.mu_hat:>10.5f} | {sig.sigma_hat:>10.5f} | {sig.conviction:>10.3f} | {sig.data_quality:>8.3f}"
+            )
 
-        # Decision Summary
+        print(DIVIDER_STR)
+
+        # 5. EXECUTION & RISK
         buy_count = sum(1 for s in signals.values() if s.signal == "EXECUTE_BUY")
         sell_count = sum(1 for s in signals.values() if s.signal == "EXECUTE_SELL")
         hold_count = sum(1 for s in signals.values() if s.signal == "HOLD")
-        reject_count = sum(1 for s in signals.values() if s.signal == "REJECT")
 
-        print(f"\n📋 DECISION SUMMARY:")
-        print(f"   ⬆️  BUY Signals:  {buy_count}")
-        print(f"   ⬇️  SELL Signals: {sell_count}")
-        print(f"   ➡️  HOLD Signals: {hold_count}")
-        print(f"   ❌ REJECT Signals: {reject_count}")
+        leverage = risk_metrics.get("leverage", 0.0)
+        total_exposure = risk_metrics.get("total_exposure", 0.0)
 
-        # Risk Metrics
-        print(f"\n⚠️ RISK METRICS:")
-        leverage = risk_metrics.get('leverage', 0.0)
-        total_exposure = risk_metrics.get('total_exposure', 0.0)
-        print(f"   Portfolio Leverage: {leverage:.2f}x")
-        print(f"   Total Exposure: ${total_exposure:,.2f}")
-        print(f"   Positions Count: {risk_metrics.get('positions_count', 0)}")
+        print(" [ GLOBAL RISK & EXECUTION TELEMETRY ]")
+        print(f"   GROSS LVRG : {leverage:>8.4f}x           LONG  ACQ : {buy_count:>6}")
+        print(
+            f"   GROSS EXP  : {total_exposure:>8.2f} USD        SHORT DIS : {sell_count:>6}"
+        )
+        print(
+            f"   OPEN POS   : {risk_metrics.get('positions_count', 0):>8}            HOLD / NO : {hold_count:>6}"
+        )
 
-        # Error Status
-        if error_count > 0:
-            print(f"\n🚨 ERRORS: {error_count} total errors")
-
-        # Timestamp
-        print(f"\n🕐 Last Update: {now.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-
-        # Instructions
-        print("\n" + "=" * 100)
-        print("Controls: Press Ctrl+C to stop gracefully | Check runtime/KILL_SWITCH to pause")
-        print("=" * 100)
+        print(HEADER_STR)
+        print(
+            f"  LAST_SYNC: {now.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]} UTC   |   INTERRUPT CAUSE: SIGINT (Ctrl+C)"
+        )
+        print(HEADER_STR)
 
 
 class LiveTradingDaemon:
@@ -174,7 +222,8 @@ class LiveTradingDaemon:
         paper_mode: bool = True,
         market_hours_only: bool = True,
         symbols: Optional[List[str]] = None,
-        headless: bool = False
+        headless: bool = False,
+        bypass_governance: bool = False,
     ):
         self.tick_interval = tick_interval
         self.data_refresh_interval = data_refresh_interval_min
@@ -182,6 +231,7 @@ class LiveTradingDaemon:
         self.market_hours_only = market_hours_only
         self.symbols = symbols
         self.headless = headless
+        self.bypass_governance = bypass_governance
 
         # State
         self.running = False
@@ -201,7 +251,9 @@ class LiveTradingDaemon:
         signal.signal(signal.SIGINT, self._handle_shutdown)
         signal.signal(signal.SIGTERM, self._handle_shutdown)
 
-        logger.info(f"LiveTradingDaemon initialized | Tick: {tick_interval}s | Data Refresh: {data_refresh_interval_min}min")
+        logger.info(
+            f"LiveTradingDaemon initialized | Tick: {tick_interval}s | Data Refresh: {data_refresh_interval_min}min"
+        )
 
     def _handle_shutdown(self, signum, frame):
         """Handle shutdown signals gracefully"""
@@ -230,7 +282,7 @@ class LiveTradingDaemon:
 
         print("\n")
         logger.info("=" * 80)
-        logger.info("🚀 24/7 INSTITUTIONAL LIVE TRADING DAEMON STARTED")
+        logger.info("24/7 INSTITUTIONAL LIVE TRADING DAEMON STARTED")
         logger.info("=" * 80)
         logger.info(f"Mode: {'PAPER' if self.paper_mode else 'LIVE'}")
         logger.info(f"Tick Interval: {self.tick_interval}s (per-second decisions)")
@@ -244,13 +296,13 @@ class LiveTradingDaemon:
             data_refresh_interval_min=self.data_refresh_interval,
             paper_mode=self.paper_mode,
             market_hours_only=self.market_hours_only,
-            symbols=self.symbols
+            symbols=self.symbols,
+            bypass_governance=self.bypass_governance,
         )
 
         # Start decision loop in background thread
         self.decision_thread = threading.Thread(
-            target=self._decision_thread_func,
-            daemon=True
+            target=self._decision_thread_func, daemon=True
         )
         self.decision_thread.start()
 
@@ -279,19 +331,29 @@ class LiveTradingDaemon:
                 # Render dashboard (unless headless)
                 if not self.headless:
                     self.dashboard.render(
-                        cycle_count=status['cycle_count'],
+                        cycle_count=status["cycle_count"],
                         uptime=uptime,
-                        system_status=status['system_status'],
-                        positions=status['positions'],
-                        signals=status['signals'],
-                        last_decision_time=datetime.fromisoformat(status['last_decision_time']) if status['last_decision_time'] else None,
-                        last_data_refresh=datetime.fromisoformat(status['last_data_refresh']) if status['last_data_refresh'] else None,
-                        risk_metrics=status['risk_metrics'],
-                        error_count=status['error_count']
+                        system_status=status["system_status"],
+                        positions=status["positions"],
+                        signals=status["signals"],
+                        last_decision_time=(
+                            datetime.fromisoformat(status["last_decision_time"])
+                            if status["last_decision_time"]
+                            else None
+                        ),
+                        last_data_refresh=(
+                            datetime.fromisoformat(status["last_data_refresh"])
+                            if status["last_data_refresh"]
+                            else None
+                        ),
+                        risk_metrics=status["risk_metrics"],
+                        error_count=status["error_count"],
                     )
                 else:
                     # Headless mode: log heartbeat
-                    logger.debug(f"[HEARTBEAT] Cycle #{status['cycle_count']} | Signals: {len(status['signals'])}")
+                    logger.debug(
+                        f"[HEARTBEAT] Cycle #{status['cycle_count']} | Signals: {len(status['signals'])}"
+                    )
 
                 # Sleep for dashboard refresh
                 time.sleep(1.0)
@@ -324,7 +386,7 @@ class LiveTradingDaemon:
         """Get current daemon status"""
         if self.decision_loop:
             return self.decision_loop.get_status()
-        return {'system_status': 'NOT_INITIALIZED'}
+        return {"system_status": "NOT_INITIALIZED"}
 
 
 def main():
@@ -345,7 +407,7 @@ Examples:
 
   # Check daemon status
   python live_trading_daemon.py --status
-        """
+        """,
     )
 
     parser.add_argument(
@@ -353,40 +415,35 @@ Examples:
         type=str,
         choices=["paper", "live"],
         default="paper",
-        help="Trading mode (default: paper)"
+        help="Trading mode (default: paper)",
     )
     parser.add_argument(
         "--tick-interval",
         type=float,
         default=1.0,
-        help="Decision loop tick interval in seconds (default: 1.0)"
+        help="Decision loop tick interval in seconds (default: 1.0)",
     )
     parser.add_argument(
         "--data-refresh",
         type=int,
         default=30,
-        help="Data refresh interval in minutes (default: 30)"
+        help="Data refresh interval in minutes (default: 30)",
     )
     parser.add_argument(
         "--market-hours-only",
         action="store_true",
         default=True,
-        help="Only trade during market hours (default: True)"
+        help="Only trade during market hours (default: True)",
     )
     parser.add_argument(
-        "--headless",
-        action="store_true",
-        help="Run without terminal dashboard"
+        "--headless", action="store_true", help="Run without terminal dashboard"
+    )
+    parser.add_argument("--status", action="store_true", help="Check daemon status")
+    parser.add_argument(
+        "--symbols", type=str, help="Comma-separated list of symbols (optional)"
     )
     parser.add_argument(
-        "--status",
-        action="store_true",
-        help="Check daemon status"
-    )
-    parser.add_argument(
-        "--symbols",
-        type=str,
-        help="Comma-separated list of symbols (optional)"
+        "--bypass-governance", action="store_true", help="Bypass governance checks for continuous operation"
     )
 
     args = parser.parse_args()
@@ -401,7 +458,8 @@ Examples:
         paper_mode=(args.mode == "paper"),
         market_hours_only=args.market_hours_only,
         symbols=symbols,
-        headless=args.headless
+        headless=args.headless,
+        bypass_governance=args.bypass_governance,
     )
 
     if args.status:
@@ -415,4 +473,3 @@ Examples:
 
 if __name__ == "__main__":
     main()
-

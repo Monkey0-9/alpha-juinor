@@ -1,0 +1,46 @@
+groups:
+  - name: TradingEngineAlerts
+    rules:
+      - alert: HighExecutionLatency
+        expr: total_execution_duration_ms > 100
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High execution latency detected on {{ $labels.instance }}"
+          description: "Total execution duration is {{ $value }}ms, which exceeds the 100ms threshold."
+
+      - alert: HighSlippage
+        expr: avg_slippage_pct > 0.005
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High slippage detected"
+          description: "Average slippage is {{ $value }}, which exceeds 0.5%."
+
+      - alert: CriticalRiskViolation
+        expr: risk_violation_count > 0
+        for: 0s
+        labels:
+          severity: emergency
+        annotations:
+          summary: "CRITICAL RISK VIOLATION"
+          description: "A risk limit has been breached. System should halt immediately."
+
+  - name: InfrastructureAlerts
+    rules:
+      - alert: DatabaseDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "TimescaleDB is down"
+          description: "The primary database is unreachable."
+
+      - alert: HighCpuUsage
+        expr: node_cpu_utilisation > 0.8
+        for: 5m
+        labels:
+          severity: warning

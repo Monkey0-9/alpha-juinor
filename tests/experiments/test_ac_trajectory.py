@@ -4,7 +4,7 @@ Verification script for Almgren-Chriss Optimizer.
 
 import pandas as pd
 import numpy as np
-from execution.strategies.almgren_chriss import AlmgrenChrissOptimizer, ACMeta
+from execution.execution_strategies.almgren_chriss import AlmgrenChrissOptimizer, ACMeta
 
 def verify_ac_trajectory():
     # Parameters for a typical institutional trade

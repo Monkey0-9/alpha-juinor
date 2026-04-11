@@ -442,6 +442,12 @@ class SupremeDecisionEngine:
         }
 
 
+# Backward compatibility alias
+class SupremeEngine(SupremeDecisionEngine):
+    """Alias for SupremeDecisionEngine for backward compatibility."""
+    pass
+
+
 # Singleton
 _engine: Optional[SupremeDecisionEngine] = None
 
@@ -450,5 +456,5 @@ def get_supreme_engine() -> SupremeDecisionEngine:
     """Get or create the Supreme Decision Engine."""
     global _engine
     if _engine is None:
-        _engine = SupremeDecisionEngine()
+        _engine = SupremeEngine()
     return _engine

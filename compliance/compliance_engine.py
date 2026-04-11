@@ -1,258 +1,211 @@
 """
-Institutional Compliance Engine
-===============================
-
-Comprehensive compliance infrastructure for regulatory requirements.
-
-Features:
+Compliance & Audit Trail
+=========================
+SEC/FINRA/MiFID II compliance tracking for:
+- Order audit trail
+- Best execution reporting
+- Wash sale detection
+- Position limit enforcement
 - Trade surveillance
-- Best execution documentation (MiFID II / RegNMS)
-- Pre-trade risk checks (fat finger protection)
-- Wash sale prevention
-- Position concentration reporting
-- Audit trail
-
-Phase 3.3: Compliance & Regulatory Infrastructure
 """
 
+import hashlib
+import json
 import logging
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class ComplianceViolation:
-    """Represents a compliance violation."""
-    violation_type: str
-    severity: str  # "HIGH", "MEDIUM", "LOW"
-    description: str
-    symbol: Optional[str]
-    timestamp: datetime
-    resolved: bool = False
-
-
-@dataclass
-class AuditEntry:
-    """Audit trail entry."""
-    action: str
-    user: str
-    timestamp: datetime
-    details: Dict[str, Any]
-    order_id: Optional[str] = None
 
 
 class ComplianceEngine:
     """
     Institutional compliance engine.
+
+    Covers:
+    - SEC Rule 17a-4 (record retention)
+    - FINRA Rule 4511 (books and records)
+    - MiFID II best execution
+    - Wash sale rule (IRS)
+    - Position limits
     """
 
     def __init__(self):
-        self.violations: List[ComplianceViolation] = []
-        self.audit_trail: List[AuditEntry] = []
-        self.recent_trades: Dict[str, List[Dict]] = {}  # symbol -> trades
-        self.position_limits: Dict[str, float] = {}
+        self._trade_log: List[Dict] = []
+        self._wash_sale_window = timedelta(days=30)
+        self._position_limits: Dict[str, float] = {}
+        self._violations: List[Dict] = []
 
-        # Configure limits
-        self.max_order_value = 10_000_000  # $10M
-        self.max_position_pct = 0.10  # 10% of NAV
-        self.wash_sale_window = timedelta(days=30)
-
-        logger.info("Compliance Engine initialized")
-
-    def pre_trade_check(
+    def record_execution(
         self,
         symbol: str,
         side: str,
         quantity: float,
-        price: float,
-        nav: float
-    ) -> Dict[str, Any]:
-        """
-        Run all pre-trade compliance checks.
-
-        Returns:
-            Dict with 'approved' bool and 'reasons' list
-        """
-        reasons = []
-
-        # 1. Fat finger check
-        order_value = quantity * price
-        if order_value > self.max_order_value:
-            reasons.append(
-                f"FAT_FINGER: Order value ${order_value:,.0f} > "
-                f"${self.max_order_value:,.0f}"
-            )
-
-        # 2. Position concentration check
-        position_value = quantity * price
-        position_pct = position_value / nav if nav > 0 else 0
-        if position_pct > self.max_position_pct:
-            reasons.append(
-                f"CONCENTRATION: Position {position_pct:.1%} > "
-                f"{self.max_position_pct:.1%}"
-            )
-
-        # 3. Wash sale prevention
-        if self._check_wash_sale(symbol, side):
-            reasons.append(f"WASH_SALE: Recent opposite trade in {symbol}")
-
-        approved = len(reasons) == 0
-
-        # Log to audit trail
-        self._log_audit(
-            action="PRE_TRADE_CHECK",
-            details={
-                "symbol": symbol,
-                "side": side,
-                "quantity": quantity,
-                "price": price,
-                "approved": approved,
-                "reasons": reasons
-            }
+        fill_price: float,
+        market_price: float,
+        venue: str,
+        timestamp: datetime = None,
+        latency_ms: float = 0,
+    ) -> Dict:
+        """Record trade for best execution reporting."""
+        ts = timestamp or datetime.utcnow()
+        slippage_bps = (
+            abs(fill_price - market_price) / market_price * 10000 if market_price else 0
         )
 
-        if not approved:
-            for reason in reasons:
-                self._add_violation(
-                    violation_type="PRE_TRADE_BLOCK",
-                    severity="HIGH",
-                    description=reason,
-                    symbol=symbol
-                )
-
-        return {
-            "approved": approved,
-            "reasons": reasons
-        }
-
-    def _check_wash_sale(self, symbol: str, side: str) -> bool:
-        """
-        Check for potential wash sale violation.
-        """
-        if symbol not in self.recent_trades:
-            return False
-
-        now = datetime.utcnow()
-        opposite_side = "SELL" if side == "BUY" else "BUY"
-
-        for trade in self.recent_trades[symbol]:
-            trade_time = trade.get("timestamp")
-            trade_side = trade.get("side")
-
-            if trade_time and trade_side == opposite_side:
-                if now - trade_time < self.wash_sale_window:
-                    return True
-
-        return False
-
-    def record_trade(
-        self,
-        symbol: str,
-        side: str,
-        quantity: float,
-        price: float,
-        order_id: str
-    ):
-        """
-        Record a trade for compliance tracking.
-        """
-        trade_record = {
+        record = {
+            "timestamp": ts.isoformat(),
             "symbol": symbol,
             "side": side,
             "quantity": quantity,
-            "price": price,
-            "order_id": order_id,
-            "timestamp": datetime.utcnow()
+            "fill_price": fill_price,
+            "market_price": market_price,
+            "slippage_bps": round(slippage_bps, 2),
+            "venue": venue,
+            "latency_ms": latency_ms,
+            "hash": self._hash_record(ts, symbol, fill_price, quantity),
+        }
+        self._trade_log.append(record)
+
+        if slippage_bps > 50:
+            self._flag_violation(
+                "EXCESSIVE_SLIPPAGE",
+                record,
+                f"Slippage {slippage_bps:.1f}bps > 50bps",
+            )
+        return record
+
+    def best_execution_report(self, period_days: int = 30) -> Dict:
+        """Generate best execution report."""
+        cutoff = datetime.utcnow() - timedelta(days=period_days)
+        recent = [t for t in self._trade_log if t["timestamp"] >= cutoff.isoformat()]
+
+        if not recent:
+            return {"period": period_days, "trades": 0}
+
+        slippages = [t["slippage_bps"] for t in recent]
+        return {
+            "period_days": period_days,
+            "total_trades": len(recent),
+            "avg_slippage_bps": round(sum(slippages) / len(slippages), 2),
+            "max_slippage_bps": max(slippages),
+            "venues_used": list(set(t["venue"] for t in recent)),
+            "violations": len(
+                [v for v in self._violations if v["timestamp"] >= cutoff.isoformat()]
+            ),
         }
 
-        if symbol not in self.recent_trades:
-            self.recent_trades[symbol] = []
+    def check_wash_sale(
+        self,
+        symbol: str,
+        side: str,
+        timestamp: datetime = None,
+    ) -> Optional[Dict]:
+        """Check if trade triggers wash sale rule."""
+        ts = timestamp or datetime.utcnow()
+        window_start = ts - self._wash_sale_window
 
-        self.recent_trades[symbol].append(trade_record)
-
-        # Keep only recent trades
-        cutoff = datetime.utcnow() - timedelta(days=31)
-        self.recent_trades[symbol] = [
-            t for t in self.recent_trades[symbol]
-            if t["timestamp"] > cutoff
+        related_sells = [
+            t
+            for t in self._trade_log
+            if (
+                t["symbol"] == symbol
+                and t["side"] == "sell"
+                and t["timestamp"] >= window_start.isoformat()
+            )
         ]
 
-        self._log_audit(
-            action="TRADE_RECORDED",
-            details=trade_record,
-            order_id=order_id
-        )
+        if side == "buy" and related_sells:
+            violation = {
+                "type": "POTENTIAL_WASH_SALE",
+                "symbol": symbol,
+                "sell_date": related_sells[-1]["timestamp"],
+                "buy_date": ts.isoformat(),
+            }
+            self._flag_violation("WASH_SALE", violation, symbol)
+            return violation
+        return None
 
-    def _add_violation(
+    def set_position_limit(self, symbol: str, max_shares: float):
+        """Set max position size for a symbol."""
+        self._position_limits[symbol] = max_shares
+
+    def check_position_limit(
         self,
-        violation_type: str,
-        severity: str,
-        description: str,
-        symbol: Optional[str] = None
-    ):
-        """Add a compliance violation."""
-        violation = ComplianceViolation(
-            violation_type=violation_type,
-            severity=severity,
-            description=description,
-            symbol=symbol,
-            timestamp=datetime.utcnow()
-        )
-        self.violations.append(violation)
-        logger.warning(f"[COMPLIANCE] {violation_type}: {description}")
+        symbol: str,
+        current_pos: float,
+        proposed_qty: float,
+    ) -> bool:
+        """Check if proposed trade exceeds limits."""
+        limit = self._position_limits.get(symbol, float("inf"))
+        new_pos = current_pos + proposed_qty
+        if abs(new_pos) > limit:
+            self._flag_violation(
+                "POSITION_LIMIT",
+                {"symbol": symbol, "new_pos": new_pos},
+                f"{symbol}: {abs(new_pos)} > {limit}",
+            )
+            return False
+        return True
 
-    def _log_audit(
+    def get_audit_trail(
         self,
-        action: str,
-        details: Dict[str, Any],
-        order_id: Optional[str] = None
+        start: datetime = None,
+        end: datetime = None,
+        symbol: str = None,
+    ) -> List[Dict]:
+        """Get audit trail with optional filters."""
+        result = self._trade_log.copy()
+        if start:
+            result = [t for t in result if t["timestamp"] >= start.isoformat()]
+        if end:
+            result = [t for t in result if t["timestamp"] <= end.isoformat()]
+        if symbol:
+            result = [t for t in result if t["symbol"] == symbol]
+        return result
+
+    def get_violations(self) -> List[Dict]:
+        """Get all compliance violations."""
+        return self._violations.copy()
+
+    def _flag_violation(
+        self,
+        vtype: str,
+        details: Dict,
+        desc: str,
     ):
-        """Log to audit trail."""
-        entry = AuditEntry(
-            action=action,
-            user="SYSTEM",
-            timestamp=datetime.utcnow(),
-            details=details,
-            order_id=order_id
+        """Record compliance violation."""
+        self._violations.append(
+            {
+                "timestamp": datetime.utcnow().isoformat(),
+                "type": vtype,
+                "description": desc,
+                "details": details,
+            }
         )
-        self.audit_trail.append(entry)
+        logger.warning(f"COMPLIANCE: {vtype} - {desc}")
 
-    def get_violation_report(self) -> Dict[str, Any]:
-        """Get compliance violation summary."""
-        high = [v for v in self.violations if v.severity == "HIGH"]
-        medium = [v for v in self.violations if v.severity == "MEDIUM"]
-        low = [v for v in self.violations if v.severity == "LOW"]
-
-        return {
-            "total_violations": len(self.violations),
-            "high_severity": len(high),
-            "medium_severity": len(medium),
-            "low_severity": len(low),
-            "unresolved": len([v for v in self.violations if not v.resolved])
-        }
-
-    def generate_best_execution_report(self) -> Dict[str, Any]:
-        """
-        Generate MiFID II / RegNMS best execution report.
-        """
-        return {
-            "report_type": "BEST_EXECUTION",
-            "generated_at": datetime.utcnow().isoformat(),
-            "total_trades": len(self.audit_trail),
-            "compliance_status": "COMPLIANT",
-            "methodology": "IMPLEMENTATION_SHORTFALL"
-        }
+    @staticmethod
+    def _hash_record(
+        ts: datetime,
+        symbol: str,
+        price: float,
+        qty: float,
+    ) -> str:
+        """Tamper-evident hash of trade record."""
+        data = f"{ts.isoformat()}|{symbol}|{price}|{qty}"
+        return hashlib.sha256(data.encode()).hexdigest()[:16]
 
 
-# Singleton
-_compliance_engine = None
+_compliance: Optional[ComplianceEngine] = None
 
 
-def get_compliance_engine() -> ComplianceEngine:
-    global _compliance_engine
-    if _compliance_engine is None:
-        _compliance_engine = ComplianceEngine()
-    return _compliance_engine
+def get_compliance() -> ComplianceEngine:
+    global _compliance
+    if _compliance is None:
+        _compliance = ComplianceEngine()
+    return _compliance
+
+
+# Alias used by main.py
+get_compliance_engine = get_compliance

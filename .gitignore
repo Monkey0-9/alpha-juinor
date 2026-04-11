@@ -81,3 +81,11 @@ output/*.csv
 !alembic.ini
 !supervisord.conf
 
+
+
+# Security — auto-added
+.env.local
+.env.production
+*.pem
+*.key
+.secrets.baseline

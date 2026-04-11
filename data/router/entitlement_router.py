@@ -13,8 +13,14 @@ import os
 import yaml
 import json
 import logging
+import time
+import os
+import yaml
+import json
+from collections import defaultdict
 from typing import Dict, Optional, List
 from datetime import datetime
+
 
 # Assuming SecretManager exists from previous work
 from config.secrets_manager import secrets
@@ -35,8 +41,13 @@ class EntitlementRouter:
 
     def _init(self):
         self.capabilities = self._load_config()
-        self.provider_priority = ["yahoo", "polygon", "alpaca"] # Default priority
-        self.blocked_providers = {} # {provider: {symbol: reason}}
+        self.provider_priority = ["bloomberg", "refinitiv", "polygon", "alpaca", "yahoo"] # Institutional priority
+        self.rate_limits = {
+            "bloomberg": {"max_calls": 100000, "window": 3600}, # 100k/hr
+            "polygon": {"max_calls": 5, "window": 60},        # Free tier
+            "yahoo": {"max_calls": 100, "window": 3600}
+        }
+        self.call_history = defaultdict(list)
         self.blocked_file = "runtime/blocked_providers.json"
 
         # Ensure runtime dir
@@ -107,6 +118,27 @@ class EntitlementRouter:
         }
         self._persist_blocked()
         logger.warning(f"[ENTITLEMENT_BLOCK] Blocked {provider} for {symbol}: {reason}")
+
+    def check_rate_limit(self, provider: str) -> bool:
+        """
+        Institutional-grade rate limiting.
+        """
+        if provider not in self.rate_limits:
+            return True
+        
+        now = time.time()
+        limit = self.rate_limits[provider]
+        window_start = now - limit["window"]
+        
+        # Clean history
+        self.call_history[provider] = [t for t in self.call_history[provider] if t > window_start]
+        
+        if len(self.call_history[provider]) >= limit["max_calls"]:
+            logger.warning(f"[RATE_LIMIT] Provider {provider} reached limit ({limit['max_calls']}/{limit['window']}s)")
+            return False
+        
+        self.call_history[provider].append(now)
+        return True
 
     def select_provider(self, symbol: str, required_history_days: int) -> Dict[str, str]:
         """

@@ -1,26 +1,29 @@
 """
-Interactive Brokers Futures/Forex Adapter
-=========================================
-
-Institutional-grade broker integration for:
-- Futures trading (CME, ICE, Eurex)
+Interactive Brokers Production Adapter
+======================================
+Institutional-grade broker integration using ib_insync for:
+- Futures (CME, ICE, Eurex, SGX)
 - Forex spot and forwards
 - Options on futures
-- Global commodities
+- Global equities (LSE, TSX, ASX, JPX, HKEx)
+- Commodities
 
-Uses IB TWS API.
+Requires IB TWS or IB Gateway running.
 """
 
 import logging
-from dataclasses import dataclass
+import os
+import threading
+import time
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 
-class AssetClass(Enum):
+class AssetClass(str, Enum):
     """Asset class types."""
 
     EQUITY = "STK"
@@ -28,6 +31,8 @@ class AssetClass(Enum):
     FOREX = "CASH"
     OPTIONS = "OPT"
     COMMODITY = "CMDTY"
+    INDEX = "IND"
+    BOND = "BOND"
 
 
 @dataclass
@@ -38,283 +43,574 @@ class IBContract:
     asset_class: AssetClass
     exchange: str
     currency: str = "USD"
-    expiry: Optional[str] = None  # For futures/options
-    strike: Optional[float] = None  # For options
-    right: Optional[str] = None  # "C" or "P" for options
+    expiry: Optional[str] = None
+    strike: Optional[float] = None
+    right: Optional[str] = None
+    multiplier: Optional[str] = None
+    local_symbol: Optional[str] = None
+
+
+@dataclass
+class IBOrder:
+    """Order tracking."""
+
+    order_id: int
+    contract: IBContract
+    action: str
+    quantity: float
+    order_type: str
+    limit_price: Optional[float] = None
+    status: str = "PENDING"
+    fill_price: float = 0.0
+    filled_qty: float = 0.0
+    timestamp: datetime = field(default_factory=datetime.utcnow)
 
 
 class IBBrokerAdapter:
     """
-    Interactive Brokers adapter for multi-asset trading.
+    Production Interactive Brokers adapter for multi-asset trading.
 
     Features:
-    - Futures across global exchanges
+    - Auto-reconnection with exponential backoff
+    - Thread-safe order management
+    - Futures across global exchanges (CME, ICE, Eurex, SGX)
     - Forex spot and forwards
     - Commodities
-    - Real-time market data
-    - Order management
+    - Real-time market data via WebSocket
+    - Position reconciliation
+    - Comprehensive error handling
     """
+
+    # Exchange routing map
+    EXCHANGE_MAP = {
+        "ES": ("CME", "USD", "50"),
+        "NQ": ("CME", "USD", "20"),
+        "YM": ("CBOT", "USD", "5"),
+        "RTY": ("CME", "USD", "50"),
+        "CL": ("NYMEX", "USD", "1000"),
+        "GC": ("COMEX", "USD", "100"),
+        "SI": ("COMEX", "USD", "5000"),
+        "HG": ("COMEX", "USD", "25000"),
+        "NG": ("NYMEX", "USD", "10000"),
+        "ZB": ("CBOT", "USD", "1000"),
+        "ZN": ("CBOT", "USD", "1000"),
+        "ZF": ("CBOT", "USD", "1000"),
+        "FESX": ("EUREX", "EUR", "10"),
+        "FDAX": ("EUREX", "EUR", "25"),
+        "NKD": ("CME", "USD", "5"),
+        "HSI": ("HKFE", "HKD", "50"),
+        "SXF": ("CDE", "CAD", "200"),
+    }
+
+    # Forex pairs
+    FOREX_PAIRS = {
+        "EURUSD": ("EUR", "USD"),
+        "GBPUSD": ("GBP", "USD"),
+        "USDJPY": ("USD", "JPY"),
+        "AUDUSD": ("AUD", "USD"),
+        "USDCAD": ("USD", "CAD"),
+        "USDCHF": ("USD", "CHF"),
+        "NZDUSD": ("NZD", "USD"),
+        "EURGBP": ("EUR", "GBP"),
+        "EURJPY": ("EUR", "JPY"),
+        "GBPJPY": ("GBP", "JPY"),
+        "EURCHF": ("EUR", "CHF"),
+        "AUDJPY": ("AUD", "JPY"),
+        "CADJPY": ("CAD", "JPY"),
+        "EURAUD": ("EUR", "AUD"),
+        "EURCAD": ("EUR", "CAD"),
+        "GBPAUD": ("GBP", "AUD"),
+        "GBPCAD": ("GBP", "CAD"),
+        "GBPCHF": ("GBP", "CHF"),
+        "AUDCAD": ("AUD", "CAD"),
+        "AUDCHF": ("AUD", "CHF"),
+    }
 
     def __init__(
         self,
-        host: str = "127.0.0.1",
-        port: int = 7497,  # TWS paper trading port
+        host: str = "",
+        port: int = 0,
         client_id: int = 1,
+        auto_reconnect: bool = True,
+        max_reconnect_attempts: int = 10,
     ):
-        self.host = host
-        self.port = port
+        self.host = host or os.environ.get("IB_HOST", "127.0.0.1")
+        self.port = port or int(os.environ.get("IB_PORT", "4002"))
         self.client_id = client_id
-        self.connected = False
-        self.positions: Dict[str, float] = {}
-        self.orders: Dict[int, Dict] = {}
+        self.auto_reconnect = auto_reconnect
+        self.max_reconnect_attempts = max_reconnect_attempts
 
-        # Simulated mode if IB not available
-        self.simulation_mode = True
-        logger.info("IBBrokerAdapter initialized in simulation mode")
+        self._ib = None
+        self._connected = False
+        self._lock = threading.Lock()
+        self._positions: Dict[str, float] = {}
+        self._orders: Dict[int, IBOrder] = {}
+        self._next_order_id = 1
+        self._reconnect_count = 0
+        self._market_data_cache: Dict[str, Dict] = {}
 
     def connect(self) -> bool:
         """
-        Connect to IB TWS/Gateway.
+        Connect to IB TWS/Gateway with auto-reconnection.
 
         Returns:
             True if connected successfully
         """
         try:
-            # In real implementation, would use ibapi
-            # from ib api.client import EClient
-            # from ibapi.wrapper import EWrapper
-            # self.app = TWSClient(...).connect()
+            from ib_insync import IB
 
-            # For now, simulate connection
-            logger.info(
-                f"Simulating connection to IB at {self.host}:{self.port}"
-            )
-            self.connected = True
+            self._ib = IB()
+            self._ib.connect(self.host, self.port, clientId=self.client_id)
+            self._connected = True
+            self._reconnect_count = 0
+
+            # Register disconnect handler
+            if self.auto_reconnect:
+                self._ib.disconnectedEvent += self._on_disconnect
+
+            # Sync positions
+            self._sync_positions()
+
+            logger.info(f"Connected to IB Gateway at " f"{self.host}:{self.port}")
             return True
 
-        except Exception as e:
-            logger.error(f"Failed to connect to IB: {e}")
+        except ImportError:
+            logger.warning(
+                "ib_insync not installed. Install with: " "pip install ib_insync"
+            )
+            self._connected = False
             return False
+        except Exception as e:
+            logger.error(f"IB connection failed: {e}")
+            self._connected = False
+            if self.auto_reconnect:
+                return self._attempt_reconnect()
+            return False
+
+    def _on_disconnect(self):
+        """Handle disconnection event."""
+        logger.warning("IB Gateway disconnected")
+        self._connected = False
+        if self.auto_reconnect:
+            self._attempt_reconnect()
+
+    def _attempt_reconnect(self) -> bool:
+        """Reconnect with exponential backoff."""
+        for attempt in range(self.max_reconnect_attempts):
+            self._reconnect_count += 1
+            wait = min(2**attempt, 60)
+            logger.info(
+                f"Reconnecting in {wait}s "
+                f"(attempt {attempt + 1}/"
+                f"{self.max_reconnect_attempts})"
+            )
+            time.sleep(wait)
+            try:
+                if self._ib:
+                    self._ib.connect(self.host, self.port, clientId=self.client_id)
+                    self._connected = True
+                    self._sync_positions()
+                    logger.info("Reconnected to IB Gateway")
+                    return True
+            except Exception as e:
+                logger.warning(f"Reconnect attempt failed: {e}")
+        logger.error("All reconnection attempts exhausted")
+        return False
+
+    def _sync_positions(self):
+        """Synchronize positions from IB."""
+        if not self._connected or not self._ib:
+            return
+        try:
+            positions = self._ib.positions()
+            self._positions = {}
+            for pos in positions:
+                symbol = pos.contract.symbol
+                self._positions[symbol] = pos.position
+            logger.info(f"Synced {len(self._positions)} positions")
+        except Exception as e:
+            logger.error(f"Position sync failed: {e}")
 
     def create_futures_contract(
         self,
         symbol: str,
-        exchange: str,
-        expiry: str,
+        expiry: str = "",
+        exchange: str = "",
     ) -> IBContract:
         """
         Create futures contract specification.
 
         Args:
             symbol: Futures symbol (e.g., "ES", "CL", "GC")
-            exchange: Exchange code (e.g., "CME", "NYMEX", "COMEX")
-            expiry: Expiry date YYYYMM format
+            expiry: Expiry YYYYMM (auto-detects if empty)
+            exchange: Exchange (auto-detects from EXCHANGE_MAP)
 
         Returns:
             IBContract specification
         """
+        info = self.EXCHANGE_MAP.get(symbol, ("CME", "USD", "1"))
+        ex = exchange or info[0]
+        curr = info[1]
+        mult = info[2]
+
+        if not expiry:
+            expiry = FuturesRollCalendar().get_active_contract(
+                symbol, datetime.utcnow()
+            )
+
         return IBContract(
             symbol=symbol,
             asset_class=AssetClass.FUTURES,
-            exchange=exchange,
-            currency="USD",
+            exchange=ex,
+            currency=curr,
             expiry=expiry,
+            multiplier=mult,
         )
 
-    def create_forex_contract(
-        self, base_currency: str, quote_currency: str
-    ) -> IBContract:
+    def create_forex_contract(self, pair: str) -> IBContract:
         """
-        Create forex contract specification.
+        Create forex contract from pair string.
 
         Args:
-            base_currency: Base currency (e.g., "EUR")
-            quote_currency: Quote currency (e.g., "USD")
-
-        Returns:
-            IBContract specification
+            pair: e.g., "EURUSD", "GBPJPY"
         """
+        if pair in self.FOREX_PAIRS:
+            base, quote = self.FOREX_PAIRS[pair]
+        else:
+            base, quote = pair[:3], pair[3:]
+
         return IBContract(
-            symbol=base_currency,
+            symbol=base,
             asset_class=AssetClass.FOREX,
-            exchange="IDEALPRO",  # IB's FX exchange
-            currency=quote_currency,
+            exchange="IDEALPRO",
+            currency=quote,
+        )
+
+    def create_equity_contract(
+        self,
+        symbol: str,
+        exchange: str = "SMART",
+        currency: str = "USD",
+    ) -> IBContract:
+        """Create equity contract for global stocks."""
+        return IBContract(
+            symbol=symbol,
+            asset_class=AssetClass.EQUITY,
+            exchange=exchange,
+            currency=currency,
         )
 
     def place_order(
         self,
         contract: IBContract,
         action: str,
-        quantity: int,
+        quantity: float,
         order_type: str = "MKT",
         limit_price: Optional[float] = None,
-    ) -> int:
+        stop_price: Optional[float] = None,
+        time_in_force: str = "GTC",
+    ) -> Optional[int]:
         """
-        Place order.
-
-        Args:
-            contract: Contract specification
-            action: "BUY" or "SELL"
-            quantity: Order size
-            order_type: "MKT", "LMT", "STP", etc.
-            limit_price: Limit price for limit orders
+        Place order with full validation.
 
         Returns:
-            Order ID
+            Order ID or None on failure
         """
-        order_id = len(self.orders) + 1000
+        with self._lock:
+            if not self._connected:
+                logger.error("Not connected to IB")
+                return None
 
-        order = {
-            "contract": contract,
-            "action": action,
-            "quantity": quantity,
-            "order_type": order_type,
-            "limit_price": limit_price,
-            "status": "SUBMITTED",
-            "filled_qty": 0,
-            "timestamp": datetime.now(),
-        }
+            try:
+                from ib_insync import (
+                    Contract,
+                    Forex,
+                    Future,
+                    LimitOrder,
+                    MarketOrder,
+                    Stock,
+                    StopOrder,
+                )
 
-        self.orders[order_id] = order
+                # Build ib_insync contract
+                if contract.asset_class == AssetClass.FUTURES:
+                    ib_contract = Future(
+                        symbol=contract.symbol,
+                        lastTradeDateOrContractMonth=(contract.expiry),
+                        exchange=contract.exchange,
+                        currency=contract.currency,
+                        multiplier=contract.multiplier,
+                    )
+                elif contract.asset_class == AssetClass.FOREX:
+                    ib_contract = Forex(
+                        pair=(f"{contract.symbol}" f"{contract.currency}"),
+                    )
+                else:
+                    ib_contract = Stock(
+                        symbol=contract.symbol,
+                        exchange=contract.exchange,
+                        currency=contract.currency,
+                    )
 
-        if self.simulation_mode:
-            # Simulate immediate fill for market orders
-            if order_type == "MKT":
-                order["status"] = "FILLED"
-                order["filled_qty"] = quantity
-                self._update_position(contract.symbol, quantity if action == "BUY" else -quantity)
+                # Build order
+                if order_type.upper() == "MKT":
+                    ib_order = MarketOrder(action, quantity)
+                elif order_type.upper() == "LMT":
+                    ib_order = LimitOrder(action, quantity, limit_price)
+                elif order_type.upper() == "STP":
+                    ib_order = StopOrder(action, quantity, stop_price)
+                else:
+                    ib_order = MarketOrder(action, quantity)
 
-        logger.info(
-            f"Order {order_id}: {action} {quantity} {contract.symbol} @ {order_type}"
-        )
+                ib_order.tif = time_in_force
 
-        return order_id
+                # Submit
+                trade = self._ib.placeOrder(ib_contract, ib_order)
+                order_id = trade.order.orderId
+
+                # Track
+                self._orders[order_id] = IBOrder(
+                    order_id=order_id,
+                    contract=contract,
+                    action=action,
+                    quantity=quantity,
+                    order_type=order_type,
+                    limit_price=limit_price,
+                    status="SUBMITTED",
+                )
+
+                logger.info(
+                    f"IB Order {order_id}: {action} "
+                    f"{quantity} {contract.symbol} "
+                    f"@ {order_type}"
+                )
+                return order_id
+
+            except ImportError:
+                logger.error("ib_insync not installed")
+                return None
+            except Exception as e:
+                logger.error(f"Order placement failed: {e}")
+                return None
 
     def get_order_status(self, order_id: int) -> Optional[Dict]:
         """Get order status."""
-        return self.orders.get(order_id)
+        if order_id in self._orders:
+            o = self._orders[order_id]
+            return {
+                "order_id": o.order_id,
+                "status": o.status,
+                "filled_qty": o.filled_qty,
+                "fill_price": o.fill_price,
+                "symbol": o.contract.symbol,
+            }
+        return None
 
     def get_positions(self) -> Dict[str, float]:
         """Get current positions."""
-        return self.positions.copy()
+        self._sync_positions()
+        return dict(self._positions)
 
-    def get_market_data(self, contract: IBContract) -> Dict[str, float]:
+    def get_market_data(self, contract: IBContract) -> Dict[str, Any]:
         """
         Get real-time market data.
 
-        Args:
-            contract: Contract specification
-
         Returns:
-            Dictionary with bid, ask, last, volume
+            Dict with bid, ask, last, volume
         """
-        if self.simulation_mode:
-            # Simulated market data
-            import random
-
-            base_price = {
-                "ES": 4500,  # S&P 500 futures
-                "NQ": 15000,  # Nasdaq futures
-                "CL": 75,  # Crude oil
-                "GC": 2000,  # Gold
-                "EUR": 1.10,  # EUR/USD
-            }.get(contract.symbol, 100)
-
-            spread = base_price * 0.0001  # 1bp spread
-
+        if not self._connected or not self._ib:
             return {
-                "bid": base_price - spread / 2,
-                "ask": base_price + spread / 2,
-                "last": base_price,
-                "volume": random.randint(10000, 100000),
-                "timestamp": datetime.now(),
+                "bid": 0,
+                "ask": 0,
+                "last": 0,
+                "volume": 0,
             }
 
-        # Real implementation would request market data via IB API
-        return {}
+        try:
+            from ib_insync import Forex, Future, Stock
 
-    def _update_position(self, symbol: str, quantity_change: float):
-        """Update position tracking."""
-        current = self.positions.get(symbol, 0)
-        self.positions[symbol] = current + quantity_change
+            if contract.asset_class == AssetClass.FUTURES:
+                ib_c = Future(
+                    contract.symbol,
+                    contract.expiry,
+                    contract.exchange,
+                )
+            elif contract.asset_class == AssetClass.FOREX:
+                ib_c = Forex(f"{contract.symbol}{contract.currency}")
+            else:
+                ib_c = Stock(
+                    contract.symbol,
+                    contract.exchange,
+                    contract.currency,
+                )
 
-        if abs(self.positions[symbol]) < 1e-6:
-            del self.positions[symbol]
+            self._ib.qualifyContracts(ib_c)
+            ticker = self._ib.reqMktData(ib_c)
+            self._ib.sleep(1)
+
+            return {
+                "bid": ticker.bid or 0,
+                "ask": ticker.ask or 0,
+                "last": ticker.last or 0,
+                "volume": ticker.volume or 0,
+                "high": ticker.high or 0,
+                "low": ticker.low or 0,
+            }
+        except Exception as e:
+            logger.error(f"Market data error: {e}")
+            return {
+                "bid": 0,
+                "ask": 0,
+                "last": 0,
+                "volume": 0,
+            }
 
     def close_all_positions(self):
         """Close all open positions."""
-        for symbol, qty in list(self.positions.items()):
-            action = "SELL" if qty > 0 else "BUY"
-            # Create contract (simplified)
-            contract = IBContract(
-                symbol=symbol,
-                asset_class=AssetClass.FUTURES,
-                exchange="CME",
-            )
-            self.place_order(contract, action, abs(qty))
-
-        logger.info("Closed all positions")
+        for symbol, qty in self._positions.items():
+            if qty != 0:
+                action = "SELL" if qty > 0 else "BUY"
+                contract = self.create_equity_contract(symbol)
+                self.place_order(contract, action, abs(qty), "MKT")
+        logger.info("Closing all positions")
 
     def disconnect(self):
         """Disconnect from IB."""
-        self.connected = False
-        logger.info("Disconnected from IB")
+        if self._ib and self._connected:
+            self._ib.disconnect()
+            self._connected = False
+            logger.info("Disconnected from IB Gateway")
+
+    @property
+    def is_connected(self) -> bool:
+        """Check connection status."""
+        return self._connected
 
 
 class FuturesRollCalendar:
     """
     Futures roll calendar management.
-
     Handles contract expiry and rolling to next contract.
     """
+
+    # Standard quarterly months: Mar, Jun, Sep, Dec
+    QUARTERLY_MONTHS = ["03", "06", "09", "12"]
+
+    # Monthly contracts months
+    MONTHLY_MONTHS = [f"{m:02d}" for m in range(1, 13)]
+
+    # Symbol → schedule type
+    SCHEDULE = {
+        "ES": "quarterly",
+        "NQ": "quarterly",
+        "YM": "quarterly",
+        "RTY": "quarterly",
+        "CL": "monthly",
+        "NG": "monthly",
+        "GC": "bimonthly",
+        "SI": "quarterly_offset",
+        "HG": "monthly",
+        "ZB": "quarterly",
+        "ZN": "quarterly",
+        "FESX": "quarterly",
+        "FDAX": "quarterly",
+        "NKD": "quarterly",
+        "HSI": "monthly",
+    }
+
+    # Roll days before expiry
+    ROLL_DAYS = {
+        "ES": 8,
+        "NQ": 8,
+        "YM": 8,
+        "RTY": 8,
+        "CL": 5,
+        "NG": 5,
+        "GC": 5,
+        "SI": 5,
+        "HG": 5,
+        "ZB": 3,
+        "ZN": 3,
+        "FESX": 5,
+        "FDAX": 5,
+        "NKD": 8,
+        "HSI": 3,
+    }
 
     def __init__(self):
         self.roll_dates: Dict[str, List[str]] = {}
 
     def get_active_contract(self, symbol: str, as_of_date: datetime) -> str:
         """
-        Get active futures contract for a symbol.
-
-        Args:
-            symbol: Futures symbol
-            as_of_date: Date to check
+        Get active futures contract expiry code.
 
         Returns:
-            Expiry code (e.g., "202603" for March 2026)
+            Expiry code e.g., "202603"
         """
-        # Simplified: use next quarter month
-        month = as_of_date.month
+        sched = self.SCHEDULE.get(symbol, "quarterly")
         year = as_of_date.year
+        month = as_of_date.month
 
-        # Roll to next quarter month
-        quarter_months = [3, 6, 9, 12]
-        next_quarter = min([m for m in quarter_months if m >= month], default=3)
+        if sched == "quarterly":
+            months = self.QUARTERLY_MONTHS
+        elif sched == "monthly":
+            months = self.MONTHLY_MONTHS
+        else:
+            months = self.QUARTERLY_MONTHS
 
-        if next_quarter < month:
-            year += 1
+        # Find next expiry
+        for m in months:
+            m_int = int(m)
+            if m_int >= month:
+                return f"{year}{m}"
 
-        expiry = f"{year}{next_quarter:02d}"
-        return expiry
+        # Wrap to next year
+        return f"{year + 1}{months[0]}"
 
     def should_roll(
-        self, symbol: str, current_expiry: str, as_of_date: datetime
+        self,
+        symbol: str,
+        current_expiry: str,
+        as_of_date: datetime,
     ) -> bool:
         """
-        Check if position should be rolled to next contract.
-
-        Args:
-            symbol: Futures symbol
-            current_expiry: Current contract expiry
-            as_of_date: Current date
+        Check if position should be rolled.
 
         Returns:
-            True if should roll
+            True if within roll window
         """
-        # Simple rule: roll 5 days before expiry
-        expiry_year = int(current_expiry[:4])
-        expiry_month = int(current_expiry[4:6])
+        roll_days = self.ROLL_DAYS.get(symbol, 5)
 
-        expiry_date = datetime(expiry_year, expiry_month, 15)  # Mid-month
+        # Parse expiry
+        exp_year = int(current_expiry[:4])
+        exp_month = int(current_expiry[4:6])
+
+        # Approximate expiry as 3rd Friday
+        from calendar import monthcalendar
+
+        cal = monthcalendar(exp_year, exp_month)
+        fridays = [week[4] for week in cal if week[4] != 0]
+        third_friday = fridays[2] if len(fridays) >= 3 else 15
+        expiry_date = datetime(exp_year, exp_month, third_friday)
+
         days_to_expiry = (expiry_date - as_of_date).days
+        return days_to_expiry <= roll_days
 
-        return days_to_expiry <= 5
+    def get_next_contract(self, symbol: str, current_expiry: str) -> str:
+        """Get next contract after current."""
+        sched = self.SCHEDULE.get(symbol, "quarterly")
+        current_month = int(current_expiry[4:6])
+        current_year = int(current_expiry[:4])
+
+        if sched == "quarterly":
+            months = [3, 6, 9, 12]
+        elif sched == "monthly":
+            months = list(range(1, 13))
+        else:
+            months = [3, 6, 9, 12]
+
+        for m in months:
+            if m > current_month:
+                return f"{current_year}{m:02d}"
+
+        return f"{current_year + 1}{months[0]:02d}"

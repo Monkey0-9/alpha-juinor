@@ -1,6 +1,7 @@
 """
 Predictive Model Wrapper
 Handles loading of LightGBM models and generating probabilistic forecasts using SMC features.
+Now integrates with advanced intelligence engine for enhanced predictions.
 """
 
 import logging
@@ -16,11 +17,30 @@ from features.ml_feature_engineer import calculate_smc_features
 
 logger = logging.getLogger(__name__)
 
+# Try to import enhanced model
+try:
+    from ml_alpha.enhanced_predictive_model import get_enhanced_model
+
+    ENHANCED_MODEL_AVAILABLE = True
+except ImportError:
+    ENHANCED_MODEL_AVAILABLE = False
+
 
 class PredictiveModel:
-    def __init__(self, model_path=MLConfig.MODEL_PATH):
+    def __init__(self, model_path=MLConfig.MODEL_PATH, use_advanced: bool = True):
         self.model_path = model_path
         self.model = None
+        self.use_advanced = use_advanced and ENHANCED_MODEL_AVAILABLE
+        self.enhanced_model = None
+
+        if self.use_advanced:
+            try:
+                self.enhanced_model = get_enhanced_model()
+                logger.info("[ML-ALPHA] Using advanced intelligence engine")
+            except Exception as e:
+                logger.warning(f"[ML-ALPHA] Failed to initialize advanced model: {e}")
+                self.use_advanced = False
+
         self._load_model()
 
     def _load_model(self):
@@ -28,7 +48,7 @@ class PredictiveModel:
         if os.path.exists(self.model_path):
             try:
                 with open(self.model_path, "rb") as f:
-                     self.model = pickle.load(f)
+                    self.model = pickle.load(f)
                 logger.info(
                     f"[ML-ALPHA] Loaded predictive model from {self.model_path}"
                 )
@@ -48,21 +68,34 @@ class PredictiveModel:
             symbol_data: DataFrame with OHLCV data.
 
         Returns:
-            dict: {'probability': float (0.0-1.0), 'confidence': str, 'source': str}
+            dict: {'probability': float (0.0-1.0), 'confidence': str, 'source': str, 'regime': str, 'anomaly': bool}
         """
-        # 1. Fallback if no model
+        # Try advanced model first
+        if self.use_advanced and self.enhanced_model:
+            try:
+                enhanced_forecast = self.enhanced_model.get_forecast(symbol_data)
+                if enhanced_forecast.get("probability") is not None:
+                    return enhanced_forecast
+            except Exception as e:
+                logger.warning(
+                    f"[ML-ALPHA] Advanced model failed: {e}, falling back to standard model"
+                )
+
+        # Fallback if no model
         if self.model is None:
             return {
                 "probability": 0.5,
                 "confidence": "neutral",
                 "source": "fallback_no_model",
+                "regime": "unknown",
+                "anomaly": False,
             }
 
         try:
-            # 2. Generate Features on the fly
+            # Generate Features on the fly
             features_df = calculate_smc_features(symbol_data)
 
-            # 3. Predict
+            # Predict
             # Expecting a classifier with predict_proba
             if hasattr(self.model, "predict_proba"):
                 # Binary classification: [prob_0, prob_1]
@@ -73,8 +106,7 @@ class PredictiveModel:
                 # Clip to 0-1 just in case
                 pred_prob = max(0.0, min(1.0, pred_prob))
 
-            # 4. Assess Confidence
-            # High confidence if probability is far from 0.5
+            # Assess Confidence
             conf_label = "neutral"
             if pred_prob > MLConfig.BULLISH_THRESHOLD:
                 conf_label = "high_bullish"
@@ -85,14 +117,31 @@ class PredictiveModel:
                 "probability": float(pred_prob),
                 "confidence": conf_label,
                 "source": "lightgbm_v1",
+                "regime": "unknown",
+                "anomaly": False,
             }
 
         except Exception as e:
             logger.error(f"[ML-ALPHA] Prediction Logic Error: {e}")
-            return {"probability": 0.5, "confidence": "error", "source": "error"}
+            return {
+                "probability": 0.5,
+                "confidence": "error",
+                "source": "error",
+                "regime": "error",
+                "anomaly": False,
+            }
 
     def get_feature_importance(self) -> dict:
         """Get feature importance from the loaded model."""
+        # Try advanced model first
+        if self.use_advanced and self.enhanced_model:
+            try:
+                advanced_importance = self.enhanced_model.get_feature_importance()
+                if advanced_importance:
+                    return advanced_importance
+            except Exception as e:
+                logger.warning(f"[ML-ALPHA] Advanced feature importance failed: {e}")
+
         if self.model is None:
             return {}
 
@@ -113,3 +162,17 @@ class PredictiveModel:
         except Exception as e:
             logger.error(f"Failed to get feature importance: {e}")
             return {}
+
+    def get_model_status(self) -> dict:
+        """Get current model status."""
+        if self.use_advanced and self.enhanced_model:
+            try:
+                return self.enhanced_model.get_model_status()
+            except Exception as e:
+                logger.warning(f"[ML-ALPHA] Failed to get advanced model status: {e}")
+
+        return {
+            "is_trained": self.model is not None,
+            "model_type": "lightgbm_v1" if self.model else "untrained",
+            "use_advanced": self.use_advanced and self.enhanced_model is not None,
+        }

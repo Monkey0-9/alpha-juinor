@@ -1,0 +1,500 @@
+# Apache Kafka Cluster Configuration for Real-Time Event Streaming
+# Production-ready setup using open-source Apache Kafka
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-config
+  namespace: quant-fund
+data:
+  server.properties: |
+    # Kafka Broker Configuration
+    broker.id=${KAFKA_BROKER_ID}
+    listeners=PLAINTEXT://:9092,SSL://:9093
+    advertised.listeners=PLAINTEXT://${POD_NAME}.kafka:9092,SSL://${POD_NAME}.kafka:9093
+    zookeeper.connect=zookeeper:2181
+    log.dirs=/var/lib/kafka/data
+    
+    # Performance Tuning
+    num.network.threads=8
+    num.io.threads=16
+    socket.send.buffer.bytes=102400
+    socket.receive.buffer.bytes=102400
+    socket.request.max.bytes=104857600
+    
+    # Replication and Durability
+    num.partitions=16
+    num.recovery.threads.per.data.dir=4
+    offsets.topic.replication.factor=3
+    transaction.state.log.replication.factor=3
+    transaction.state.log.min.isr=2
+    default.replication.factor=3
+    min.insync.replicas=2
+    
+    # Log Retention
+    log.retention.hours=168
+    log.segment.bytes=1073741824
+    log.retention.check.interval.ms=300000
+    
+    # Compression
+    compression.type=producer
+    compression.codec=snappy
+    
+    # Security
+    ssl.keystore.location=/etc/kafka/secrets/kafka.server.keystore.jks
+    ssl.keystore.password=${KAFKA_SSL_PASSWORD}
+    ssl.key.password=${KAFKA_SSL_PASSWORD}
+    ssl.truststore.location=/etc/kafka/secrets/kafka.server.truststore.jks
+    ssl.truststore.password=${KAFKA_SSL_PASSWORD}
+    
+    # Monitoring
+    metric.reporters=io.prometheus.jmx.JmxReporter
+    jmx.port=9999
+---
+# Kafka Broker StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: quant-fund
+  labels:
+    app: kafka
+    component: streaming
+spec:
+  serviceName: kafka
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+        component: streaming
+    spec:
+      containers:
+      - name: kafka
+        image: confluentinc/cp-kafka:7.4.0
+        ports:
+        - containerPort: 9092
+          name: plaintext
+        - containerPort: 9093
+          name: ssl
+        - containerPort: 9999
+          name: jmx
+        env:
+        - name: KAFKA_BROKER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: KAFKA_ZOOKEEPER_CONNECT
+          value: "zookeeper:2181"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: KAFKA_SSL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: kafka-secrets
+              key: ssl-password
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "broker.id=${KAFKA_BROKER_ID}" > /etc/kafka/config/broker.id
+          echo "listeners=PLAINTEXT://:9092,SSL://:9093" >> /etc/kafka/config/broker.id
+          echo "advertised.listeners=PLAINTEXT://${POD_NAME}.kafka:9092,SSL://${POD_NAME}.kafka:9093" >> /etc/kafka/config/broker.id
+          cat /etc/kafka/config/server.properties >> /etc/kafka/config/broker.id
+          exec kafka-server-start /etc/kafka/config/broker.id
+        volumeMounts:
+        - name: kafka-storage
+          mountPath: /var/lib/kafka/data
+        - name: kafka-config
+          mountPath: /etc/kafka/config
+        - name: kafka-secrets
+          mountPath: /etc/kafka/secrets
+          readOnly: true
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2000m"
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+        livenessProbe:
+          tcpSocket:
+            port: 9092
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 9092
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: kafka-config
+        configMap:
+          name: kafka-config
+      - name: kafka-secrets
+        secret:
+          secretName: kafka-secrets
+  volumeClaimTemplates:
+  - metadata:
+      name: kafka-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: "fast-ssd"
+      resources:
+        requests:
+          storage: 1Ti
+---
+# Kafka Headless Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: quant-fund
+  labels:
+    app: kafka
+spec:
+  ports:
+  - port: 9092
+    name: plaintext
+  - port: 9093
+    name: ssl
+  - port: 9999
+    name: jmx
+  clusterIP: None
+  selector:
+    app: kafka
+---
+# Kafka External Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-external
+  namespace: quant-fund
+  labels:
+    app: kafka
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 9092
+    targetPort: 9092
+    name: plaintext
+  - port: 9093
+    targetPort: 9093
+    name: ssl
+  selector:
+    app: kafka
+---
+# Kafka Topics Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-topics
+  namespace: quant-fund
+data:
+  market-data.json: |
+    {
+      "topic": "market-data",
+      "partitions": 16,
+      "replication_factor": 3,
+      "config": {
+        "cleanup.policy": "delete",
+        "retention.ms": "86400000",
+        "segment.ms": "86400000",
+        "compression.type": "snappy"
+      }
+    }
+  trading-signals.json: |
+    {
+      "topic": "trading-signals",
+      "partitions": 8,
+      "replication_factor": 3,
+      "config": {
+        "cleanup.policy": "delete",
+        "retention.ms": "604800000",
+        "compression.type": "snappy"
+      }
+    }
+  risk-events.json: |
+    {
+      "topic": "risk-events",
+      "partitions": 4,
+      "replication_factor": 3,
+      "config": {
+        "cleanup.policy": "delete",
+        "retention.ms": "2592000000",
+        "compression.type": "snappy"
+      }
+    }
+  alternative-data.json: |
+    {
+      "topic": "alternative-data",
+      "partitions": 12,
+      "replication_factor": 3,
+      "config": {
+        "cleanup.policy": "delete",
+        "retention.ms": "604800000",
+        "compression.type": "snappy"
+      }
+    }
+  quantum-results.json: |
+    {
+      "topic": "quantum-results",
+      "partitions": 4,
+      "replication_factor": 3,
+      "config": {
+        "cleanup.policy": "delete",
+        "retention.ms": "2592000000",
+        "compression.type": "snappy"
+      }
+    }
+---
+# Kafka Topic Creation Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-kafka-topics
+  namespace: quant-fund
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: kafka-topics-creator
+        image: confluentinc/cp-kafka:7.4.0
+        command:
+        - /bin/bash
+        - -c
+        - |
+          # Wait for Kafka to be ready
+          until kafka-topics --bootstrap-server kafka:9092 --list; do
+            echo "Waiting for Kafka..."
+            sleep 5
+          done
+          
+          # Create topics
+          kafka-topics --bootstrap-server kafka:9092 --create --topic market-data --partitions 16 --replication-factor 3 --config cleanup.policy=delete --config retention.ms=86400000 --config compression.type=snappy || echo "Topic market-data already exists"
+          
+          kafka-topics --bootstrap-server kafka:9092 --create --topic trading-signals --partitions 8 --replication-factor 3 --config cleanup.policy=delete --config retention.ms=604800000 --config compression.type=snappy || echo "Topic trading-signals already exists"
+          
+          kafka-topics --bootstrap-server kafka:9092 --create --topic risk-events --partitions 4 --replication-factor 3 --config cleanup.policy=delete --config retention.ms=2592000000 --config compression.type=snappy || echo "Topic risk-events already exists"
+          
+          kafka-topics --bootstrap-server kafka:9092 --create --topic alternative-data --partitions 12 --replication-factor 3 --config cleanup.policy=delete --config retention.ms=604800000 --config compression.type=snappy || echo "Topic alternative-data already exists"
+          
+          kafka-topics --bootstrap-server kafka:9092 --create --topic quantum-results --partitions 4 --replication-factor 3 --config cleanup.policy=delete --config retention.ms=2592000000 --config compression.type=snappy || echo "Topic quantum-results already exists"
+          
+          echo "All Kafka topics created successfully"
+---
+# Kafka Consumer Group Monitor
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-monitor
+  namespace: quant-fund
+  labels:
+    app: kafka-monitor
+    component: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-monitor
+  template:
+    metadata:
+      labels:
+        app: kafka-monitor
+        component: monitoring
+    spec:
+      containers:
+      - name: kafka-monitor
+        image: confluentinc/cp-kafka:7.4.0
+        command:
+        - /bin/bash
+        - -c
+        - |
+          while true; do
+            echo "=== Kafka Cluster Status ==="
+            kafka-broker-api-versions --bootstrap-server kafka:9092
+            
+            echo "=== Topics ==="
+            kafka-topics --bootstrap-server kafka:9092 --list
+            
+            echo "=== Consumer Groups ==="
+            kafka-consumer-groups --bootstrap-server kafka:9092 --list
+            
+            echo "=== Consumer Group Details ==="
+            for group in $(kafka-consumer-groups --bootstrap-server kafka:9092 --list | grep -v "GROUP"); do
+              echo "Group: $group"
+              kafka-consumer-groups --bootstrap-server kafka:9092 --describe --group $group
+              echo "---"
+            done
+            
+            sleep 30
+          done
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+---
+# Kafka Prometheus Exporter
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-exporter
+  namespace: quant-fund
+  labels:
+    app: kafka-exporter
+    component: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-exporter
+  template:
+    metadata:
+      labels:
+        app: kafka-exporter
+        component: monitoring
+    spec:
+      containers:
+      - name: kafka-exporter
+        image: danielqsj/kafka-exporter:latest
+        ports:
+        - containerPort: 9308
+          name: metrics
+        env:
+        - name: KAFKA_BROKERS
+          value: "kafka:9092"
+        - name: KAFKA_EXPORTER_ENABLE_SASL
+          value: "false"
+        - name: KAFKA_EXPORTER_ENABLE_TLS
+          value: "false"
+        - name: KAFKA_EXPORTER_LOG_LEVEL
+          value: "info"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: 9308
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: 9308
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+# Kafka Exporter Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-exporter
+  namespace: quant-fund
+  labels:
+    app: kafka-exporter
+    component: monitoring
+spec:
+  ports:
+  - port: 9308
+    targetPort: 9308
+    name: metrics
+  selector:
+    app: kafka-exporter
+---
+# Kafka UI Dashboard
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-ui
+  namespace: quant-fund
+  labels:
+    app: kafka-ui
+    component: dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-ui
+  template:
+    metadata:
+      labels:
+        app: kafka-ui
+        component: dashboard
+    spec:
+      containers:
+      - name: kafka-ui
+        image: provectuslabs/kafka-ui:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: KAFKA_CLUSTERS_0_NAME
+          value: "Production"
+        - name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
+          value: "kafka:9092"
+        - name: KAFKA_CLUSTERS_0_ZOOKEEPER
+          value: "zookeeper:2181"
+        - name: KAFKA_CLUSTERS_0_READONLY
+          value: "false"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+# Kafka UI Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-ui
+  namespace: quant-fund
+  labels:
+    app: kafka-ui
+    component: dashboard
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  selector:
+    app: kafka-ui
+---
+# Kafka Secrets
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kafka-secrets
+  namespace: quant-fund
+type: Opaque
+data:
+  ssl-password: "c3VwZXJfc2VjcmV0X3Bhc3N3b3Jk"  # base64 encoded "super_secret_password"
+  keystore: ""  # Add actual keystore data
+  truststore: ""  # Add actual truststore data

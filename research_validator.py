@@ -421,6 +421,138 @@ def walk_forward_analysis(
 # MAIN RESEARCH VALIDATOR
 # =============================================================================
 
+# =============================================================================
+# RESEARCH VALIDATOR CLASS - World-Class Strategy Validation
+# =============================================================================
+
+class ResearchValidator:
+    """
+    World-Class Research Validator for Strategy Validation.
+
+    Implements institutional-grade validation methodology:
+    - Simple, economically-grounded strategies
+    - Walk-forward analysis (train/test rolling windows)
+    - Conservative friction modeling
+    - Multiple robustness checks
+    - Statistical significance testing
+
+    Success Criteria:
+    - OOS Sharpe > 0 (positive)
+    - Sharpe Decay < 30%
+    - Stable across rolling windows
+    - Statistically significant alpha
+    """
+
+    def __init__(self, config: Optional[Dict] = None):
+        """Initialize the world-class research validator."""
+        self.config = config or {}
+        self.transaction_cost_bps = self.config.get('transaction_cost_bps', TRANSACTION_COST_BPS)
+        self.slippage_bps = self.config.get('slippage_bps', SLIPPAGE_BPS)
+        self.total_friction = self.transaction_cost_bps + self.slippage_bps
+        self.train_years = self.config.get('train_years', TRAIN_YEARS)
+        self.test_years = self.config.get('test_years', TEST_YEARS)
+
+    def validate_strategy(
+        self,
+        prices: pd.Series,
+        strategy_func,
+        strategy_name: str,
+        **strategy_params
+    ) -> WalkForwardResult:
+        """
+        Validate a strategy using walk-forward analysis.
+
+        Args:
+            prices: Price series
+            strategy_func: Function that generates signals
+            strategy_name: Name of the strategy
+            **strategy_params: Parameters for the strategy function
+
+        Returns:
+            WalkForwardResult with validation metrics
+        """
+        return walk_forward_analysis(
+            prices, strategy_func, strategy_name,
+            train_years=self.train_years,
+            test_years=self.test_years,
+            **strategy_params
+        )
+
+    def validate_multiple_strategies(
+        self,
+        prices: pd.Series,
+        strategies: Dict[str, Tuple[callable, Dict]]
+    ) -> Dict[str, WalkForwardResult]:
+        """Validate multiple strategies and compare results."""
+        results = {}
+        for name, (func, params) in strategies.items():
+            result = self.validate_strategy(prices, func, name, **params)
+            results[name] = result
+        return results
+
+    def generate_report(
+        self,
+        results: Dict[str, WalkForwardResult]
+    ) -> str:
+        """Generate a comprehensive validation report."""
+        report = []
+        report.append("=" * 70)
+        report.append("     RESEARCH VALIDATION REPORT")
+        report.append("     " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        report.append("=" * 70)
+        report.append("")
+
+        for name, result in results.items():
+            status = "PASS" if result.passed else "FAIL"
+            report.append(f"Strategy: {name} [{status}]")
+            report.append(f"  In-Sample Sharpe:  {result.in_sample_sharpe:.3f}")
+            report.append(f"  Out-Sample Sharpe: {result.out_sample_sharpe:.3f}")
+            report.append(f"  Sharpe Decay:      {result.sharpe_decay_pct:.1%}")
+            report.append("")
+
+        # Summary
+        passed = sum(1 for r in results.values() if r.passed)
+        total = len(results)
+        report.append(f"Summary: {passed}/{total} strategies passed validation")
+        report.append("=" * 70)
+
+        return "\n".join(report)
+
+    def fetch_and_validate(
+        self,
+        symbols: List[str],
+        strategy_func,
+        strategy_name: str,
+        start: str = "2005-01-01",
+        **strategy_params
+    ) -> WalkForwardResult:
+        """Fetch data and validate a strategy in one call."""
+        prices_df = fetch_data(symbols, start=start)
+        if prices_df is None:
+            raise ValueError("Failed to fetch price data")
+
+        prices = prices_df['close']
+        return self.validate_strategy(
+            prices, strategy_func, strategy_name, **strategy_params
+        )
+
+    def calculate_strategy_metrics(
+        self,
+        prices: pd.Series,
+        signals: pd.Series
+    ) -> Dict[str, float]:
+        """Calculate comprehensive strategy metrics."""
+        result = run_backtest(prices, signals)
+        return {
+            'sharpe_ratio': result.sharpe,
+            'cagr': result.cagr,
+            'max_drawdown': result.max_dd,
+            'volatility': result.volatility,
+            'win_rate': result.win_rate,
+            'trades': result.trades
+        }
+
+
 def main():
     print("=" * 70)
     print("     RESEARCH VALIDATOR - First Principles Approach")

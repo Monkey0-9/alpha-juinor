@@ -82,10 +82,11 @@ class DecisionRecorder:
     - Query interface for recent decisions
     """
 
-    def __init__(self, log_dir: str = "logs/decisions"):
+    def __init__(self, log_dir: str = "logs/decisions", db_conn=None):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self._buffer: List[DecisionRecord] = []
+        self.db_conn = db_conn
         logger.info(f"[DECISION_RECORDER] Initialized at {self.log_dir}")
 
     def record(
@@ -121,11 +122,38 @@ class DecisionRecorder:
         # Append to buffer
         self._buffer.append(record)
 
-        # Write to file
+        # Write to file (Primary Storage)
         self._write_to_file(record)
+        
+        # Write to Database (Secondary/Searchable Storage)
+        if self.db_conn:
+            self._write_to_db(record)
 
         logger.debug(f"[DECISION] {symbol} {decision} @ {confidence:.2f}")
         return record
+
+    def _write_to_db(self, record: DecisionRecord):
+        """Write record to TimescaleDB/PostgreSQL."""
+        try:
+            # Assuming a standard psycopg2/sqlalchemy connection
+            cursor = self.db_conn.cursor()
+            query = """
+                INSERT INTO trading_audit (
+                    time, symbol, decision, signal_strength, confidence, 
+                    source_alpha, portfolio_weight, risk_check_passed, 
+                    regime, execution_tactic, rationale, metadata
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(query, (
+                record.timestamp, record.symbol, record.decision,
+                record.signal_strength, record.confidence, record.source_alpha,
+                record.portfolio_weight, record.risk_check_passed,
+                record.regime, record.execution_tactic, record.rationale,
+                json.dumps(record.meta)
+            ))
+            self.db_conn.commit()
+        except Exception as e:
+            logger.error(f"[DECISION_RECORDER] DB Write Failed: {e}")
 
     def _write_to_file(self, record: DecisionRecord):
         """Write decision to daily log file."""
