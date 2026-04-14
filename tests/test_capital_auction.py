@@ -1,8 +1,8 @@
 
 import pytest
 import numpy as np
-from governance.capital_auction import CapitalAuctionEngine, CapitalAuctionInput
-from governance.institutional_specification import AssetClass
+from mini_quant_fund.governance.capital_auction import CapitalAuctionEngine, CapitalAuctionInput
+from mini_quant_fund.governance.institutional_specification import AssetClass
 
 class TestCapitalAuctionNaNs:
 

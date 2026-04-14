@@ -8,8 +8,8 @@ import os
 # Add root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from alpha_families.ml_alpha import MLAlpha
-from data.processors.features import FeatureEngineer
+from mini_quant_fund.alpha_families.ml_alpha import MLAlpha
+from mini_quant_fund.data.processors.features import FeatureEngineer
 
 @pytest.fixture
 def mock_price_data():

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def load_shadow_predictions(db_path: str, days: int = 7):
-    """Load shadow predictions from audit table."""
+    """Load shadow predictions from mini_quant_fund.audit table."""
     conn = sqlite3.connect(db_path)
 
     cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()

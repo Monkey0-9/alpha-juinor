@@ -7,7 +7,7 @@ import unittest
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import numpy as np
-from strategies.stat_arb import KalmanPairsTrader
+from mini_quant_fund.strategies.stat_arb import KalmanPairsTrader
 
 class TestKalman(unittest.TestCase):
     

@@ -1,6 +1,6 @@
 
 import numpy as np
-from portfolio.optimizer import optimize_portfolio
+from mini_quant_fund.portfolio.optimizer import optimize_portfolio
 import pytest
 
 def make_toy_problem(seed=123):

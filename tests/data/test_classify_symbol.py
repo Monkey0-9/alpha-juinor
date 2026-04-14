@@ -3,7 +3,7 @@ tests/data/test_classify_symbol.py
 Requirement 13: Symbol classification for 100 edge cases (sampled).
 """
 import unittest
-from data.router.entitlement_router import router
+from mini_quant_fund.data.router.entitlement_router import router
 
 class TestSymbolClassification(unittest.TestCase):
     def test_stocks(self):

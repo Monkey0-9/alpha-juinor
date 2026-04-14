@@ -30,34 +30,34 @@ class GlobalQuantFundOrchestrator:
         logger.info("Initializing Institutional-Grade Quant Fund Orchestrator")
 
         # Load Phase 2 Infrastructure
-        from infrastructure.cloud_native import MicroservicesArchitecture
+        from mini_quant_fund.infrastructure.cloud_native import MicroservicesArchitecture
         self.arch = MicroservicesArchitecture()
 
         # Load Phase 1 Data Adapters
-        from alternative_data.integrations.credit_card_adapter import CreditCardAdapter
-        from alternative_data.integrations.satellite_adapter import SatelliteAdapter
-        from data.data_lake import DataQualityMonitor
+        from mini_quant_fund.alternative_data.integrations.credit_card_adapter import CreditCardAdapter
+        from mini_quant_fund.alternative_data.integrations.satellite_adapter import SatelliteAdapter
+        from mini_quant_fund.data.data_lake import DataQualityMonitor
         self.satellite = SatelliteAdapter()
         self.cc_data = CreditCardAdapter()
         self.data_quality = DataQualityMonitor()
 
         # Load Phase 1 & 3 Intelligence
-        from ml.enhanced_portfolio_rl import EnhancedPortfolioRL
-        from ml.graph_neural_network import SupplyChainAnalyzer
-        from quantum.quantum_finance import QuantumPortfolioOptimizer
+        from mini_quant_fund.ml.enhanced_portfolio_rl import EnhancedPortfolioRL
+        from mini_quant_fund.ml.graph_neural_network import SupplyChainAnalyzer
+        from mini_quant_fund.quantum.quantum_finance import QuantumPortfolioOptimizer
         self.gnn = SupplyChainAnalyzer(num_features=10)
         self.rl_agent = EnhancedPortfolioRL(num_features=20, num_assets=10)
         self.quantum_opt = QuantumPortfolioOptimizer(num_assets=10)
 
         # Load Phase 2 Risk
-        from risk.advanced_risk_models import ExtremeValueTheory, NetworkContagionModel
+        from mini_quant_fund.risk.advanced_risk_models import ExtremeValueTheory, NetworkContagionModel
         self.contagion = NetworkContagionModel()
         self.tail_risk = ExtremeValueTheory()
 
         # Load Phase 1 & 2 Execution
-        from brokers.ib_broker import IBBrokerAdapter
-        from hft.low_latency_engine import LowLatencyMarketDataHandler
-        from strategies.market_making.advanced_mm import AdvancedMarketMakingStrategy
+        from mini_quant_fund.brokers.ib_broker import IBBrokerAdapter
+        from mini_quant_fund.hft.low_latency_engine import LowLatencyMarketDataHandler
+        from mini_quant_fund.strategies.market_making.advanced_mm import AdvancedMarketMakingStrategy
         self.broker = IBBrokerAdapter()
         self.hft_handler = LowLatencyMarketDataHandler()
         self.mm_strategy = AdvancedMarketMakingStrategy("AAPL")

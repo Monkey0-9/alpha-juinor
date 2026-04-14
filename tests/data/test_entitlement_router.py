@@ -5,7 +5,7 @@ tests/data/test_entitlement_router.py
 import unittest
 import os
 import json
-from data.router.entitlement_router import EntitlementRouter, router
+from mini_quant_fund.data.router.entitlement_router import EntitlementRouter, router
 
 class TestEntitlementRouter(unittest.TestCase):
 

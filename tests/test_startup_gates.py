@@ -10,8 +10,8 @@ import os
 # Add project root
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from database.manager import DatabaseManager
-from data.governance.governance_agent import SymbolGovernor
+from mini_quant_fund.database.manager import DatabaseManager
+from mini_quant_fund.data.governance.governance_agent import SymbolGovernor
 
 def test_governance_gates():
     """Test the governance gate sequence"""

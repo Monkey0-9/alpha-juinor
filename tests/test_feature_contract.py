@@ -6,7 +6,7 @@ import pytest
 import json
 from pathlib import Path
 
-from features.contract import (
+from mini_quant_fund.features.contract import (
     load_feature_contract,
     get_feature_list,
     validate_contract_compliance,

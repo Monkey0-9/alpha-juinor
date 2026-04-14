@@ -6,9 +6,9 @@ import pytest
 import pandas as pd
 import numpy as np
 
-from data.processors.features import compute_features_for_symbol
-from features.contract import get_feature_list
-from utils.errors import FeatureValidationError
+from mini_quant_fund.data.processors.features import compute_features_for_symbol
+from mini_quant_fund.features.contract import get_feature_list
+from mini_quant_fund.utils.errors import FeatureValidationError
 
 
 def create_synthetic_ohlcv(n_rows=300):

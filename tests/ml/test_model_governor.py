@@ -3,7 +3,7 @@ tests/ml/test_model_governor.py
 """
 import unittest
 import numpy as np
-from ml.governor import ModelGovernor
+from mini_quant_fund.ml.governor import ModelGovernor
 
 class TestModelGovernor(unittest.TestCase):
     def test_psi_no_drift(self):

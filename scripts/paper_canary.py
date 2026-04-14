@@ -8,14 +8,14 @@ import logging
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Moved import inside main/function to catch ImportError
-# from orchestration.live_decision_loop import LiveDecisionLoop
+# from mini_quant_fund.orchestration.live_decision_loop import LiveDecisionLoop
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("PaperCanary")
 
 def run_canary():
     try:
-        from orchestration.live_decision_loop import LiveDecisionLoop
+        from mini_quant_fund.orchestration.live_decision_loop import LiveDecisionLoop
 
         class LimitedLiveLoop(LiveDecisionLoop):
             """Subclass to run for a limited number of ticks."""

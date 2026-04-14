@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
-from utils.time import get_now_utc
+from mini_quant_fund.utils.time import get_now_utc
 import asyncio
 
 logger = logging.getLogger("MarketListener")

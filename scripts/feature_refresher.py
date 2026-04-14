@@ -19,8 +19,8 @@ from typing import List, Dict
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from database.manager import DatabaseManager
-from configs.config_manager import ConfigManager
+from mini_quant_fund.database.manager import DatabaseManager
+from mini_quant_fund.configs.config_manager import ConfigManager
 
 import pandas as pd
 from mini_quant_fund.intelligence.feature_store import FeatureStore
@@ -65,7 +65,7 @@ def refresh_features():
 
             # 3. Contract Check (Stricter than Store validation)
             # Find expected features from authoritative registry
-            from features.contract import get_feature_list
+            from mini_quant_fund.features.contract import get_feature_list
             expected_features = get_feature_list("ml_v1")
 
             # Predict and Store

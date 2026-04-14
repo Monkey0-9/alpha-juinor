@@ -1,9 +1,23 @@
 import pytest
 import pandas as pd
 import shutil
+import sys
+import importlib.util
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 collect_ignore = ["test_output.txt", "test_output_2.txt", "test_output_utf8.txt", "test_output_2_utf8.txt"]
+if importlib.util.find_spec("torch") is None:
+    collect_ignore.append("test_airllm.py")
 
 @pytest.fixture
 def mock_ohlcv_data():

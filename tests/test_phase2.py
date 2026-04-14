@@ -3,10 +3,10 @@ import unittest
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from risk.engine import RiskManager, RiskRegime
-from strategies.alpha import CompositeAlpha, TrendAlpha
-from alpha_families.ml_alpha import MLAlpha
-from data.processors.features import FeatureEngineer
+from mini_quant_fund.risk.engine import RiskManager, RiskRegime
+from mini_quant_fund.strategies.alpha import CompositeAlpha, TrendAlpha
+from mini_quant_fund.alpha_families.ml_alpha import MLAlpha
+from mini_quant_fund.data.processors.features import FeatureEngineer
 
 class TestPhase2(unittest.TestCase):
 

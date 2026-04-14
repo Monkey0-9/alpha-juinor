@@ -7,8 +7,8 @@ import joblib
 import pandas as pd
 import pytest
 
-from alpha_families.ml_alpha import MLAlpha
-from utils.errors import ModelFeatureMismatchError, GovernanceDisabledError
+from mini_quant_fund.alpha_families.ml_alpha import MLAlpha
+from mini_quant_fund.utils.errors import ModelFeatureMismatchError, GovernanceDisabledError
 
 
 def test_model_feature_mismatch(tmp_path):

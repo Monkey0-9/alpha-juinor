@@ -1,8 +1,8 @@
 import pytest
 import pandas as pd
 import numpy as np
-from alpha_families.ml_alpha import MLAlpha
-from utils.metrics import metrics
+from mini_quant_fund.alpha_families.ml_alpha import MLAlpha
+from mini_quant_fund.utils.metrics import metrics
 
 class MockModel:
     def __init__(self, feature_names=None):

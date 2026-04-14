@@ -2,7 +2,7 @@
 import pytest
 import pandas as pd
 import numpy as np
-from utils.timeutils import ensure_business_days, safe_infer_freq
+from mini_quant_fund.utils.timeutils import ensure_business_days, safe_infer_freq
 
 class TestTimeUtils:
 

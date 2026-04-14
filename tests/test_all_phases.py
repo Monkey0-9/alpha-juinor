@@ -27,7 +27,7 @@ class TestGraphNeuralNetwork:
         """Test Graph Attention Layer."""
         import torch
 
-        from ml.graph_neural_network import GraphAttentionLayer
+        from mini_quant_fund.ml.graph_neural_network import GraphAttentionLayer
 
         layer = GraphAttentionLayer(in_features=10, out_features=8)
         h = torch.randn(5, 10)  # 5 nodes, 10 features
@@ -38,7 +38,7 @@ class TestGraphNeuralNetwork:
 
     def test_supply_chain_analyzer(self):
         """Test supply chain contagion analysis."""
-        from ml.graph_neural_network import CompanyNode, SupplyChainAnalyzer
+        from mini_quant_fund.ml.graph_neural_network import CompanyNode, SupplyChainAnalyzer
 
         analyzer = SupplyChainAnalyzer(num_features=10)
 
@@ -69,7 +69,7 @@ class TestEnhancedPortfolioRL:
 
     def test_multi_objective_reward(self):
         """Test multi-objective reward calculation."""
-        from ml.enhanced_portfolio_rl import MultiObjectiveReward
+        from mini_quant_fund.ml.enhanced_portfolio_rl import MultiObjectiveReward
 
         reward_calc = MultiObjectiveReward()
         returns = np.array([0.01, 0.02, -0.01, 0.015])
@@ -79,7 +79,7 @@ class TestEnhancedPortfolioRL:
 
     def test_rl_action_selection(self):
         """Test RL action selection."""
-        from ml.enhanced_portfolio_rl import EnhancedPortfolioRL
+        from mini_quant_fund.ml.enhanced_portfolio_rl import EnhancedPortfolioRL
 
         agent = EnhancedPortfolioRL(num_features=20, num_assets=10)
         state = np.random.randn(10, 20)
@@ -94,7 +94,7 @@ class TestIBBroker:
 
     def test_futures_contract_creation(self):
         """Test futures contract specification."""
-        from brokers.ib_broker import AssetClass, IBBrokerAdapter
+        from mini_quant_fund.brokers.ib_broker import AssetClass, IBBrokerAdapter
 
         broker = IBBrokerAdapter()
         contract = broker.create_futures_contract("ES", "CME", "202603")
@@ -105,7 +105,7 @@ class TestIBBroker:
 
     def test_order_placement(self):
         """Test order placement."""
-        from brokers.ib_broker import IBBrokerAdapter
+        from mini_quant_fund.brokers.ib_broker import IBBrokerAdapter
 
         broker = IBBrokerAdapter()
         broker.connect()
@@ -128,7 +128,7 @@ class TestHFTInfrastructure:
         """Test low-latency market data handler."""
         import time
 
-        from hft.low_latency_engine import LowLatencyMarketDataHandler, Tick
+        from mini_quant_fund.hft.low_latency_engine import LowLatencyMarketDataHandler, Tick
 
         handler = LowLatencyMarketDataHandler()
 
@@ -149,7 +149,7 @@ class TestHFTInfrastructure:
 
     def test_fpga_tick_processor(self):
         """Test FPGA-simulated tick processing."""
-        from hft.low_latency_engine import FPGATickProcessor
+        from mini_quant_fund.hft.low_latency_engine import FPGATickProcessor
 
         processor = FPGATickProcessor()
         signals = processor.update("AAPL", bid=150.0, ask=150.05)
@@ -164,7 +164,7 @@ class TestAdvancedRiskModels:
 
     def test_network_contagion(self):
         """Test network contagion model."""
-        from risk.advanced_risk_models import NetworkContagionModel
+        from mini_quant_fund.risk.advanced_risk_models import NetworkContagionModel
 
         model = NetworkContagionModel()
 
@@ -180,7 +180,7 @@ class TestAdvancedRiskModels:
 
     def test_extreme_value_theory(self):
         """Test EVT for tail risk."""
-        from risk.advanced_risk_models import ExtremeValueTheory
+        from mini_quant_fund.risk.advanced_risk_models import ExtremeValueTheory
 
         evt = ExtremeValueTheory()
         losses = np.random.exponential(scale=0.01, size=1000)
@@ -197,7 +197,7 @@ class TestCloudNative:
 
     def test_microservices_definition(self):
         """Test microservice configuration."""
-        from infrastructure.cloud_native import MicroservicesArchitecture, ServiceConfig
+        from mini_quant_fund.infrastructure.cloud_native import MicroservicesArchitecture, ServiceConfig
 
         arch = MicroservicesArchitecture()
 
@@ -214,7 +214,7 @@ class TestCloudNative:
 
     def test_autoscaling_policy(self):
         """Test auto-scaling recommendations."""
-        from infrastructure.cloud_native import AutoScalingPolicy
+        from mini_quant_fund.infrastructure.cloud_native import AutoScalingPolicy
 
         policy = AutoScalingPolicy(min_replicas=1, max_replicas=10)
         recommendation = policy.recommend_replicas(
@@ -282,7 +282,7 @@ class TestQuantumFinance:
 
     def test_quantum_portfolio_optimization(self):
         """Test QAOA portfolio optimization."""
-        from quantum.quantum_finance import QuantumPortfolioOptimizer
+        from mini_quant_fund.quantum.quantum_finance import QuantumPortfolioOptimizer
 
         optimizer = QuantumPortfolioOptimizer(num_assets=20)
 
@@ -297,7 +297,7 @@ class TestQuantumFinance:
 
     def test_quantum_monte_carlo(self):
         """Test quantum MC VaR estimation."""
-        from quantum.quantum_finance import QuantumMonteCarloSimulator
+        from mini_quant_fund.quantum.quantum_finance import QuantumMonteCarloSimulator
 
         simulator = QuantumMonteCarloSimulator()
         var = simulator.quantum_var_estimation(
@@ -312,7 +312,7 @@ class TestAdvancedMarketMaking:
 
     def test_inventory_management(self):
         """Test Avellaneda-Stoikov inventory management."""
-        from strategies.market_making.advanced_mm import InventoryManagementModel
+        from mini_quant_fund.strategies.market_making.advanced_mm import InventoryManagementModel
 
         model = InventoryManagementModel()
 
@@ -327,7 +327,7 @@ class TestAdvancedMarketMaking:
 
     def test_adverse_selection_protection(self):
         """Test adverse selection detection."""
-        from strategies.market_making.advanced_mm import AdverseSelectionProtection
+        from mini_quant_fund.strategies.market_making.advanced_mm import AdverseSelectionProtection
 
         protection = AdverseSelectionProtection()
 
@@ -344,7 +344,7 @@ class TestDataLake:
 
     def test_kafka_stream_processor(self):
         """Test Kafka stream processing."""
-        from data.data_lake import KafkaStreamProcessor
+        from mini_quant_fund.data.data_lake import KafkaStreamProcessor
 
         processor = KafkaStreamProcessor()
 
@@ -362,7 +362,7 @@ class TestDataLake:
         """Test data quality assessment."""
         from datetime import datetime
 
-        from data.data_lake import DataQualityMonitor, DataRecord
+        from mini_quant_fund.data.data_lake import DataQualityMonitor, DataRecord
 
         monitor = DataQualityMonitor()
 

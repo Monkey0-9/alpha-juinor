@@ -10,7 +10,7 @@ sys.path.append(os.getcwd())
 import cProfile
 import pstats
 import io
-from orchestration.live_decision_loop import LiveDecisionLoop
+from mini_quant_fund.orchestration.live_decision_loop import LiveDecisionLoop
 import yaml
 
 def profile_decision_loop():

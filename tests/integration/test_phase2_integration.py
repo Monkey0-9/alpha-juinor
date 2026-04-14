@@ -6,8 +6,8 @@ Verifies "Start to End" integration of Phase 2 components:
 2. DecisionExplainer in decide_execution
 """
 import unittest
-from governance.execution_decision import decide_execution
-from execution.gates import ExecutionGatekeeper
+from mini_quant_fund.governance.execution_decision import decide_execution
+from mini_quant_fund.execution.gates import ExecutionGatekeeper
 
 class TestPhase2Integration(unittest.TestCase):
     def test_explainer_integration(self):

@@ -10,12 +10,12 @@ import os
 # Ensure project root is in path
 sys.path.append(os.getcwd())
 
-from strategies.stat_arb.engine import StatArbEngine
-from alpha_agents.statistical_fundamental import StatArbAgent
+from mini_quant_fund.strategies.stat_arb.engine import StatArbEngine
+from mini_quant_fund.alpha_agents.statistical_fundamental import StatArbAgent
 from contracts import AgentResult, DecisionRecord
-from meta_intelligence.pm_brain import PMBrain
-from meta_intelligence.bayesian_scorer import BayesianScorer
-from risk.engine import RiskManager
+from mini_quant_fund.meta_intelligence.pm_brain import PMBrain
+from mini_quant_fund.meta_intelligence.bayesian_scorer import BayesianScorer
+from mini_quant_fund.risk.engine import RiskManager
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -76,7 +76,7 @@ class TestPhase8Integration(unittest.TestCase):
         print("\n[TEST] Verifying PMBrain Ledoit-Wolf Optimization...")
 
         # Patch the optimizer to avoid cvxpy dependency issues
-        with unittest.mock.patch('meta_intelligence.pm_brain.optimize_portfolio') as mock_opt:
+        with unittest.mock.patch('mini_quant_fund.meta_intelligence.pm_brain.optimize_portfolio') as mock_opt:
             mock_opt.return_value = {
                 "w": np.array([0.5, 0.5]),
                 "rejected_assets": [],
@@ -84,7 +84,7 @@ class TestPhase8Integration(unittest.TestCase):
             }
 
             # Force patch at module level for PMBrain
-            import meta_intelligence.pm_brain
+            import mini_quant_fund.meta_intelligence.pm_brain
             meta_intelligence.pm_brain.optimize_portfolio = mock_opt
 
             pm = PMBrain()

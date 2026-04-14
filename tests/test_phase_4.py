@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 # Add project root
 sys.path.insert(0, os.getcwd())
 
-from services.risk_enforcer import RiskEnforcer
-from regime.controller import RegimeController, RegimeLabel, RegimeState, RegimeOverrides
+from mini_quant_fund.services.risk_enforcer import RiskEnforcer
+from mini_quant_fund.regime.controller import RegimeController, RegimeLabel, RegimeState, RegimeOverrides
 
 class TestPhase4(unittest.TestCase):
 

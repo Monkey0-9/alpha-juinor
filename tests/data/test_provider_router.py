@@ -4,7 +4,7 @@ Requirement: Provider selection and entitlement blocking.
 """
 import unittest
 from unittest.mock import MagicMock, patch
-from data.router.entitlement_router import router
+from mini_quant_fund.data.router.entitlement_router import router
 
 class TestProviderRouter(unittest.TestCase):
     def setUp(self):

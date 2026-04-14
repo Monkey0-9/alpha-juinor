@@ -1,8 +1,8 @@
 import pytest
 from datetime import datetime
-from portfolio.ledger import PortfolioLedger, PortfolioEvent, EventType
-from backtest.portfolio import Portfolio
-from backtest.execution import Trade
+from mini_quant_fund.portfolio.ledger import PortfolioLedger, PortfolioEvent, EventType
+from mini_quant_fund.backtest.portfolio import Portfolio
+from mini_quant_fund.backtest.execution import Trade
 
 def test_ledger_initial_capital():
     ledger = PortfolioLedger(initial_capital=100000)

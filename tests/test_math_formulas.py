@@ -6,10 +6,10 @@ Tests: MAD, conviction z-score, fractional Kelly, CVaR, impact model.
 import pytest
 import numpy as np
 import pandas as pd
-from meta_intelligence.pm_brain import PMBrain
-from execution_ai.impact_model import ImpactModel
-from risk.cvar import calculate_portfolio_cvar
-from maths.financial import fractional_kelly
+from mini_quant_fund.meta_intelligence.pm_brain import PMBrain
+from mini_quant_fund.execution_ai.impact_model import ImpactModel
+from mini_quant_fund.risk.cvar import calculate_portfolio_cvar
+from mini_quant_fund.maths.financial import fractional_kelly
 
 
 class TestMathFormulas:

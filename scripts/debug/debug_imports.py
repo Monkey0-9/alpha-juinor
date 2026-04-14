@@ -5,7 +5,7 @@ import traceback
 print("Checking Elite Imports...")
 
 try:
-    from intelligence.elite_monte_carlo import get_elite_mc_predictor
+    from mini_quant_fund.intelligence.elite_monte_carlo import get_elite_mc_predictor
     print("SUCCESS: elite_monte_carlo imported")
 except ImportError:
     print("FAILURE: elite_monte_carlo failed to import")
@@ -15,7 +15,7 @@ except Exception as e:
     traceback.print_exc()
 
 try:
-    from intelligence.elite_statistics import TimeSeriesStats
+    from mini_quant_fund.intelligence.elite_statistics import TimeSeriesStats
     print("SUCCESS: elite_statistics imported")
 except ImportError:
     print("FAILURE: elite_statistics failed to import")
@@ -24,6 +24,6 @@ except Exception as e:
     print(f"ERROR: elite_statistics error: {e}")
     traceback.print_exc()
 
-import strategies.monte_carlo_mean_reversion as mr
+import mini_quant_fund.strategies.monte_carlo_mean_reversion as mr
 
 print(f"Strategy ELITE_AVAILABLE: {mr.ELITE_AVAILABLE}")

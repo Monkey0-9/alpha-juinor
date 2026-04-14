@@ -3,7 +3,7 @@ import sys
 import os
 sys.path.append(os.getcwd())
 
-from alpha_families.agent_runner import run_agent
+from mini_quant_fund.alpha_families.agent_runner import run_agent
 import pandas as pd
 
 class MockAgent:

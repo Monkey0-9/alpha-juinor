@@ -10,8 +10,8 @@ from datetime import datetime
 # Add root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from database.manager import DatabaseManager
-from monitoring.health import HealthMonitor
+from mini_quant_fund.database.manager import DatabaseManager
+from mini_quant_fund.monitoring.health import HealthMonitor
 
 
 logging.basicConfig(level=logging.INFO)

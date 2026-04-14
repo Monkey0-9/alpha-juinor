@@ -11,9 +11,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 import numpy as np
 import logging
-from alpha_families.normalization import AlphaNormalizer
-from strategies.institutional_strategy import InstitutionalStrategy
-from portfolio.allocator import InstitutionalAllocator
+from mini_quant_fund.alpha_families.normalization import AlphaNormalizer
+from mini_quant_fund.strategies.institutional_strategy import InstitutionalStrategy
+from mini_quant_fund.portfolio.allocator import InstitutionalAllocator
 from contracts import AllocationRequest
 
 # Setup Logging

@@ -9,7 +9,7 @@ import pandas as pd
 
 sys.path.insert(0, "/c/mini-quant-fund")
 
-from ml_alpha.advanced_features import AdvancedFeatureEngineer
+from mini_quant_fund.ml_alpha.advanced_features import AdvancedFeatureEngineer
 
 # Generate sample data - NEED MORE DATA FOR 200-PERIOD MOVING AVERAGE
 np.random.seed(42)

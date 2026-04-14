@@ -15,7 +15,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agents.decision_agent import DecisionAgent
+from mini_quant_fund.agents.decision_agent import DecisionAgent
 from tests.test_helpers import sample_input
 
 

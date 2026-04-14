@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 from unittest.mock import Mock, patch
 
-from alpha_families.statistical_alpha import StatisticalAlpha, ModelNotFitError, MIN_ARIMA_SAMPLE
+from mini_quant_fund.alpha_families.statistical_alpha import StatisticalAlpha, ModelNotFitError, MIN_ARIMA_SAMPLE
 
 
 def create_price_data(n_rows=100):
@@ -36,7 +36,7 @@ def test_arima_ewma_fallback():
     # Create data but mock ARIMA to fail
     data = create_price_data(n_rows=100)
 
-    with patch('alpha_families.statistical_alpha.ARIMA') as mock_arima:
+    with patch('mini_quant_fund.alpha_families.statistical_alpha.ARIMA') as mock_arima:
         mock_arima.side_effect = Exception("ARIMA fit failed")
 
         result = alpha.arima_safe_predict(data, symbol="TEST")
@@ -52,7 +52,7 @@ def test_symbol_degradation_after_three_failures():
     data = create_price_data(n_rows=100)
 
     # Force 3 failures
-    with patch('alpha_families.statistical_alpha.ARIMA') as mock_arima:
+    with patch('mini_quant_fund.alpha_families.statistical_alpha.ARIMA') as mock_arima:
         mock_arima.side_effect = Exception("ARIMA fail")
 
         for i in range(3):
@@ -73,7 +73,7 @@ def test_degraded_symbol_uses_ewma_only():
     alpha._degraded_symbols.add("TEST")
     alpha._symbol_failures["TEST"] = 5
 
-    with patch('alpha_families.statistical_alpha.ARIMA') as mock_arima:
+    with patch('mini_quant_fund.alpha_families.statistical_alpha.ARIMA') as mock_arima:
         mock_arima.side_effect = Exception("Should not be called")
 
         result = alpha.arima_safe_predict(data, symbol="TEST")
@@ -98,7 +98,7 @@ def test_failure_counter_resets_on_success():
     mock_model_fit.mle_retvals = {'converged': True}
     mock_model_fit.forecast.return_value = pd.Series([0.01])
 
-    with patch('alpha_families.statistical_alpha.ARIMA') as mock_arima:
+    with patch('mini_quant_fund.alpha_families.statistical_alpha.ARIMA') as mock_arima:
         mock_arima.return_value.fit.return_value = mock_model_fit
 
         result = alpha.arima_safe_predict(data, symbol="TEST")
@@ -115,7 +115,7 @@ def test_arima_fallback_increments_metrics():
 
     initial_fallbacks = alpha.arima_fallbacks
 
-    with patch('alpha_families.statistical_alpha.ARIMA') as mock_arima:
+    with patch('mini_quant_fund.alpha_families.statistical_alpha.ARIMA') as mock_arima:
         mock_arima.side_effect = Exception("ARIMA fail")
 
         result = alpha.arima_safe_predict(data, symbol="TEST")
@@ -133,14 +133,14 @@ def test_generate_signal_confidence_differs():
     mock_model_fit.mle_retvals = {'converged': True}
     mock_model_fit.forecast.return_value = pd.Series([0.01])
 
-    with patch('alpha_families.statistical_alpha.ARIMA') as mock_arima:
+    with patch('mini_quant_fund.alpha_families.statistical_alpha.ARIMA') as mock_arima:
         mock_arima.return_value.fit.return_value = mock_model_fit
 
         result = alpha.generate_signal(data, symbol="TEST")
         arima_confidence = result["confidence"]
 
     # Mock ARIMA failure → EWMA
-    with patch('alpha_families.statistical_alpha.ARIMA') as mock_arima:
+    with patch('mini_quant_fund.alpha_families.statistical_alpha.ARIMA') as mock_arima:
         mock_arima.side_effect = Exception("fail")
 
         result = alpha.generate_signal(data, symbol="TEST2")

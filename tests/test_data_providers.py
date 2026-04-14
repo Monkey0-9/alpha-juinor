@@ -1,10 +1,10 @@
 import unittest
 import pandas as pd
 from unittest.mock import patch, MagicMock
-from data.providers.yahoo import YahooDataProvider
-from data.providers.binance import BinanceDataProvider
-from data.providers.coingecko import CoinGeckoDataProvider
-from data.providers.polygon import PolygonDataProvider
+from mini_quant_fund.data.providers.yahoo import YahooDataProvider
+from mini_quant_fund.data.providers.binance import BinanceDataProvider
+from mini_quant_fund.data.providers.coingecko import CoinGeckoDataProvider
+from mini_quant_fund.data.providers.polygon import PolygonDataProvider
 
 class TestDataProviders(unittest.TestCase):
     """

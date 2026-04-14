@@ -1,4 +1,4 @@
-# monitoring/__init__.py
-from .alerts import AlertManager
+# monitoring package
+from .structured_logger import get_logger, StructuredLogger
 
-__all__ = ['AlertManager']
+__all__ = ['get_logger', 'StructuredLogger']

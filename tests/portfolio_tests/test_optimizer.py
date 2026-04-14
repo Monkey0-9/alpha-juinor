@@ -3,7 +3,7 @@ tests/portfolio/test_optimizer.py
 """
 import unittest
 import numpy as np
-from portfolio.optimizer import PortfolioOptimizer, Constraint, CVXPY_AVAILABLE
+from mini_quant_fund.portfolio.optimizer import PortfolioOptimizer, Constraint, CVXPY_AVAILABLE
 
 class TestOptimizer(unittest.TestCase):
     def setUp(self):

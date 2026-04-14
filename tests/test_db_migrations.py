@@ -16,7 +16,7 @@ from unittest.mock import Mock, patch, MagicMock
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from database.adapters.postgres_manager import PostgresManager
+from mini_quant_fund.database.adapters.postgres_manager import PostgresManager
 
 
 class TestPostgresManager:
@@ -25,7 +25,7 @@ class TestPostgresManager:
     @pytest.fixture
     def mock_engine(self):
         """Create a mock SQLAlchemy engine."""
-        with patch('database.adapters.postgres_manager.create_engine') as mock:
+        with patch('mini_quant_fund.database.adapters.postgres_manager.create_engine') as mock:
             engine = MagicMock()
             mock.return_value = engine
             yield engine
@@ -50,7 +50,7 @@ class TestPostgresManager:
         os.environ['DB_MAX_OVERFLOW'] = '10'
 
         try:
-            from database.adapters.postgres_manager import (
+            from mini_quant_fund.database.adapters.postgres_manager import (
                 POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB,
                 POSTGRES_USER, POSTGRES_PASSWORD, POOL_SIZE, MAX_OVERFLOW
             )
@@ -75,7 +75,7 @@ class TestPostgresManager:
         PostgresManager._instance = None
         PostgresManager._lock = None
 
-        with patch('database.adapters.postgres_manager.create_engine'):
+        with patch('mini_quant_fund.database.adapters.postgres_manager.create_engine'):
             manager1 = PostgresManager()
             manager2 = PostgresManager()
 
@@ -89,7 +89,7 @@ class TestPostgresManager:
         mock_engine = MagicMock()
         mock_session = MagicMock()
 
-        with patch('database.adapters.postgres_manager.create_engine', return_value=mock_engine):
+        with patch('mini_quant_fund.database.adapters.postgres_manager.create_engine', return_value=mock_engine):
             with patch.object(PostgresManager, '_init_schema'):
                 manager = PostgresManager()
                 manager.engine = mock_engine
@@ -115,7 +115,7 @@ class TestPostgresManager:
         PostgresManager._instance = None
         PostgresManager._lock = None
 
-        with patch('database.adapters.postgres_manager.create_engine') as mock:
+        with patch('mini_quant_fund.database.adapters.postgres_manager.create_engine') as mock:
             mock.side_effect = Exception("Connection failed")
 
             with pytest.raises(Exception):
@@ -253,9 +253,9 @@ class TestDatabaseFactory:
 
     def test_factory_get_sqlite_manager(self):
         """Test getting SQLite manager from factory."""
-        with patch('database.adapters.postgres_manager.create_engine'):
-            from database import DatabaseFactory
-            from database.manager import DatabaseManager
+        with patch('mini_quant_fund.database.adapters.postgres_manager.create_engine'):
+            from mini_quant_fund.database import DatabaseFactory
+            from mini_quant_fund.database.manager import DatabaseManager
 
             # Reset singletons
             DatabaseManager._instance = None
@@ -267,7 +267,7 @@ class TestDatabaseFactory:
 
     def test_factory_engine_selection(self):
         """Test database engine selection."""
-        from database import DatabaseFactory
+        from mini_quant_fund.database import DatabaseFactory
 
         # Test default engine
         assert DatabaseFactory.get_engine() in ['sqlite', 'postgres']
@@ -283,9 +283,9 @@ class TestDatabaseFactory:
 
     def test_unified_manager_properties(self):
         """Test unified database manager properties."""
-        from database import UnifiedDatabaseManager, DatabaseFactory
+        from mini_quant_fund.database import UnifiedDatabaseManager, DatabaseFactory
 
-        with patch('database.adapters.postgres_manager.create_engine'):
+        with patch('mini_quant_fund.database.adapters.postgres_manager.create_engine'):
             DatabaseFactory._postgres_instance = None
             DatabaseFactory._sqlite_instance = None
             DatabaseManager._instance = None

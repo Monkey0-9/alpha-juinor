@@ -14,11 +14,11 @@ from datetime import datetime, timedelta
 import sys
 sys.path.insert(0, 'c:/mini-quant-fund')
 
-from strategies.features.microstructure_factors import (
+from mini_quant_fund.strategies.features.microstructure_factors import (
     MicrostructureFactors,
     MicrostructureMetrics
 )
-from strategies.features.advanced_technical_factors import (
+from mini_quant_fund.strategies.features.advanced_technical_factors import (
     AdvancedTechnicalFactors,
     AdvancedTechnicalMetrics
 )

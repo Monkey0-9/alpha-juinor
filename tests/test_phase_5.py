@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 # Add project root
 sys.path.insert(0, os.getcwd())
 
-from execution.impact_gate import ImpactGate, ImpactDecision
-from execution.regime_aware_executor import RegimeAwareExecutor
+from mini_quant_fund.execution.impact_gate import ImpactGate, ImpactDecision
+from mini_quant_fund.execution.regime_aware_executor import RegimeAwareExecutor
 
 class TestPhase5(unittest.TestCase):
 

@@ -1,0 +1,22 @@
+portfolio_limits:
+  max_drawdown: 0.15
+  max_leverage: 1.2
+  target_volatility: 0.18
+  var_95_limit: 0.05
+position_limits:
+  max_correlated_exposure: 0.3
+  max_position_size: 0.08
+  max_sector_exposure: 0.2
+  min_position_size: 0.005
+stop_loss_config:
+  individual_stop: 0.06
+  portfolio_stop: 0.1
+  time_stop_hours: 72
+  trailing_stop: 0.04
+take_profit_config:
+  individual_target: 0.25
+  partial_profit_levels:
+  - 0.1
+  - 0.15
+  - 0.2
+  profit_trailing: true

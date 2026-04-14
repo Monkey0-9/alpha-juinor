@@ -222,7 +222,7 @@ class ReplayEngine:
 
         # Execute replay cycle
         try:
-            from orchestration.cycle_runner import run_institutional_cycle
+            from mini_quant_fund.orchestration.cycle_runner import run_institutional_cycle
 
             # Run with same parameters
             result = run_institutional_cycle(

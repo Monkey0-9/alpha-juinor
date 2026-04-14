@@ -17,45 +17,45 @@ def test_imports():
 
     try:
         # Phase 1
-        from ml import graph_neural_network
+        from mini_quant_fund.ml import graph_neural_network
         print("✓ graph_neural_network")
 
-        from ml import enhanced_portfolio_rl
+        from mini_quant_fund.ml import enhanced_portfolio_rl
         print("✓ enhanced_portfolio_rl")
 
-        from brokers import ib_broker
+        from mini_quant_fund.brokers import ib_broker
         print("✓ ib_broker")
 
-        from alternative_data.integrations import satellite_adapter
+        from mini_quant_fund.alternative_data.integrations import satellite_adapter
         print("✓ satellite_adapter")
 
-        from alternative_data.integrations import credit_card_adapter
+        from mini_quant_fund.alternative_data.integrations import credit_card_adapter
         print("✓ credit_card_adapter")
 
-        from alternative_data.integrations import geolocation_adapter
+        from mini_quant_fund.alternative_data.integrations import geolocation_adapter
         print("✓ geolocation_adapter")
 
         # Phase 2
-        from hft import low_latency_engine
+        from mini_quant_fund.hft import low_latency_engine
         print("✓ low_latency_engine")
 
-        from risk import advanced_risk_models
+        from mini_quant_fund.risk import advanced_risk_models
         print("✓ advanced_risk_models")
 
-        from infrastructure import cloud_native
+        from mini_quant_fund.infrastructure import cloud_native
         print("✓ cloud_native")
 
         from compliance import regulatory_automation
         print("✓ regulatory_automation")
 
         # Phase 3
-        from quantum import quantum_finance
+        from mini_quant_fund.quantum import quantum_finance
         print("✓ quantum_finance")
 
-        from strategies.market_making import advanced_mm
+        from mini_quant_fund.strategies.market_making import advanced_mm
         print("✓ advanced_mm")
 
-        from data import data_lake
+        from mini_quant_fund.data import data_lake
         print("✓ data_lake")
 
         print("\n✅ All imports successful!")
@@ -74,27 +74,27 @@ def test_basic_functionality():
 
     try:
         # Test alternative data
-        from alternative_data.integrations.satellite_adapter import SatelliteAdapter
+        from mini_quant_fund.alternative_data.integrations.satellite_adapter import SatelliteAdapter
         adapter = SatelliteAdapter()
         signal = adapter.get_parking_lot_traffic("WMT", "store_123")
         assert signal is not None
         print("✓ Satellite adapter works")
 
         # Test IB broker
-        from brokers.ib_broker import IBBrokerAdapter
+        from mini_quant_fund.brokers.ib_broker import IBBrokerAdapter
         broker = IBBrokerAdapter()
         broker.connect()
         assert broker.connected
         print("✓ IB broker works")
 
         # Test HFT engine
-        from hft.low_latency_engine import LowLatencyMarketDataHandler
+        from mini_quant_fund.hft.low_latency_engine import LowLatencyMarketDataHandler
         handler = LowLatencyMarketDataHandler()
         assert handler is not None
         print("✓ HFT engine works")
 
         # Test cloud native
-        from infrastructure.cloud_native import MicroservicesArchitecture
+        from mini_quant_fund.infrastructure.cloud_native import MicroservicesArchitecture
         arch = MicroservicesArchitecture()
         assert arch is not None
         print("✓ Cloud-native works")
@@ -102,13 +102,13 @@ def test_basic_functionality():
         # Test quantum finance
         import numpy as np
 
-        from quantum.quantum_finance import QuantumPortfolioOptimizer
+        from mini_quant_fund.quantum.quantum_finance import QuantumPortfolioOptimizer
         optimizer = QuantumPortfolioOptimizer(num_assets=10)
         assert optimizer is not None
         print("✓ Quantum finance works")
 
         # Test market making
-        from strategies.market_making.advanced_mm import InventoryManagementModel
+        from mini_quant_fund.strategies.market_making.advanced_mm import InventoryManagementModel
         model = InventoryManagementModel()
         bid, ask = model.get_quotes(100, 0, 0.2)
         assert bid < ask
@@ -129,9 +129,9 @@ def test_derivatives():
     print("\nTesting derivatives...")
 
     try:
-        from derivatives.exotic_options import BarrierOption, price_barrier_option
-        from derivatives.volatility_surface import BlackScholesModel, SABRModel
-        from strategies.delta_hedging import DeltaHedgingStrategy
+        from mini_quant_fund.derivatives.exotic_options import BarrierOption, price_barrier_option
+        from mini_quant_fund.derivatives.volatility_surface import BlackScholesModel, SABRModel
+        from mini_quant_fund.strategies.delta_hedging import DeltaHedgingStrategy
 
         # Test Black-Scholes
         price = BlackScholesModel.price(100, 100, 1.0, 0.05, 0.02, 0.2, "call")

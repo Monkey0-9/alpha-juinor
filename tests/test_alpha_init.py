@@ -1,5 +1,5 @@
 
-from alpha_families.ml_alpha import MLAlpha
+from mini_quant_fund.alpha_families.ml_alpha import MLAlpha
 import logging
 logging.basicConfig(level=logging.INFO)
 print("Instantiating MLAlpha...")

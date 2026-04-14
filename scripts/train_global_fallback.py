@@ -14,8 +14,8 @@ import joblib
 from pathlib import Path
 from datetime import datetime
 
-from database.manager import DatabaseManager
-from data.processors.features import compute_features_for_symbol
+from mini_quant_fund.database.manager import DatabaseManager
+from mini_quant_fund.data.processors.features import compute_features_for_symbol
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)

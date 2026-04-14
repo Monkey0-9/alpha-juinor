@@ -20,7 +20,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from agents.institutional_decision_agent import (
+from mini_quant_fund.agents.institutional_decision_agent import (
     InstitutionalDecisionAgent,
     create_sample_input,
     validate_input,

@@ -8,7 +8,7 @@ Verifies system behavior defined in operational hardening plan.
 
 import unittest
 
-from portfolio.pm_brain import PMBrain
+from mini_quant_fund.portfolio.pm_brain import PMBrain
 from contracts import AlphaDistribution
 
 

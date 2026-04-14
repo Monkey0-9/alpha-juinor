@@ -3,7 +3,7 @@ import logging
 import time
 import threading
 from main import heartbeat_worker
-from utils.metrics import metrics
+from mini_quant_fund.utils.metrics import metrics
 
 def test_heartbeat_worker_logs(caplog):
     # Setup
@@ -37,6 +37,6 @@ def test_metrics_singleton():
     metrics.cycles += 1
     assert metrics.cycles == 1
 
-    from utils.metrics import metrics as metrics2
+    from mini_quant_fund.utils.metrics import metrics as metrics2
     assert metrics2.cycles == 1
     assert id(metrics) == id(metrics2)

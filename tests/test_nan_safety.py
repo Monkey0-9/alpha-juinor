@@ -1,8 +1,8 @@
 import pytest
 import pandas as pd
 import numpy as np
-from alpha_families.agent_runner import run_agent
-from strategies.institutional_strategy import InstitutionalStrategy
+from mini_quant_fund.alpha_families.agent_runner import run_agent
+from mini_quant_fund.strategies.institutional_strategy import InstitutionalStrategy
 
 class NanAgent:
     def generate_signal(self, data, **kwargs):

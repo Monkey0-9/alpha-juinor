@@ -5,10 +5,10 @@ Integration tests for CompositeAlphaStrategy.
 import pytest
 import pandas as pd
 import numpy as np
-from strategies.composite_alpha import CompositeAlphaStrategy
-from risk.engine import RiskManager
-from alpha_families.fundamental_alpha import FundamentalAlpha
-from alpha_families.statistical_alpha import StatisticalAlpha
+from mini_quant_fund.strategies.composite_alpha import CompositeAlphaStrategy
+from mini_quant_fund.risk.engine import RiskManager
+from mini_quant_fund.alpha_families.fundamental_alpha import FundamentalAlpha
+from mini_quant_fund.alpha_families.statistical_alpha import StatisticalAlpha
 
 
 class TestCompositeAlphaStrategy:

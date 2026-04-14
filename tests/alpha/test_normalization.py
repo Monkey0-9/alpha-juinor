@@ -6,7 +6,7 @@ Tests for Mandatory Alpha Normalization.
 import unittest
 import numpy as np
 import pandas as pd
-from alpha_families.normalization import AlphaNormalizer
+from mini_quant_fund.alpha_families.normalization import AlphaNormalizer
 
 class TestAlphaNormalization(unittest.TestCase):
     def setUp(self):

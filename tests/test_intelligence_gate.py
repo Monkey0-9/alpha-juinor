@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 
-from governance.execution_decision import decide_execution
+from mini_quant_fund.governance.execution_decision import decide_execution
 
 
 class TestIntelligenceGate(unittest.TestCase):
@@ -15,7 +15,7 @@ class TestIntelligenceGate(unittest.TestCase):
         }
         self.skipping_history = {}
         # Mock the explainer to avoid method name mismatches (explain vs explain_trade)
-        import governance.execution_decision
+        import mini_quant_fund.governance.execution_decision
 
         governance.execution_decision.explainer = MagicMock()
 

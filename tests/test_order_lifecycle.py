@@ -14,7 +14,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from execution.oms import (
+from mini_quant_fund.execution.oms import (
     OMS, Order, Fill, OrderStatus, OrderSide, OrderType, TimeInForce, RiskCheckResult
 )
 
@@ -259,7 +259,7 @@ class TestMarketImpact:
 
     def test_impact_estimate(self):
         """Test impact estimation."""
-        from execution.market_impact import MarketImpactModel
+        from mini_quant_fund.execution.market_impact import MarketImpactModel
 
         model = MarketImpactModel()
 
@@ -278,7 +278,7 @@ class TestMarketImpact:
 
     def test_optimal_execution(self):
         """Test optimal execution calculation."""
-        from execution.market_impact import MarketImpactModel
+        from mini_quant_fund.execution.market_impact import MarketImpactModel
 
         model = MarketImpactModel()
 
@@ -297,7 +297,7 @@ class TestMarketImpact:
 
     def test_liquidity_estimator(self):
         """Test liquidity estimation."""
-        from execution.market_impact import LiquidityEstimator
+        from mini_quant_fund.execution.market_impact import LiquidityEstimator
 
         estimator = LiquidityEstimator()
 

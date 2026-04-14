@@ -32,8 +32,8 @@ def demo_intelligence_core():
     print("INTELLIGENCE CORE DEMONSTRATION")
     print("=" * 80)
     
-    from ml_alpha.intelligence_core import get_intelligence_core
-    from ml_alpha.enhanced_predictive_model import get_enhanced_model
+    from mini_quant_fund.ml_alpha.intelligence_core import get_intelligence_core
+    from mini_quant_fund.ml_alpha.enhanced_predictive_model import get_enhanced_model
     
     # Get instances
     logger.info("\n[INIT] Creating Intelligence Core and Enhanced Model...")

@@ -6,10 +6,10 @@ sys.path.insert(0, '.')
 
 import pandas as pd
 import numpy as np
-from alpha_families.fundamental_alpha import FundamentalAlpha
-from alpha_families.statistical_alpha import StatisticalAlpha
-from alpha_families.alternative_alpha import AlternativeAlpha
-from alpha_families.ml_alpha import MLAlpha
+from mini_quant_fund.alpha_families.fundamental_alpha import FundamentalAlpha
+from mini_quant_fund.alpha_families.statistical_alpha import StatisticalAlpha
+from mini_quant_fund.alpha_families.alternative_alpha import AlternativeAlpha
+from mini_quant_fund.alpha_families.ml_alpha import MLAlpha
 
 # Create sample data
 dates = pd.date_range('2023-01-01', periods=200, freq='D')

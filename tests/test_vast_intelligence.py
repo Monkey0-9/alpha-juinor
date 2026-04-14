@@ -4,9 +4,9 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 
-from analytics.regime_analyzer import MarketRegime, RegimeAnalysis
-from intelligence.autonomous_brain import AutonomousTradingBrain
-from intelligence.smart_money_detector import SmartMoneyDetector, SmartMoneySignal
+from mini_quant_fund.analytics.regime_analyzer import MarketRegime, RegimeAnalysis
+from mini_quant_fund.intelligence.autonomous_brain import AutonomousTradingBrain
+from mini_quant_fund.intelligence.smart_money_detector import SmartMoneyDetector, SmartMoneySignal
 
 
 class TestVastIntelligence(unittest.TestCase):

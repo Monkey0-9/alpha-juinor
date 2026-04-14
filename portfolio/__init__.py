@@ -1,1 +1,0 @@
-from portfolio.capital_competition import CapitalCompetitionEngine, CompetitionResult

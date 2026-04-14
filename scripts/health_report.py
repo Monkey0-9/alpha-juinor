@@ -13,7 +13,7 @@ from collections import Counter
 # Ensure project root is in path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database.manager import DatabaseManager
+from mini_quant_fund.database.manager import DatabaseManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("HealthReport")

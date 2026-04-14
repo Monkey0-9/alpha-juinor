@@ -6,7 +6,7 @@ import yaml
 # Add root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from risk.kill_switch import DistributedKillSwitch, KillSwitchState, KillSwitchReason
+from mini_quant_fund.risk.kill_switch import DistributedKillSwitch, KillSwitchState, KillSwitchReason
 
 def test_kill_switch_fallback():
     print("Testing Kill Switch Fallback (REDIS-LESS)...")

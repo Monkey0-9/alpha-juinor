@@ -1,103 +1,73 @@
-# docker-compose.yml
-version: '3.8'
+
+version: "3.8"
 
 services:
-  # Main application service
-  app:
+  # Main application service (Trading Engine)
+  trading-engine:
     build:
       context: .
       target: runtime
-    image: mini-quant-fund:latest
+    image: quant-fund-os:latest
     volumes:
       - .:/app
-      - backtest_results:/app/output/backtests
     environment:
-      - PYTHONPATH=/app
+      - PYTHONPATH=/app/src
       - DB_ENGINE=${DB_ENGINE:-sqlite}
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=mini_quant
-      - POSTGRES_USER=mini_quant
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - ALPACA_API_KEY=${ALPACA_API_KEY}
+      - ALPACA_SECRET_KEY=${ALPACA_SECRET_KEY}
     depends_on:
       - postgres
-    command: [ "--mode", "backtest" ]
+    command: ["--mode", "paper"]
     networks:
       - quant-network
 
+  # Streamlit Dashboard
   dashboard:
     build:
       context: .
       target: runtime
-    image: mini-quant-fund:latest
+    image: quant-fund-os:latest
     ports:
       - "8501:8501"
     volumes:
       - .:/app
-      - backtest_results:/app/output/backtests
     environment:
-      - PYTHONPATH=/app
-      - DB_ENGINE=${DB_ENGINE:-sqlite}
-    command: [ "streamlit", "run", "dashboard.py", "--server.port=8501", "--server.address=0.0.0.0" ]
+      - PYTHONPATH=/app/src
+    command: ["streamlit", "run", "src/mini_quant_fund/ui/streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    depends_on:
+      - trading-engine
     networks:
       - quant-network
 
-  # PostgreSQL with TimescaleDB for production time-series data
+  # TimescaleDB for metrics and history
   postgres:
     image: timescale/timescaledb:latest-pg15
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mini_quant_secure_password}
-      POSTGRES_DB: mini_quant
-      POSTGRES_USER: mini_quant
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quant_secure_pass}
+      POSTGRES_DB: quantfund
+      POSTGRES_USER: quantadmin
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mini_quant -d mini_quant"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     networks:
       - quant-network
-    command: >
-      -c max_connections=100
-      -c shared_buffers=256MB
-      -c effective_cache_size=512MB
-      -c work_mem=16MB
-      -c maintenance_work_mem=64MB
-      -c max_wal_size=1GB
-      -c min_wal_size=80MB
 
-  # Prometheus for metrics collection
   prometheus:
     image: prom/prometheus:latest
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
+      - ./src/mini_quant_fund/infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=15d'
     networks:
       - quant-network
 
-  # Grafana for dashboards
   grafana:
     image: grafana/grafana:latest
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-      - GF_USERS_ALLOW_SIGN_UP=false
     depends_on:
       - prometheus
     networks:
@@ -108,7 +78,4 @@ networks:
     driver: bridge
 
 volumes:
-  backtest_results:
   postgres_data:
-  prometheus_data:
-  grafana_data:

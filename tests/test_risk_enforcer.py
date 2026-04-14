@@ -1,6 +1,6 @@
 # tests/test_risk_enforcer.py
 import numpy as np
-from services.risk_enforcer import RiskEnforcer
+from mini_quant_fund.services.risk_enforcer import RiskEnforcer
 
 def test_risk_enforcer_cvar_basic():
     re = RiskEnforcer(params={"cvar_limit_pct":0.2})

@@ -1,5 +1,5 @@
 # tests/test_calibrator.py
-from execution.calibrator import analyze_fills, update_tc_params
+from mini_quant_fund.execution.calibrator import analyze_fills, update_tc_params
 import csv, os
 
 def test_calibrator(tmp_path):

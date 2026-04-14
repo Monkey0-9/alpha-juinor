@@ -11,9 +11,9 @@ import time
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database.manager import DatabaseManager
+from mini_quant_fund.database.manager import DatabaseManager
 from mini_quant_fund.intelligence.feature_store import FeatureStore
-from data.collectors.data_router import DataRouter
+from mini_quant_fund.data.collectors.data_router import DataRouter
 
 # Logging setup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')

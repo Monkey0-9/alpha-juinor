@@ -4,7 +4,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from backtest.backtester import run_backtest
+from mini_quant_fund.backtest.backtester import run_backtest
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

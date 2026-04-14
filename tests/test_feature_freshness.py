@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
-from strategies.institutional_strategy import InstitutionalStrategy, GovernanceError
+from mini_quant_fund.strategies.institutional_strategy import InstitutionalStrategy, GovernanceError
 
 class TestFeatureFreshness:
 

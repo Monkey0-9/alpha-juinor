@@ -38,7 +38,7 @@ class TestPhase10Components(unittest.TestCase):
     def test_factor_zoo(self):
         """Test Factor Zoo calculations."""
         print("\n[TEST] Factor Zoo...")
-        from factors.factor_zoo import get_factor_zoo
+        from mini_quant_fund.factors.factor_zoo import get_factor_zoo
 
         zoo = get_factor_zoo()
 
@@ -68,7 +68,7 @@ class TestPhase10Components(unittest.TestCase):
     def test_factor_orthogonalization(self):
         """Test factor orthogonalization."""
         print("\n[TEST] Factor Orthogonalization...")
-        from factors.factor_orthogonalization import FactorOrthogonalizer
+        from mini_quant_fund.factors.factor_orthogonalization import FactorOrthogonalizer
 
         # Create correlated factors
         factor_data = pd.DataFrame({
@@ -96,7 +96,7 @@ class TestPhase10Components(unittest.TestCase):
     def test_transaction_cost_model(self):
         """Test transaction cost estimation."""
         print("\n[TEST] Transaction Cost Model...")
-        from execution.transaction_cost_model import get_transaction_cost_model
+        from mini_quant_fund.execution.transaction_cost_model import get_transaction_cost_model
 
         tcm = get_transaction_cost_model()
 
@@ -121,7 +121,7 @@ class TestPhase10Components(unittest.TestCase):
     def test_microstructure(self):
         """Test microstructure analysis."""
         print("\n[TEST] Microstructure Analysis...")
-        from execution.microstructure import get_microstructure_analyzer
+        from mini_quant_fund.execution.microstructure import get_microstructure_analyzer
 
         analyzer = get_microstructure_analyzer()
 
@@ -144,7 +144,7 @@ class TestPhase10Components(unittest.TestCase):
     def test_dynamic_leverage(self):
         """Test dynamic leverage engine."""
         print("\n[TEST] Dynamic Leverage...")
-        from risk.dynamic_leverage import get_leverage_engine
+        from mini_quant_fund.risk.dynamic_leverage import get_leverage_engine
 
         engine = get_leverage_engine()
 
@@ -171,7 +171,7 @@ class TestPhase10Components(unittest.TestCase):
     def test_alpha_decay(self):
         """Test alpha decay detection."""
         print("\n[TEST] Alpha Decay Detection...")
-        from monitoring.alpha_decay import get_alpha_decay_detector
+        from mini_quant_fund.monitoring.alpha_decay import get_alpha_decay_detector
 
         detector = get_alpha_decay_detector()
 
@@ -199,7 +199,7 @@ class TestPhase10Components(unittest.TestCase):
     def test_alternative_data(self):
         """Test alternative data engine."""
         print("\n[TEST] Alternative Data...")
-        from alternative_data import get_alternative_data_engine
+        from mini_quant_fund.alternative_data import get_alternative_data_engine
 
         engine = get_alternative_data_engine()
 
@@ -219,7 +219,7 @@ class TestPhase10Components(unittest.TestCase):
     def test_pnl_attribution(self):
         """Test P&L attribution."""
         print("\n[TEST] P&L Attribution...")
-        from analytics.pnl_attribution import get_pnl_attributor
+        from mini_quant_fund.analytics.pnl_attribution import get_pnl_attributor
 
         attributor = get_pnl_attributor()
 

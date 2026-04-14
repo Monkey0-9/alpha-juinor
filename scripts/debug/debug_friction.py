@@ -11,7 +11,7 @@ import yfinance as yf
 
 # Import System
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from strategy_factory.manager import StrategyManager
+from mini_quant_fund.strategy_factory.manager import StrategyManager
 from allocator.meta_controller import MetaController
 from institutional_portfolio_validation import run_portfolio_backtest
 

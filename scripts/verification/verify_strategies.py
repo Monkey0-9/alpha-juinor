@@ -10,7 +10,7 @@ Target: Correlation < 0.3
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from strategy_factory.manager import StrategyManager
+from mini_quant_fund.strategy_factory.manager import StrategyManager
 
 def verify():
     # 1. Load Data

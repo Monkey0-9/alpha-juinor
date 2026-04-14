@@ -1,9 +1,9 @@
 
 import unittest
 from unittest.mock import MagicMock, patch
-from execution.gates import ExecutionGatekeeper
-from database.manager import DatabaseManager
-from database.schema import SymbolGovernanceRecord
+from mini_quant_fund.execution.gates import ExecutionGatekeeper
+from mini_quant_fund.database.manager import DatabaseManager
+from mini_quant_fund.database.schema import SymbolGovernanceRecord
 
 class TestGovernanceGate(unittest.TestCase):
     def setUp(self):
@@ -39,7 +39,7 @@ class TestGovernanceGate(unittest.TestCase):
             last_checked_ts="2026-01-21T00:00:00"
         ))
 
-        with patch('risk.market_impact_models.TransactionCostModel.estimate_total_cost') as mock_estimate:
+        with patch('mini_quant_fund.risk.market_impact_models.TransactionCostModel.estimate_total_cost') as mock_estimate:
             mock_estimate.return_value = {'cost_bps': 5.0} # Below 20bps limit
 
             is_ok, reason, scaled_qty = self.gate.validate_execution(

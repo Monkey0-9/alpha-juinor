@@ -50,7 +50,7 @@ class Top1PercentBootstrapper:
 
     def bootstrap_data_intelligence(self):
         logger.info("Bootstrapping Data Intelligence...")
-        from data.fundamental.sec_ingestor import SECIngestor
+        from mini_quant_fund.data.fundamental.sec_ingestor import SECIngestor
         ingestor = SECIngestor()
         if ingestor.cik_map:
             logger.info(f"✅ SEC Ingestor: Loaded {len(ingestor.cik_map)} tickers")
@@ -60,16 +60,16 @@ class Top1PercentBootstrapper:
 
     def bootstrap_execution_engine(self):
         logger.info("Bootstrapping Execution Engine...")
-        from execution.ultimate_executor import get_ultimate_executor
+        from mini_quant_fund.execution.ultimate_executor import get_ultimate_executor
         executor = get_ultimate_executor()
         logger.info("✅ UltimateExecutor: Hardened with Slippage & Market Impact models")
-        from utils.latency_tracker import tracker
+        from mini_quant_fund.utils.latency_tracker import tracker
         logger.info("✅ LatencyTracker: Initialized for Nanosecond Precision")
         self.status["Execution"] = "TOP 1% (Ultra-Low Latency)"
 
     def run_compliance_check(self):
         logger.info("Running Compliance Check...")
-        from audit.decision_recorder import get_decision_recorder
+        from mini_quant_fund.audit.decision_recorder import get_decision_recorder
         recorder = get_decision_recorder()
         logger.info("✅ DecisionRecorder: Immutable Database Support Active")
         self.status["Compliance"] = "INSTITUTIONAL (SEC/FINRA Standard)"

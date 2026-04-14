@@ -2,8 +2,8 @@
 import os
 import logging
 from dotenv import load_dotenv
-from data.collectors.alpaca_collector import AlpacaDataProvider
-from brokers.alpaca_broker import AlpacaExecutionHandler
+from mini_quant_fund.data.collectors.alpaca_collector import AlpacaDataProvider
+from mini_quant_fund.brokers.alpaca_broker import AlpacaExecutionHandler
 
 logging.basicConfig(level=logging.INFO)
 load_dotenv()

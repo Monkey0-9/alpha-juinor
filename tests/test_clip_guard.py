@@ -2,7 +2,7 @@
 import pytest
 import pandas as pd
 import numpy as np
-from strategies.alpha import safe_clip
+from mini_quant_fund.strategies.alpha import safe_clip
 
 def test_clip_guard_all_nan():
     index = pd.date_range("2023-01-01", periods=10)

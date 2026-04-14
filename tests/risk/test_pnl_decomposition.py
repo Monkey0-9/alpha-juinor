@@ -6,7 +6,7 @@ Tests for Economic Truth Engine (OLS).
 import unittest
 import numpy as np
 import pandas as pd
-from risk.pnl_decomposition import PnLDecomposer
+from mini_quant_fund.risk.pnl_decomposition import PnLDecomposer
 
 class TestPnLDecomposition(unittest.TestCase):
     def setUp(self):

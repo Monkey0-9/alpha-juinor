@@ -2,8 +2,8 @@
 tests/execution/test_fill_model.py
 """
 import unittest
-from execution.fill_simulator import FillSimulator
-from risk.pnl_attribution import PnLAttribution
+from mini_quant_fund.execution.fill_simulator import FillSimulator
+from mini_quant_fund.risk.pnl_attribution import PnLAttribution
 
 class TestExecution(unittest.TestCase):
     def test_simulator_slicing(self):
@@ -24,7 +24,7 @@ class TestExecution(unittest.TestCase):
         attr = PnLAttribution(beta=1.0)
 
         # Mock fill
-        from execution.fill_simulator import Fill
+        from mini_quant_fund.execution.fill_simulator import Fill
         f = Fill("A", "1", 101.0, 1.0, "", 0.0, 1.0, 0.0, 100.0)
 
         rec = attr.attribute([f], 100.0, 110.0, 0.05, "BUY")

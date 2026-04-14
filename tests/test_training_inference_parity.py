@@ -6,8 +6,8 @@ import pytest
 import json
 from pathlib import Path
 
-from features.contract import load_feature_contract
-from data.processors.features import compute_features_for_symbol
+from mini_quant_fund.features.contract import load_feature_contract
+from mini_quant_fund.data.processors.features import compute_features_for_symbol
 import pandas as pd
 import numpy as np
 

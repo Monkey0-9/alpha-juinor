@@ -1,7 +1,7 @@
 
 import pytest
 from unittest.mock import MagicMock, patch
-from brokers.alpaca_broker import AlpacaExecutionHandler
+from mini_quant_fund.brokers.alpaca_broker import AlpacaExecutionHandler
 
 class MockResponse:
     def __init__(self, json_data, status_code=200):

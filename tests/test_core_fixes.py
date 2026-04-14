@@ -3,9 +3,9 @@ import unittest
 from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
-from portfolio.ledger import PortfolioLedger, PortfolioEvent, EventType, PositionBook
-from backtest.execution import RealisticExecutionHandler, Order, OrderType, BarData, ExecutionError
-from risk.engine import RiskManager
+from mini_quant_fund.portfolio.ledger import PortfolioLedger, PortfolioEvent, EventType, PositionBook
+from mini_quant_fund.backtest.execution import RealisticExecutionHandler, Order, OrderType, BarData, ExecutionError
+from mini_quant_fund.risk.engine import RiskManager
 
 class TestCoreFixes(unittest.TestCase):
     

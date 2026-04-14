@@ -21,9 +21,9 @@ import sys
 
 # Import Strategy Components
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from strategy_factory.manager import StrategyManager
+from mini_quant_fund.strategy_factory.manager import StrategyManager
 from allocator.meta_controller import MetaController
-from strategy_factory.interface import Signal
+from mini_quant_fund.strategy_factory.interface import Signal
 
 # Constants
 TRADING_DAYS = 252

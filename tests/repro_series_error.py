@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 import logging
-from strategies.institutional_strategy import InstitutionalStrategy
-from risk.engine import RiskManager
-from data.utils.schema import ensure_dataframe
+from mini_quant_fund.strategies.institutional_strategy import InstitutionalStrategy
+from mini_quant_fund.risk.engine import RiskManager
+from mini_quant_fund.data.utils.schema import ensure_dataframe
 
 logging.basicConfig(level=logging.INFO)
 

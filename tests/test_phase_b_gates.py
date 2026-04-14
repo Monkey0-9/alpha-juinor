@@ -3,9 +3,9 @@ import pytest
 import pandas as pd
 import numpy as np
 from contracts import AllocationRequest
-from portfolio.capital_auction import CapitalAuctionEngine
-from execution.gates import ExecutionGatekeeper
-from portfolio.allocator import InstitutionalAllocator
+from mini_quant_fund.portfolio.capital_auction import CapitalAuctionEngine
+from mini_quant_fund.execution.gates import ExecutionGatekeeper
+from mini_quant_fund.portfolio.allocator import InstitutionalAllocator
 
 def test_capital_auction_competition():
     """Verify that higher confidence/mu wins in the auction."""

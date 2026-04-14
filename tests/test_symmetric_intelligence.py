@@ -2,7 +2,7 @@ import unittest
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-from intelligence.autonomous_brain import AutonomousTradingBrain
+from mini_quant_fund.intelligence.autonomous_brain import AutonomousTradingBrain
 
 
 class TestSymmetricIntelligence(unittest.TestCase):

@@ -1,0 +1,22 @@
+pipeline:
+  name: alternative_data_ingestion
+  version: 3.0.0
+  sources:
+    - type: kafka
+      name: satellite_feed
+      topic: raw_satellite_imagery
+      partitions: 16
+    - type: kafka
+      name: credit_card_feed
+      topic: anonymized_transactions
+      partitions: 8
+  processors:
+    - name: image_analyzer
+      type: cnn_parking_lot_counter
+      input: satellite_feed
+    - name: transaction_aggregator
+      type: spend_by_ticker
+      input: credit_card_feed
+  sink:
+    type: timescaledb
+    table: signals_v3

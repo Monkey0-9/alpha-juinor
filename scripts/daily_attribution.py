@@ -15,9 +15,9 @@ from datetime import datetime, timedelta
 # Add project root
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database.manager import DatabaseManager
-from risk.pnl_decomposition import PnLDecomposer, DecompositionResult
-from database.schema import DecompositionRecord
+from mini_quant_fund.database.manager import DatabaseManager
+from mini_quant_fund.risk.pnl_decomposition import PnLDecomposer, DecompositionResult
+from mini_quant_fund.database.schema import DecompositionRecord
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
 logger = logging.getLogger("DAILY_ATTRIBUTION")

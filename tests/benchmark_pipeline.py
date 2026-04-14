@@ -8,8 +8,8 @@ import numpy as np
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from strategies.institutional_strategy import InstitutionalStrategy
-from configs.config_manager import ConfigManager
+from mini_quant_fund.strategies.institutional_strategy import InstitutionalStrategy
+from mini_quant_fund.configs.config_manager import ConfigManager
 
 def run_benchmark():
     print("🚀 Starting High-Frequency Benchmark...")

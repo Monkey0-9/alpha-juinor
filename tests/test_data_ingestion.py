@@ -8,7 +8,7 @@ import os
 # Add project root to sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from data.ingestion.ingest_process import DataIngestionAgent
+from mini_quant_fund.data.ingestion.ingest_process import DataIngestionAgent
 
 class TestDataIngestionAgent(unittest.TestCase):
     def setUp(self):
@@ -16,8 +16,8 @@ class TestDataIngestionAgent(unittest.TestCase):
         self.mock_router = MagicMock()
 
         # Patch DatabaseManager and DataRouter
-        self.db_patcher = patch('data.ingestion.ingest_process.DatabaseManager', return_value=self.mock_db)
-        self.router_patcher = patch('data.ingestion.ingest_process.DataRouter', return_value=self.mock_router)
+        self.db_patcher = patch('mini_quant_fund.data.ingestion.ingest_process.DatabaseManager', return_value=self.mock_db)
+        self.router_patcher = patch('mini_quant_fund.data.ingestion.ingest_process.DataRouter', return_value=self.mock_router)
         self.db_patcher.start()
         self.router_patcher.start()
 

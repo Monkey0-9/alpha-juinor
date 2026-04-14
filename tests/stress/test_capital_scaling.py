@@ -5,7 +5,7 @@ Stress tests for capital scaling realism.
 """
 import unittest
 import os
-from risk.capital_stress import CapitalStressTester, StressTestResult
+from mini_quant_fund.risk.capital_stress import CapitalStressTester, StressTestResult
 
 class TestCapitalScaling(unittest.TestCase):
     def setUp(self):

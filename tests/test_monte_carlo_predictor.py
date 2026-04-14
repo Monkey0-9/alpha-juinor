@@ -7,7 +7,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from intelligence.monte_carlo_predictor import (
+from mini_quant_fund.intelligence.monte_carlo_predictor import (
     MarketRegime,
     MarkovChainRegimeDetector,
     MonteCarloPricePredictor,

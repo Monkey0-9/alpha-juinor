@@ -7,7 +7,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from strategies.monte_carlo_mean_reversion import MonteCarloMeanReversionStrategy
+from mini_quant_fund.strategies.monte_carlo_mean_reversion import MonteCarloMeanReversionStrategy
 
 # Setup logging
 logging.basicConfig(

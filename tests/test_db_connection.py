@@ -1,6 +1,6 @@
 import pytest
 
-from database.manager import DatabaseManager
+from mini_quant_fund.database.manager import DatabaseManager
 
 
 def test_get_connection():

@@ -9,7 +9,7 @@ from datetime import datetime
 sys.path.insert(0, os.getcwd())
 
 from contracts.alpha_model import AlphaOutput, AlphaDecision
-from ml.feature_store import get_feature_store
+from mini_quant_fund.ml.feature_store import get_feature_store
 
 class TestPhase2(unittest.TestCase):
 

@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pytest
 
-from backtest.execution import (
+from mini_quant_fund.backtest.execution import (
     Order,
     OrderType,
     RealisticExecutionHandler,

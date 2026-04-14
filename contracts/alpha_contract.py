@@ -257,7 +257,7 @@ class AlphaContractEnforcer:
         Normalize and validate alpha output.
 
         Args:
-            raw_output: Raw dictionary output from alpha model
+            raw_output: Raw dictionary output from mini_quant_fund.alpha model
             provider: Alpha source identifier
             model_version: Model version
             input_features: List of input feature names (for hash)

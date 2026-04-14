@@ -8,7 +8,7 @@ import os
 # Add root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from risk.factor_model import StatisticalRiskModel
+from mini_quant_fund.risk.factor_model import StatisticalRiskModel
 
 def test_pca_risk_model():
     # 1. Create correlated synthetic data

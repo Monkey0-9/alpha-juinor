@@ -25,7 +25,7 @@ class TestPhase12Components(unittest.TestCase):
     def test_genetic_optimizer(self):
         """Test genetic algorithm optimizer."""
         print("\n[TEST] Genetic Optimizer...")
-        from ml.genetic_optimizer import get_genetic_optimizer
+        from mini_quant_fund.ml.genetic_optimizer import get_genetic_optimizer
 
         ga = get_genetic_optimizer()
 
@@ -51,7 +51,7 @@ class TestPhase12Components(unittest.TestCase):
     def test_pod_manager(self):
         """Test Millennium-style pod manager."""
         print("\n[TEST] Pod Risk Manager...")
-        from risk.pod_manager import get_pod_manager, PodStatus
+        from mini_quant_fund.risk.pod_manager import get_pod_manager, PodStatus
 
         pm = get_pod_manager()
         pm.pods.clear()  # Reset
@@ -70,7 +70,7 @@ class TestPhase12Components(unittest.TestCase):
     def test_nlp_sentiment(self):
         """Test NLP sentiment analyzer."""
         print("\n[TEST] NLP Sentiment...")
-        from ml.nlp_sentiment import get_nlp_analyzer
+        from mini_quant_fund.ml.nlp_sentiment import get_nlp_analyzer
 
         nlp = get_nlp_analyzer()
 
@@ -88,7 +88,7 @@ class TestPhase12Components(unittest.TestCase):
     def test_llm_signals(self):
         """Test LLM signal generator."""
         print("\n[TEST] LLM Signals...")
-        from ml.llm_signals import get_llm_generator, MarketContext
+        from mini_quant_fund.ml.llm_signals import get_llm_generator, MarketContext
 
         gen = get_llm_generator()
 
@@ -114,7 +114,7 @@ class TestPhase12Components(unittest.TestCase):
     def test_regime_sizer(self):
         """Test regime position sizer."""
         print("\n[TEST] Regime Position Sizer...")
-        from portfolio.regime_sizer import get_position_sizer, RegimeType
+        from mini_quant_fund.portfolio.regime_sizer import get_position_sizer, RegimeType
 
         sizer = get_position_sizer()
 
@@ -137,7 +137,7 @@ class TestPhase12Components(unittest.TestCase):
     def test_correlation_engine(self):
         """Test cross-asset correlation."""
         print("\n[TEST] Correlation Engine...")
-        from risk.correlation_engine import get_correlation_engine
+        from mini_quant_fund.risk.correlation_engine import get_correlation_engine
 
         engine = get_correlation_engine()
 
@@ -156,7 +156,7 @@ class TestPhase12Components(unittest.TestCase):
     def test_monte_carlo(self):
         """Test Monte Carlo simulator."""
         print("\n[TEST] Monte Carlo Simulator...")
-        from risk.monte_carlo import get_monte_carlo
+        from mini_quant_fund.risk.monte_carlo import get_monte_carlo
 
         mc = get_monte_carlo()
 
@@ -175,7 +175,7 @@ class TestPhase12Components(unittest.TestCase):
     def test_pairs_trading(self):
         """Test pairs trading engine."""
         print("\n[TEST] Pairs Trading...")
-        from strategies.pairs_trading import get_pairs_engine
+        from mini_quant_fund.strategies.pairs_trading import get_pairs_engine
 
         engine = get_pairs_engine()
 
@@ -195,7 +195,7 @@ class TestPhase12Components(unittest.TestCase):
     def test_adaptive_allocator(self):
         """Test adaptive strategy allocator."""
         print("\n[TEST] Adaptive Allocator...")
-        from portfolio.adaptive_allocator import get_adaptive_allocator
+        from mini_quant_fund.portfolio.adaptive_allocator import get_adaptive_allocator
 
         allocator = get_adaptive_allocator()
         allocator.strategies.clear()
@@ -214,7 +214,7 @@ class TestPhase12Components(unittest.TestCase):
     def test_tca_analyzer(self):
         """Test TCA analyzer."""
         print("\n[TEST] TCA Analyzer...")
-        from analytics.tca_analyzer import get_tca_analyzer
+        from mini_quant_fund.analytics.tca_analyzer import get_tca_analyzer
 
         tca = get_tca_analyzer()
 
@@ -241,7 +241,7 @@ class TestPhase12Components(unittest.TestCase):
     def test_smart_router(self):
         """Test smart order router."""
         print("\n[TEST] Smart Order Router...")
-        from execution.smart_router import get_smart_router
+        from mini_quant_fund.execution.smart_router import get_smart_router
 
         sor = get_smart_router()
 
@@ -261,7 +261,7 @@ class TestPhase12Components(unittest.TestCase):
     def test_book_analyzer(self):
         """Test order book analyzer."""
         print("\n[TEST] Order Book Analyzer...")
-        from execution.book_analyzer import (
+        from mini_quant_fund.execution.book_analyzer import (
             get_book_analyzer, OrderBook, OrderBookLevel
         )
 

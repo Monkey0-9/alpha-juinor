@@ -1,6 +1,6 @@
-from database.manager import DatabaseManager
+from mini_quant_fund.database.manager import DatabaseManager
 import pandas as pd
-from data.processors.features import compute_features_for_symbol
+from mini_quant_fund.data.processors.features import compute_features_for_symbol
 
 db = DatabaseManager()
 df = db.get_daily_prices("AAPL")

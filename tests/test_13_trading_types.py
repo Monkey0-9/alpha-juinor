@@ -20,7 +20,7 @@ class TestDayTrading:
 
     def test_day_trading_creation(self):
         """Verify day trading positions created correctly"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -37,7 +37,7 @@ class TestDayTrading:
 
     def test_day_trading_auto_close(self):
         """Verify day trades close at 3:50 PM ET"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -51,7 +51,7 @@ class TestSwingTrading:
 
     def test_swing_trading_selection(self):
         """Verify swing trading selected for low-volatility environments"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -67,7 +67,7 @@ class TestSwingTrading:
 
     def test_swing_trading_parameters(self):
         """Verify swing trading has correct hold times"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -81,7 +81,7 @@ class TestScalping:
 
     def test_scalping_selection(self):
         """Verify scalping selected for ultra-liquid stocks"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -97,7 +97,7 @@ class TestScalping:
 
     def test_scalping_parameters(self):
         """Verify scalping has ultra-short hold times"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -111,7 +111,7 @@ class TestPositionTrading:
 
     def test_position_trading_long_holds(self):
         """Verify position trading supports long-term holds"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -126,7 +126,7 @@ class TestMomentumTrading:
 
     def test_momentum_trading_selection(self):
         """Verify momentum trading selected in trending conditions"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -146,7 +146,7 @@ class TestAlgorithmicTrading:
 
     def test_algorithmic_always_active(self):
         """Verify algorithmic trading is always selected"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -166,7 +166,7 @@ class TestNewsTrading:
 
     def test_news_trading_high_volatility(self):
         """Verify news trading selected in high volatility"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -186,7 +186,7 @@ class TestEventDrivenTrading:
 
     def test_event_driven_earnings(self):
         """Verify event-driven trading activated for earnings"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -206,7 +206,7 @@ class TestTechnicalTrading:
 
     def test_technical_trading_medium_vol(self):
         """Verify technical trading works in normal volatility"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -226,7 +226,7 @@ class TestFundamentalTrading:
 
     def test_fundamental_parameters(self):
         """Verify fundamental trading has long-term parameters"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -240,7 +240,7 @@ class TestDeliveryTrading:
 
     def test_delivery_trading_buy_hold(self):
         """Verify delivery trading is long-term buy-and-hold"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -254,7 +254,7 @@ class TestSocialCopyTrading:
 
     def test_social_trading_parameters(self):
         """Verify social trading has medium hold times"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -263,7 +263,7 @@ class TestSocialCopyTrading:
 
     def test_copy_trading_scaled_nav(self):
         """Verify copy trading scales to NAV"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -276,14 +276,14 @@ class TestIntegration13Types:
 
     def test_all_13_types_exist(self):
         """Verify all 13 trading types are defined"""
-        from strategies.unified_trading_engine import TradingType
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType
 
         types = list(TradingType)
         assert len(types) == 13
 
     def test_signal_generation_all_types(self):
         """Verify signal generation for all types"""
-        from strategies.unified_trading_engine import UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -303,7 +303,7 @@ class TestIntegration13Types:
 
     def test_priority_conflict_resolution(self):
         """Verify priority-based conflict resolution works"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -326,7 +326,7 @@ class TestStressScenarios:
 
     def test_high_volatility_weekend(self):
         """Test system behavior during high volatility + weekend"""
-        from strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
+        from mini_quant_fund.strategies.unified_trading_engine import TradingType, UnifiedTradingEngine
 
         engine = UnifiedTradingEngine(nav=1_000_000, config={})
 
@@ -343,7 +343,7 @@ class TestStressScenarios:
 
     def test_zero_liquidity_rejection(self):
         """Test rejection of illiquid symbols"""
-        from execution.enhanced_seven_gates import SevenGateRiskManager
+        from mini_quant_fund.execution.enhanced_seven_gates import SevenGateRiskManager
 
         gates = SevenGateRiskManager(
             nav=1_000_000, max_gross_leverage=3.0, adv_limit_pct=0.10, test_mode=True
@@ -367,7 +367,7 @@ class TestStressScenarios:
 
     def test_vix_spike_rejection(self):
         """Test rejection during VIX spike"""
-        from execution.enhanced_seven_gates import SevenGateRiskManager
+        from mini_quant_fund.execution.enhanced_seven_gates import SevenGateRiskManager
 
         gates = SevenGateRiskManager(
             nav=1_000_000, max_gross_leverage=3.0, max_vix=50.0, test_mode=True

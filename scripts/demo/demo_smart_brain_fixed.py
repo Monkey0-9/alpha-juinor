@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Add project to path
 sys.path.insert(0, "/c/mini-quant-fund")
 
-from ml_alpha.smart_brain_engine import MarketState, get_smart_brain
+from mini_quant_fund.ml_alpha.smart_brain_engine import MarketState, get_smart_brain
 
 
 def generate_sample_market_data(days: int = 50, trend: str = "up") -> tuple:

@@ -13,8 +13,8 @@ from unittest.mock import MagicMock
 
 sys.path.insert(0, os.getcwd())
 
-from ml.safe_predict import SafePredictor
-from ml.governor import ModelGovernor
+from mini_quant_fund.ml.safe_predict import SafePredictor
+from mini_quant_fund.ml.governor import ModelGovernor
 from contracts.alpha_model import AlphaOutput
 
 

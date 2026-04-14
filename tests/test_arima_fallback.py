@@ -1,8 +1,8 @@
 import pytest
 import pandas as pd
 import numpy as np
-from alpha_families.statistical_alpha import StatisticalAlpha
-from utils.metrics import metrics
+from mini_quant_fund.alpha_families.statistical_alpha import StatisticalAlpha
+from mini_quant_fund.utils.metrics import metrics
 
 def test_arima_fallback_to_ewma_for_short_series():
     sa = StatisticalAlpha()

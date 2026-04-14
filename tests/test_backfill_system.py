@@ -21,9 +21,9 @@ import numpy as np
 from datetime import datetime, timedelta
 
 # Test imports
-from data_intelligence.quality_agent import QualityAgent, QualityResult
-from monitoring.prometheus_metrics import MetricsCollector, get_metrics_collector
-from monitoring.alerts import AlertManager, AlertCategory, AlertSeverity
+from mini_quant_fund.data_intelligence.quality_agent import QualityAgent, QualityResult
+from mini_quant_fund.monitoring.prometheus_metrics import MetricsCollector, get_metrics_collector
+from mini_quant_fund.monitoring.alerts import AlertManager, AlertCategory, AlertSeverity
 
 def test_quality_agent():
     """Test QualityAgent data quality assessment"""
@@ -218,7 +218,7 @@ def test_integration():
     print("TEST: Integration - Quality Enforcement")
     print("=" * 60)
 
-    from data_intelligence.quality_agent import MIN_DATA_QUALITY
+    from mini_quant_fund.data_intelligence.quality_agent import MIN_DATA_QUALITY
 
     # Simulate what happens in cycle_runner._apply_quality_enforcement
     print(f"\n1. Quality threshold: {MIN_DATA_QUALITY}")

@@ -1,0 +1,346 @@
+# TimescaleDB Production Cluster
+# Multi-node HA deployment with streaming replication
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: timescaledb-primary
+  namespace: trading-system
+  labels:
+    app: timescaledb
+    role: primary
+spec:
+  serviceName: timescaledb-primary
+  replicas: 1
+  selector:
+    matchLabels:
+      app: timescaledb
+      role: primary
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        role: primary
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: database
+                operator: In
+                values:
+                - "true"
+      containers:
+      - name: timescaledb
+        image: timescale/timescaledb-ha:pg15-ts2.13-all
+        ports:
+        - containerPort: 5432
+          name: postgresql
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-secrets
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-secrets
+              key: password
+        - name: POSTGRES_DB
+          value: mini_quant_fund
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: TIMESCALEDB_TELEMETRY
+          value: "off"
+        - name: TS_TUNE_MEMORY
+          value: "8GB"
+        - name: TS_TUNE_NUM_CPUS
+          value: "8"
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "4000m"
+          limits:
+            memory: "16Gi"
+            cpu: "8000m"
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        - name: config
+          mountPath: /etc/postgresql/postgresql.conf
+          subPath: postgresql.conf
+        - name: timescaledb-config
+          mountPath: /etc/postgresql/timescaledb.conf
+          subPath: timescaledb.conf
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: timescaledb-config
+      - name: timescaledb-config
+        configMap:
+          name: timescaledb-custom-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 500Gi
+
+---
+# TimescaleDB Replicas for HA
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: timescaledb-replica
+  namespace: trading-system
+  labels:
+    app: timescaledb
+    role: replica
+spec:
+  serviceName: timescaledb-replica
+  replicas: 2
+  selector:
+    matchLabels:
+      app: timescaledb
+      role: replica
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        role: replica
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - timescaledb
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - name: timescaledb
+        image: timescale/timescaledb-ha:pg15-ts2.13-all
+        ports:
+        - containerPort: 5432
+          name: postgresql
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-secrets
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-secrets
+              key: password
+        - name: POSTGRES_DB
+          value: mini_quant_fund
+        - name: REPLICATE_FROM
+          value: timescaledb-primary-0.timescaledb-primary
+        command:
+        - /bin/bash
+        - -c
+        - |
+          # Wait for primary to be ready
+          until pg_isready -h timescaledb-primary -p 5432; do
+            echo "Waiting for primary..."
+            sleep 5
+          done
+          
+          # Initialize replica
+          rm -rf $PGDATA/*
+          PGPASSWORD=$POSTGRES_PASSWORD pg_basebackup -h timescaledb-primary \
+            -D $PGDATA -U $POSTGRES_USER -v -P -W -X stream
+          
+          # Create recovery.conf
+          cat > $PGDATA/postgresql.auto.conf <<EOF
+          primary_conninfo = 'host=timescaledb-primary port=5432 user=$POSTGRES_USER password=$POSTGRES_PASSWORD'
+          recovery_target_timeline = 'latest'
+          hot_standby = on
+          EOF
+          
+          touch $PGDATA/standby.signal
+          
+          # Start PostgreSQL
+          exec postgres -D $PGDATA
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2000m"
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 500Gi
+
+---
+# Services
+apiVersion: v1
+kind: Service
+metadata:
+  name: timescaledb-primary
+  namespace: trading-system
+spec:
+  selector:
+    app: timescaledb
+    role: primary
+  ports:
+  - port: 5432
+    targetPort: 5432
+  clusterIP: None
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: timescaledb-replicas
+  namespace: trading-system
+spec:
+  selector:
+    app: timescaledb
+    role: replica
+  ports:
+  - port: 5432
+    targetPort: 5432
+  clusterIP: None
+
+---
+# ConfigMap for PostgreSQL configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: timescaledb-config
+  namespace: trading-system
+data:
+  postgresql.conf: |
+    # Connection Settings
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 500
+    superuser_reserved_connections = 10
+    
+    # Memory Settings
+    shared_buffers = 4GB
+    effective_cache_size = 12GB
+    work_mem = 64MB
+    maintenance_work_mem = 512MB
+    
+    # WAL Settings
+    wal_level = replica
+    max_wal_size = 4GB
+    min_wal_size = 1GB
+    checkpoint_timeout = 10min
+    checkpoint_completion_target = 0.9
+    wal_keep_size = 1GB
+    max_slot_wal_keep_size = 2GB
+    
+    # Replication
+    hot_standby = on
+    max_wal_senders = 10
+    max_replication_slots = 10
+    wal_sender_timeout = 60s
+    
+    # Query Planning
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    default_statistics_target = 500
+    
+    # Logging
+    logging_collector = on
+    log_directory = 'log'
+    log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+    log_min_duration_statement = 1000
+    log_checkpoints = on
+    log_connections = on
+    log_disconnections = on
+    log_lock_waits = on
+    
+    # TimeScaleDB specific
+    timescaledb.telemetry_level = off
+    
+    # Performance
+    shared_preload_libraries = 'timescaledb,pg_stat_statements,auto_explain'
+    auto_explain.log_min_duration = '5s'
+    auto_explain.log_analyze = true
+    pg_stat_statements.track = all
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: timescaledb-custom-config
+  namespace: trading-system
+data:
+  timescaledb.conf: |
+    # TimescaleDB tuning
+    timescaledb.max_background_workers = 8
+    timescaledb.max_cached_chunks_per_hypertable = 100
+    
+    # Partitioning
+    timescaledb.hypertable_chunk_time_interval = 1 day
+    timescaledb.hypertable_compression_segment_size = 100000
+
+---
+# Secrets
+apiVersion: v1
+kind: Secret
+metadata:
+  name: timescaledb-secrets
+  namespace: trading-system
+type: Opaque
+stringData:
+  username: quant_admin
+  password: "${TIMESCALEDB_PASSWORD}"  # Will be substituted by external-secrets
+
+---
+# Storage Class for SSD
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+provisioner: kubernetes.io/gce-pd  # or aws-ebs, azure-disk
+parameters:
+  type: pd-ssd
+  replication-type: regional
+allowVolumeExpansion: true
+mountOptions:
+  - debug
+volumeBindingMode: WaitForFirstConsumer

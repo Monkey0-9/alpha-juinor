@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 sys.path.insert(0, os.getcwd())
 
 from contracts.alpha_model import AlphaOutput, AlphaDecision
-from portfolio.pm_brain import PMBrain
+from mini_quant_fund.portfolio.pm_brain import PMBrain
 from contracts.allocation import RejectedAsset
 
 class TestPhase3(unittest.TestCase):

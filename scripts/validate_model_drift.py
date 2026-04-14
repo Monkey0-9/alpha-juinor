@@ -8,7 +8,7 @@ import pandas as pd
 # Add project root
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models.drift_detection import DriftDetector
+from mini_quant_fund.models.drift_detection import DriftDetector
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("DriftValidation")

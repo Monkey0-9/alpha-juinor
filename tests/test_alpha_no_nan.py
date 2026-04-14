@@ -2,7 +2,7 @@
 import pytest
 import pandas as pd
 import numpy as np
-from strategies.alpha import TrendAlpha, MeanReversionAlpha, RSIAlpha
+from mini_quant_fund.strategies.alpha import TrendAlpha, MeanReversionAlpha, RSIAlpha
 
 @pytest.mark.parametrize("alpha_class", [TrendAlpha, MeanReversionAlpha, RSIAlpha])
 def test_alpha_no_nan_output(alpha_class):

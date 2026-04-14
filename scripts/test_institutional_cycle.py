@@ -6,7 +6,7 @@ import time
 # Ensure root is in path
 sys.path.append(".")
 
-from orchestration.cycle_orchestrator import CycleOrchestrator
+from mini_quant_fund.orchestration.cycle_orchestrator import CycleOrchestrator
 
 logging.basicConfig(level=logging.INFO)
 

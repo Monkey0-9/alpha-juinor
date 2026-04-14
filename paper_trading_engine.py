@@ -23,7 +23,7 @@ import logging
 # Add parent to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from strategy_factory.manager import StrategyManager
+from mini_quant_fund.strategy_factory.manager import StrategyManager
 from allocator.meta_controller import MetaController
 
 # Logger setup (configured by entry point)
@@ -95,8 +95,8 @@ class CircuitBreaker:
         return True # Continue
 
 # Imports
-from risk.gateway import RiskGateway
-from execution.sor import SmartOrderRouter
+from mini_quant_fund.risk.gateway import RiskGateway
+from mini_quant_fund.execution.sor import SmartOrderRouter
 
 class MultiStrategyEngine:
     """

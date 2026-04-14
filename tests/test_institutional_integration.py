@@ -20,7 +20,7 @@ class TestDataFlowIntegration(unittest.TestCase):
 
     def test_data_state_machine_integration(self):
         """Test DataStateMachine evaluates and transitions correctly."""
-        from data_intelligence.data_state_machine import get_data_state_machine, DataState
+        from mini_quant_fund.data_intelligence.data_state_machine import get_data_state_machine, DataState
 
         dsm = get_data_state_machine()
 
@@ -48,7 +48,7 @@ class TestDataFlowIntegration(unittest.TestCase):
 
     def test_validation_gateway_scores_correctly(self):
         """Test ValidationGateway produces quality scores."""
-        from data_intelligence.validation_gateway import ValidationGateway
+        from mini_quant_fund.data_intelligence.validation_gateway import ValidationGateway
 
         gateway = ValidationGateway()
 
@@ -74,7 +74,7 @@ class TestRegimeIntegration(unittest.TestCase):
 
     def test_regime_detection(self):
         """Test regime controller detects regimes correctly."""
-        from regime.controller import get_regime_controller, RegimeLabel
+        from mini_quant_fund.regime.controller import get_regime_controller, RegimeLabel
 
         rc = get_regime_controller()
 
@@ -93,7 +93,7 @@ class TestRegimeIntegration(unittest.TestCase):
 
     def test_regime_overrides(self):
         """Test regime overrides are applied correctly."""
-        from regime.controller import RegimeOverrides, RegimeLabel
+        from mini_quant_fund.regime.controller import RegimeOverrides, RegimeLabel
 
         # RISK_ON should have highest limits
         risk_on = RegimeOverrides.for_regime(RegimeLabel.RISK_ON)
@@ -112,7 +112,7 @@ class TestCVaRIntegration(unittest.TestCase):
 
     def test_cvar_computation(self):
         """Test CVaR engine computes valid CVaR."""
-        from risk.cvar_engine import get_cvar_engine
+        from mini_quant_fund.risk.cvar_engine import get_cvar_engine
 
         engine = get_cvar_engine()
 
@@ -129,7 +129,7 @@ class TestCVaRIntegration(unittest.TestCase):
 
     def test_cvar_gate_blocking(self):
         """Test CVaR gate blocks excessive risk."""
-        from risk.cvar_gate import CVaRGate
+        from mini_quant_fund.risk.cvar_gate import CVaRGate
 
         gate = CVaRGate(symbol_cvar_limit=-0.05)
 
@@ -155,7 +155,7 @@ class TestAuditIntegration(unittest.TestCase):
 
     def test_decision_recording(self):
         """Test decisions are recorded correctly."""
-        from audit.decision_recorder import DecisionRecorder, DecisionType, AlphaContribution
+        from mini_quant_fund.audit.decision_recorder import DecisionRecorder, DecisionType, AlphaContribution
 
         recorder = DecisionRecorder(run_id="test_run", fail_open=True)
 
@@ -198,7 +198,7 @@ class TestModuleIntegration(unittest.TestCase):
 
     def test_strategy_has_institutional_modules(self):
         """Test InstitutionalStrategy has all modules wired."""
-        from strategies.institutional_strategy import InstitutionalStrategy
+        from mini_quant_fund.strategies.institutional_strategy import InstitutionalStrategy
 
         # Just verify import works and attributes exist
         strategy = InstitutionalStrategy()
@@ -209,7 +209,7 @@ class TestModuleIntegration(unittest.TestCase):
 
     def test_allocator_has_institutional_modules(self):
         """Test InstitutionalAllocator has all modules wired."""
-        from portfolio.allocator import InstitutionalAllocator
+        from mini_quant_fund.portfolio.allocator import InstitutionalAllocator
 
         allocator = InstitutionalAllocator()
 
@@ -218,7 +218,7 @@ class TestModuleIntegration(unittest.TestCase):
 
     def test_oms_has_impact_gate(self):
         """Test OMS has impact gate wired."""
-        from execution.oms import OMS
+        from mini_quant_fund.execution.oms import OMS
 
         oms = OMS()
 

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from intelligence.autonomous_brain import AutonomousTradingBrain
+from mini_quant_fund.intelligence.autonomous_brain import AutonomousTradingBrain
 
 
 class TestPredictiveIntegration(unittest.TestCase):
@@ -31,7 +31,7 @@ class TestPredictiveIntegration(unittest.TestCase):
         # It should have initialized _predictive_model (even if None)
         self.assertTrue(hasattr(self.brain, '_predictive_model'))
 
-    @patch('intelligence.autonomous_brain.PredictiveModel')
+    @patch('mini_quant_fund.intelligence.autonomous_brain.PredictiveModel')
     def test_high_confidence_boost(self, MockModel):
         """Test that high ML probability boosts the score."""
         # Setup Brain with Mocked Model
@@ -68,7 +68,7 @@ class TestPredictiveIntegration(unittest.TestCase):
         self.assertGreater(ranked[0]['score'], 0.6)
         self.assertIn("ML BOOST", ranked[0]['reasoning'])
 
-    @patch('intelligence.autonomous_brain.PredictiveModel')
+    @patch('mini_quant_fund.intelligence.autonomous_brain.PredictiveModel')
     def test_low_confidence_penalty(self, MockModel):
         """Test that low ML probability penalizes the score."""
         brain = AutonomousTradingBrain()

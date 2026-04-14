@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 import numpy as np
-from data.processors.validator import validate_features, sanitize_numeric_df, ensure_adjusted_close, FeatureValidationError
+from mini_quant_fund.data.processors.validator import validate_features, sanitize_numeric_df, ensure_adjusted_close, FeatureValidationError
 
 def test_sanitize_numeric_df():
     df = pd.DataFrame({

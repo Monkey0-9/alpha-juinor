@@ -3,8 +3,8 @@ import pytest
 import time
 import pandas as pd
 import numpy as np
-from strategies.alpha import TrendAlpha
-from data.processors.features import FeatureEngineer
+from mini_quant_fund.strategies.alpha import TrendAlpha
+from mini_quant_fund.data.processors.features import FeatureEngineer
 
 def test_performance_smoke_features():
     """Ensure feature generation doesn't block for more than 2 seconds for small universe."""

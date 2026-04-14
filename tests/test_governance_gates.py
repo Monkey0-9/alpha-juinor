@@ -8,22 +8,22 @@ from unittest.mock import patch, MagicMock
 
 # MOCK HEAVY DEPENDENCIES BEFORE IMPORTING main
 sys.modules["strategies"] = MagicMock()
-sys.modules["strategies.factory"] = MagicMock()
+sys.modules["mini_quant_fund.strategies.factory"] = MagicMock()
 sys.modules["risk"] = MagicMock()
-sys.modules["risk.engine"] = MagicMock()
+sys.modules["mini_quant_fund.risk.engine"] = MagicMock()
 sys.modules["portfolio"] = MagicMock()
-sys.modules["portfolio.allocator"] = MagicMock()
+sys.modules["mini_quant_fund.portfolio.allocator"] = MagicMock()
 sys.modules["brokers"] = MagicMock()
-sys.modules["brokers.alpaca_broker"] = MagicMock()
-sys.modules["brokers.mock_broker"] = MagicMock()
+sys.modules["mini_quant_fund.brokers.alpaca_broker"] = MagicMock()
+sys.modules["mini_quant_fund.brokers.mock_broker"] = MagicMock()
 sys.modules["database"] = MagicMock()
-sys.modules["database.manager"] = MagicMock()
-sys.modules["data.collectors"] = MagicMock()
-sys.modules["data.collectors.data_router"] = MagicMock()
+sys.modules["mini_quant_fund.database.manager"] = MagicMock()
+sys.modules["mini_quant_fund.data.collectors"] = MagicMock()
+sys.modules["mini_quant_fund.data.collectors.data_router"] = MagicMock()
 
 # Now import the target modules
-from data.governance.provider_matrix import select_provider, PROVIDER_CAPABILITIES
-from data.governance.quality_engine import DataQualityEngine
+from mini_quant_fund.data.governance.provider_matrix import select_provider, PROVIDER_CAPABILITIES
+from mini_quant_fund.data.governance.quality_engine import DataQualityEngine
 from main import InstitutionalLiveAgent
 
 class TestGovernanceGates:

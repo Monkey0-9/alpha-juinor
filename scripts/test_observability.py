@@ -8,7 +8,7 @@ import logging
 # Add project root
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from monitoring.prometheus_exporter import metrics
+from mini_quant_fund.monitoring.prometheus_exporter import metrics
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ObservabilityTest")

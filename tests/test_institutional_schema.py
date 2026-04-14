@@ -4,7 +4,7 @@
 import sys
 sys.path.insert(0, '.')
 
-from database.schema import (
+from mini_quant_fund.database.schema import (
     # Existing classes
     PriceRecord, CorporateAction, FeatureRecord, ModelOutput,
     DecisionRecord, OrderRecord, PositionRecord, AuditEntry, CycleMeta,
@@ -63,7 +63,7 @@ def test_institutional_schema_classes():
 
 def test_sql_definitions():
     # Test SQL creation
-    from database.schema import SCHEMA_SQL
+    from mini_quant_fund.database.schema import SCHEMA_SQL
     sql_lines = len(SCHEMA_SQL.split('\n'))
     print(f"\n✓ SQL schema: {sql_lines} lines")
 

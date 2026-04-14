@@ -11,12 +11,12 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import numpy as np
 import pandas as pd
 
-from strategies.monte_carlo_mean_reversion import (
+from mini_quant_fund.strategies.monte_carlo_mean_reversion import (
     MCMRConfig,
     MonteCarloMeanReversionStrategy,
     create_mc_mean_reversion_strategy,
 )
-from strategy_factory.interface import Signal
+from mini_quant_fund.strategy_factory.interface import Signal
 
 
 class TestMonteCarloMeanReversionStrategy(unittest.TestCase):

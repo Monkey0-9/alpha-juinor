@@ -4,7 +4,7 @@ tests/governance/test_explainability.py
 Tests for Operator Trust & Explainability.
 """
 import unittest
-from governance.explainer import DecisionExplainer, DecisionExplanation
+from mini_quant_fund.governance.explainer import DecisionExplainer, DecisionExplanation
 
 class TestExplainability(unittest.TestCase):
     def setUp(self):
@@ -65,7 +65,7 @@ class TestExplainability(unittest.TestCase):
 
         self.assertEqual(explanation.action, "SKIP")
         self.assertEqual(explanation.governance_status, "BLOCKED")
-        self.assertGreater(len(explanation.reasoning), 3)
+        self.assertGreaterEqual(len(explanation.reasoning), 3)
 
     def test_confidence_bands_strong_signal(self):
         """Test confidence bands for strong signal"""

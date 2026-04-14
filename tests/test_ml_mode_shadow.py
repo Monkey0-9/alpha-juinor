@@ -7,7 +7,7 @@ import pandas as pd
 from unittest.mock import Mock, patch, MagicMock
 import json
 
-from alpha_families.ml_alpha import MLAlpha
+from mini_quant_fund.alpha_families.ml_alpha import MLAlpha
 
 
 def test_ml_mode_disabled():
@@ -36,7 +36,7 @@ def test_ml_mode_shadow_returns_neutral():
     ml._load_model_for_symbol = lambda sym: mock_model_artifact
     ml._extract_features = lambda df: pd.DataFrame({"f1": [1.0]})
 
-    with patch('configs.config_manager.ConfigManager') as mock_cm:
+    with patch('mini_quant_fund.configs.config_manager.ConfigManager') as mock_cm:
         mock_cm.return_value.config = {"features": {"ml_enabled": True, "ml_mode": "shadow"}}
 
         result = ml.generate_signal(pd.DataFrame(), symbol="TEST")
@@ -57,7 +57,7 @@ def test_ml_mode_live_requires_model():
 
     ml._load_model_for_symbol = lambda sym: None  # No model
 
-    with patch('configs.config_manager.ConfigManager') as mock_cm:
+    with patch('mini_quant_fund.configs.config_manager.ConfigManager') as mock_cm:
         mock_cm.return_value.config = {"features": {"ml_enabled": True, "ml_mode": "live"}}
 
         with pytest.raises(ValueError, match="LIVE mode requires model"):
@@ -77,7 +77,7 @@ def test_ml_mode_live_returns_signal():
     ml._load_model_for_symbol = lambda sym: mock_model_artifact
     ml._extract_features = lambda df: pd.DataFrame({"f1": [1.0]})
 
-    with patch('configs.config_manager.ConfigManager') as mock_cm:
+    with patch('mini_quant_fund.configs.config_manager.ConfigManager') as mock_cm:
         mock_cm.return_value.config = {"features": {"ml_enabled": True, "ml_mode": "live"}}
 
         result = ml.generate_signal(pd.DataFrame(), symbol="TEST")
@@ -99,7 +99,7 @@ def test_shadow_mode_logging(caplog):
     ml._load_model_for_symbol = lambda sym: mock_model_artifact
     ml._extract_features = lambda df: pd.DataFrame({"f1": [1.0]})
 
-    with patch('configs.config_manager.ConfigManager') as mock_cm:
+    with patch('mini_quant_fund.configs.config_manager.ConfigManager') as mock_cm:
         mock_cm.return_value.config = {"features": {"ml_enabled": True, "ml_mode": "shadow"}}
 
         with caplog.at_level('INFO'):

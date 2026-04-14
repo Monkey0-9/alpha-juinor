@@ -1,0 +1,30 @@
+{
+  "monitoring": {
+    "enabled": true,
+    "update_frequency": "1 minute",
+    "alerts": {
+      "performance_drop": {
+        "threshold": 0.1,
+        "period": "1 day"
+      },
+      "drawdown_alert": {
+        "threshold": 0.12,
+        "action": "reduce_positions"
+      },
+      "correlation_spike": {
+        "threshold": 0.8,
+        "action": "rebalance"
+      },
+      "volatility_spike": {
+        "threshold": 0.3,
+        "action": "reduce_leverage"
+      }
+    },
+    "reports": {
+      "daily_summary": true,
+      "weekly_performance": true,
+      "monthly_analysis": true,
+      "risk_metrics": true
+    }
+  }
+}

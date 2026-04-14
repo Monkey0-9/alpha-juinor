@@ -7,15 +7,15 @@ Tests for satellite, credit card, and geolocation adapters.
 
 import pytest
 
-from alternative_data.integrations.credit_card_adapter import (
+from mini_quant_fund.alternative_data.integrations.credit_card_adapter import (
     CreditCardAdapter,
     TransactionSignal,
 )
-from alternative_data.integrations.geolocation_adapter import (
+from mini_quant_fund.alternative_data.integrations.geolocation_adapter import (
     GeolocationAdapter,
     MobilitySignal,
 )
-from alternative_data.integrations.satellite_adapter import (
+from mini_quant_fund.alternative_data.integrations.satellite_adapter import (
     SatelliteAdapter,
     SatelliteSignal,
 )

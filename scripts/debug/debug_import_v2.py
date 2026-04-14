@@ -3,7 +3,7 @@ import os
 sys.path.insert(0, os.getcwd())
 print(f"Sys Path: {sys.path}")
 try:
-    import portfolio
+    import mini_quant_fund.portfolio
     print(f"Portfolio: {portfolio}")
     print(f"Portfolio file: {getattr(portfolio, '__file__', 'None')}")
     print(f"Portfolio path: {getattr(portfolio, '__path__', 'None')}")

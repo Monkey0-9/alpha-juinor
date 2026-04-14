@@ -1,0 +1,9 @@
+{
+  "ticker": "KO",
+  "start_date": "2021-04-12",
+  "end_date": "2026-04-11",
+  "data_type": "ohlcv",
+  "cached_at": "2026-04-11T20:59:35.456636",
+  "rows": 1256,
+  "ttl_hours": 24.0
+}

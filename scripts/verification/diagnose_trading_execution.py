@@ -61,21 +61,21 @@ if not (alpaca_key and alpaca_secret):
 # Check 5: Required modules
 print("\n5️⃣  SYSTEM MODULES:")
 try:
-    from execution.parallel_strategy_engine import ParallelStrategyExecutor
+    from mini_quant_fund.execution.parallel_strategy_engine import ParallelStrategyExecutor
 
     print(f"   ParallelStrategyExecutor:  Available")
 except ImportError as e:
     print(f"   ParallelStrategyExecutor:  {e}")
 
 try:
-    from orchestration.live_decision_loop import LiveDecisionLoop
+    from mini_quant_fund.orchestration.live_decision_loop import LiveDecisionLoop
 
     print(f"   LiveDecisionLoop:          Available")
 except ImportError as e:
     print(f"   LiveDecisionLoop:          {e}")
 
 try:
-    from brokers.mock_broker import MockBroker
+    from mini_quant_fund.brokers.mock_broker import MockBroker
 
     print(f"   MockBroker:                Available")
 except ImportError as e:

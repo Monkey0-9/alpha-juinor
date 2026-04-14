@@ -12,7 +12,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from orchestration.cycle_orchestrator import CycleOrchestrator
+from mini_quant_fund.orchestration.cycle_orchestrator import CycleOrchestrator
 
 
 def generate_mock_universe(size: int = 249):

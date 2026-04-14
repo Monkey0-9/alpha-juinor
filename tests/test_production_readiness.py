@@ -7,13 +7,13 @@ import pandas as pd
 from unittest.mock import MagicMock, AsyncMock
 
 # Adjust path if needed or rely on pytest pythonpath
-from risk.kill_switch import DistributedKillSwitch, KillSwitchReason
-from monitoring.reconciliation import PositionReconciler
-from execution.idempotent_broker import IdempotentBrokerAdapter
-from data.governance.quality_engine import DataQualityEngine
-from backtest.realistic_execution import RealisticExecutionHandler
+from mini_quant_fund.risk.kill_switch import DistributedKillSwitch, KillSwitchReason
+from mini_quant_fund.monitoring.reconciliation import PositionReconciler
+from mini_quant_fund.execution.idempotent_broker import IdempotentBrokerAdapter
+from mini_quant_fund.data.governance.quality_engine import DataQualityEngine
+from mini_quant_fund.backtest.realistic_execution import RealisticExecutionHandler
 from compliance.audit_trail import InstitutionalAuditTrail
-from database.manager import DatabaseManager
+from mini_quant_fund.database.manager import DatabaseManager
 
 class TestProductionReadiness:
     """Comprehensive tests for production safety features"""
@@ -98,7 +98,7 @@ class TestProductionReadiness:
 
         # Mock data (BarData, price_history)
         # Type checking might require specific classes
-        from backtest.execution import Order, BarData
+        from mini_quant_fund.backtest.execution import Order, BarData
 
         order = Order(ticker="AAPL", quantity=100, order_type="MARKET")
         bar = BarData(

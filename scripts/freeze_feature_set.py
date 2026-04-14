@@ -23,7 +23,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ml.input_schema_guard import get_schema_guard, FrozenFeatureSchema
+from mini_quant_fund.ml.input_schema_guard import get_schema_guard, FrozenFeatureSchema
 
 logging.basicConfig(
     level=logging.INFO,

@@ -49,7 +49,7 @@ def test_no_private_db_calls():
 
 def test_get_connection_is_context_manager():
     """Test that get_connection() returns a proper context manager."""
-    from database.manager import DatabaseManager
+    from mini_quant_fund.database.manager import DatabaseManager
 
     db = DatabaseManager()
 
@@ -64,7 +64,7 @@ def test_get_connection_is_context_manager():
 
 def test_deprecated_warning():
     """Test that _get_connection() emits deprecation warning."""
-    from database.manager import DatabaseManager
+    from mini_quant_fund.database.manager import DatabaseManager
     import warnings
 
     db = DatabaseManager()

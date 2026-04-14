@@ -5,10 +5,10 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from compliance.compliance_engine import get_compliance
-from data.global_universe import get_global_universe
-from execution.currency_settlement import get_settlement
-from execution.exchange_holidays import get_holiday_calendar
-from monitoring.grafana_metrics import get_metrics
+from mini_quant_fund.data.global_universe import get_global_universe
+from mini_quant_fund.execution.currency_settlement import get_settlement
+from mini_quant_fund.execution.exchange_holidays import get_holiday_calendar
+from mini_quant_fund.monitoring.grafana_metrics import get_metrics
 
 # Holiday Calendar
 cal = get_holiday_calendar()

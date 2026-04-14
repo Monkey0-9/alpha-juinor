@@ -1,17 +1,17 @@
 import unittest
 from unittest.mock import MagicMock, patch
-from ml.bytez_interface import BytezClient
+from mini_quant_fund.ml.bytez_interface import BytezClient
 
 class TestBytezIntegration(unittest.TestCase):
 
-    @patch('ml.bytez_interface.Bytez')
+    @patch('mini_quant_fund.ml.bytez_interface.Bytez')
     def test_client_initialization(self, mock_bytez):
         """Test that the client initializes with an API key."""
         client = BytezClient(api_key="test-key")
         self.assertEqual(client.api_key, "test-key")
         mock_bytez.assert_called_once_with("test-key")
 
-    @patch('ml.bytez_interface.Bytez')
+    @patch('mini_quant_fund.ml.bytez_interface.Bytez')
     def test_run_qa_success(self, mock_bytez):
         """Test that run_qa calls the SDK correctly and returns results."""
         # Setup mocks
@@ -34,7 +34,7 @@ class TestBytezIntegration(unittest.TestCase):
         self.assertEqual(res["output"], "London")
         self.assertIsNone(res["error"])
 
-    @patch('ml.bytez_interface.Bytez')
+    @patch('mini_quant_fund.ml.bytez_interface.Bytez')
     def test_run_model_error_handling(self, mock_bytez):
         """Test that exceptions are caught and returned as errors."""
         mock_model = MagicMock()

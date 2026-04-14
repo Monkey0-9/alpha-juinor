@@ -13,8 +13,8 @@ from pathlib import Path
 # Add root to sys.path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from data.universe_manager import UnifiedUniverseManager
-from data.ingestion_agent import InstitutionalIngestionAgent
+from mini_quant_fund.data.universe_manager import UnifiedUniverseManager
+from mini_quant_fund.data.ingestion_agent import InstitutionalIngestionAgent
 
 def main():
     parser = argparse.ArgumentParser(description="Institutional Market Data Ingestion Runner")

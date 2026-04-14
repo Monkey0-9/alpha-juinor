@@ -9,9 +9,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from risk.engine import RiskManager
-from strategies.alpha import CompositeAlpha, TrendAlpha
-from backtest.execution import Order
+from mini_quant_fund.risk.engine import RiskManager
+from mini_quant_fund.strategies.alpha import CompositeAlpha, TrendAlpha
+from mini_quant_fund.backtest.execution import Order
 
 class TestActiveTrading(unittest.TestCase):
     

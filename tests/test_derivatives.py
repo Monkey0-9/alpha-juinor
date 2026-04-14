@@ -8,7 +8,7 @@ Comprehensive tests for volatility surface, exotic options, and delta hedging.
 import numpy as np
 import pytest
 
-from derivatives.exotic_options import (
+from mini_quant_fund.derivatives.exotic_options import (
     AsianOption,
     BarrierOption,
     ExoticOptionsEngine,
@@ -17,13 +17,13 @@ from derivatives.exotic_options import (
     price_barrier_option,
     price_lookback_option,
 )
-from derivatives.volatility_surface import (
+from mini_quant_fund.derivatives.volatility_surface import (
     BlackScholesModel,
     OptionQuote,
     SABRModel,
     VolatilitySurface,
 )
-from strategies.delta_hedging import (
+from mini_quant_fund.strategies.delta_hedging import (
     DeltaHedgingStrategy,
     GammaScalpingStrategy,
     HedgePosition,

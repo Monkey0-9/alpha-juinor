@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 from unittest.mock import MagicMock, patch
 from main import InstitutionalLiveAgent
-from alpha_families.ml_alpha import MLAlpha
-from risk.engine import RiskManager, RiskDecision, RiskRegime
+from mini_quant_fund.alpha_families.ml_alpha import MLAlpha
+from mini_quant_fund.risk.engine import RiskManager, RiskDecision, RiskRegime
 
 class TestGovernance(unittest.TestCase):
 

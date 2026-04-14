@@ -7,7 +7,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from enhanced_strategy import RegimeDetector, MarketRegime
-from strategy_factory.interface import Signal
+from mini_quant_fund.strategy_factory.interface import Signal
 
 class MetaController:
     """

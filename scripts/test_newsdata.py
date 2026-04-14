@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 # Ensure we can import from the project root
 sys.path.append(os.getcwd())
 
-from data.providers.news_provider import NewsDataProvider
+from mini_quant_fund.data.providers.news_provider import NewsDataProvider
 
 def test_news_provider():
     load_dotenv()

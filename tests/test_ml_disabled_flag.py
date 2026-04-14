@@ -6,7 +6,7 @@ import pytest
 import pandas as pd
 from unittest.mock import Mock, patch
 
-from alpha_families.ml_alpha import MLAlpha
+from mini_quant_fund.alpha_families.ml_alpha import MLAlpha
 
 
 def test_ml_alpha_disabled_by_config(tmp_path):
@@ -20,7 +20,7 @@ def test_ml_alpha_disabled_by_config(tmp_path):
         }
     }
 
-    with patch('configs.config_manager.ConfigManager') as mock_cm:
+    with patch('mini_quant_fund.configs.config_manager.ConfigManager') as mock_cm:
         mock_cm.return_value.config = mock_config
 
         result = ml.generate_signal(pd.DataFrame(), symbol="TEST")
@@ -41,7 +41,7 @@ def test_ml_alpha_enabled_by_config(tmp_path):
         }
     }
 
-    with patch('configs.config_manager.ConfigManager') as mock_cm:
+    with patch('mini_quant_fund.configs.config_manager.ConfigManager') as mock_cm:
         mock_cm.return_value.config = mock_config
 
         result = ml.generate_signal(pd.DataFrame(), symbol="TEST")
@@ -70,7 +70,7 @@ def test_ml_alpha_no_model_loading_when_disabled(tmp_path, monkeypatch):
         }
     }
 
-    with patch('configs.config_manager.ConfigManager') as mock_cm:
+    with patch('mini_quant_fund.configs.config_manager.ConfigManager') as mock_cm:
         mock_cm.return_value.config = mock_config
 
         ml.generate_signal(pd.DataFrame(), symbol="TEST")
@@ -93,7 +93,7 @@ def test_governance_disabled_overrides_config(tmp_path):
         }
     }
 
-    with patch('configs.config_manager.ConfigManager') as mock_cm:
+    with patch('mini_quant_fund.configs.config_manager.ConfigManager') as mock_cm:
         mock_cm.return_value.config = mock_config
 
         result = ml.generate_signal(pd.DataFrame(), symbol="TEST")

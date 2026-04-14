@@ -1,0 +1,128 @@
+# Aggressive Return Configuration - 60-70% Annual Target
+# =======================================================
+# Optimized for high returns with controlled risk
+
+# Universe Configuration
+universe:
+  config_file: "configs/universe_50_plus.json"
+  min_symbols: 50
+  max_symbols: 75
+  sector_diversification: true
+
+# Risk Management - Aggressive but Controlled
+risk_management:
+  max_position_size: 0.08          # 8% max per position (up from 5%)
+  max_sector_exposure: 0.20        # 20% max per sector
+  portfolio_leverage: 1.2           # 1.2x leverage for higher returns
+  target_volatility: 0.18          # 18% annual volatility
+  max_drawdown_limit: 0.15         # 15% max drawdown
+  stop_loss_level: 0.06            # 6% stop loss (tighter for risk control)
+  take_profit_level: 0.25           # 25% take profit (aggressive profit taking)
+
+# Capital Allocation
+capital_allocation:
+  base_allocation_per_symbol: 0.02   # 2% base allocation
+  momentum_boost: 1.5               # 50% boost for high momentum
+  quality_multiplier: 1.3           # 30% boost for high-quality stocks
+  volatility_adjustment: true
+  correlation_adjustment: true
+
+# Strategy Parameters - High Return Focus
+strategy_config:
+  # Trading frequencies
+  day_trading:
+    enabled: true
+    allocation: 0.15               # 15% to day trading
+    max_positions: 10
+    holding_period: "1-5 days"
+  
+  swing_trading:
+    enabled: true
+    allocation: 0.20               # 20% to swing trading
+    max_positions: 15
+    holding_period: "5-20 days"
+  
+  momentum_trading:
+    enabled: true
+    allocation: 0.25               # 25% to momentum (highest allocation)
+    max_positions: 12
+    holding_period: "1-60 days"
+    momentum_threshold: 0.15        # 15% momentum threshold
+  
+  scalping:
+    enabled: true
+    allocation: 0.10               # 10% to scalping
+    max_positions: 20
+    holding_period: "seconds-minutes"
+    profit_target: 0.005           # 0.5% per trade
+  
+  position_trading:
+    enabled: true
+    allocation: 0.15               # 15% to position trading
+    max_positions: 8
+    holding_period: "20-90 days"
+  
+  algorithmic_trading:
+    enabled: true
+    allocation: 0.10               # 10% to algorithmic
+    max_positions: 25
+    rebalance_frequency: "hourly"
+
+# Performance Targets
+performance_targets:
+  annual_return_target: 0.65        # 65% annual return target
+  sharpe_ratio_target: 2.5          # Sharpe > 2.5
+  max_drawdown_target: 0.15         # Max 15% drawdown
+  win_rate_target: 0.55             # 55% win rate minimum
+  profit_factor_target: 1.8          # Profit factor > 1.8
+
+# Market Regime Adaptation
+regime_adaptation:
+  bull_market:
+    position_multiplier: 1.3
+    leverage_multiplier: 1.2
+    volatility_threshold: 0.25
+  
+  bear_market:
+    position_multiplier: 0.7
+    leverage_multiplier: 0.8
+    volatility_threshold: 0.35
+  
+  sideways_market:
+    position_multiplier: 1.0
+    leverage_multiplier: 1.0
+    volatility_threshold: 0.20
+
+# Execution Optimization
+execution:
+  order_type: "adaptive"            # Market/limit based on conditions
+  slippage_tolerance: 0.001         # 0.1% slippage tolerance
+  execution_speed: "fast"           # Fast execution for momentum
+  batch_trading: true               # Batch similar orders
+  smart_routing: true               # Route to optimal venues
+
+# Data Requirements
+data_requirements:
+  real_time_data: true
+  fundamental_data: true
+  sentiment_data: true
+  options_data: false              # Disabled for simplicity
+  news_data: true
+  social_media_data: true
+
+# Monitoring and Alerts
+monitoring:
+  performance_alerts: true
+  risk_alerts: true
+  drawdown_alerts: true
+  correlation_alerts: true
+  daily_reports: true
+  weekly_summaries: true
+
+# Backtesting Requirements
+backtesting:
+  min_history_years: 3
+  out_of_sample_period: "6 months"
+  walk_forward_analysis: true
+  monte_carlo_simulations: 1000
+  stress_scenarios: ["2008", "2020", "2022"]

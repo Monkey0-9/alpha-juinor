@@ -7,7 +7,7 @@ import unittest
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
-from ml.alpha_decay import AlphaDecayMonitor, DecayMetrics
+from mini_quant_fund.ml.alpha_decay import AlphaDecayMonitor, DecayMetrics
 
 class TestAlphaDecayMonitor(unittest.TestCase):
     def setUp(self):

@@ -5,7 +5,7 @@ Unit tests for data quality module.
 import pytest
 import pandas as pd
 import numpy as np
-from data.quality import compute_data_quality, validate_data_for_trading, validate_data_for_ml
+from mini_quant_fund.data.quality import compute_data_quality, validate_data_for_trading, validate_data_for_ml
 
 
 class TestDataQuality:

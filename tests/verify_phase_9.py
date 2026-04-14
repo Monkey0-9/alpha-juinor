@@ -33,7 +33,7 @@ class TestPhase9Integration(unittest.TestCase):
     def test_rate_limiter(self):
         """Test Token Bucket rate limiter."""
         print("\n[TEST] Rate Limiter...")
-        from data.rate_limiter import get_rate_limiter
+        from mini_quant_fund.data.rate_limiter import get_rate_limiter
 
         limiter = get_rate_limiter()
 
@@ -49,7 +49,7 @@ class TestPhase9Integration(unittest.TestCase):
     def test_multi_timeframe_engine(self):
         """Test Multi-Timeframe Strategy Engine."""
         print("\n[TEST] Multi-Timeframe Engine...")
-        from strategies.multi_timeframe_engine import (
+        from mini_quant_fund.strategies.multi_timeframe_engine import (
             get_mtf_engine, Timeframe
         )
 
@@ -76,7 +76,7 @@ class TestPhase9Integration(unittest.TestCase):
     def test_return_maximizer(self):
         """Test Return Maximizer."""
         print("\n[TEST] Return Maximizer...")
-        from strategies.return_maximizer import (
+        from mini_quant_fund.strategies.return_maximizer import (
             get_return_maximizer, OpportunityScore
         )
 
@@ -106,7 +106,7 @@ class TestPhase9Integration(unittest.TestCase):
     def test_auto_pilot(self):
         """Test Auto Pilot automation."""
         print("\n[TEST] Auto Pilot...")
-        from orchestration.auto_pilot import get_autopilot, AutoAction
+        from mini_quant_fund.orchestration.auto_pilot import get_autopilot, AutoAction
 
         pilot = get_autopilot()
 
@@ -144,7 +144,7 @@ class TestPhase9Integration(unittest.TestCase):
     def test_error_handler(self):
         """Test Global Error Handler."""
         print("\n[TEST] Error Handler...")
-        from governance.error_handler import (
+        from mini_quant_fund.governance.error_handler import (
             get_error_handler, ErrorSeverity, error_boundary
         )
 

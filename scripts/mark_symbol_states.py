@@ -21,7 +21,7 @@ from pathlib import Path
 # Add repo root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from data.quality import compute_data_quality
+from mini_quant_fund.data.quality import compute_data_quality
 import pandas as pd
 import logging
 

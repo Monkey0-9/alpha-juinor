@@ -2,10 +2,10 @@
 import pytest
 import pandas as pd
 import numpy as np
-from portfolio.pm_brain import pm_brain_run
-from ml.validate_features import validate_feature_schema, REQUIRED_FEATURES
-from utils.metrics import metrics
-from utils.alerts import check_system_thresholds
+from mini_quant_fund.portfolio.pm_brain import pm_brain_run
+from mini_quant_fund.ml.validate_features import validate_feature_schema, REQUIRED_FEATURES
+from mini_quant_fund.utils.metrics import metrics
+from mini_quant_fund.utils.alerts import check_system_thresholds
 
 def test_pm_brain_filtering():
     """Test that PM Brain selects only top-K and respects impact."""

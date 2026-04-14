@@ -5,7 +5,7 @@ Aligns universe.json with Governance Reality (DB ACTIVE state).
 import json
 import sqlite3
 from pathlib import Path
-from data.universe_manager import UnifiedUniverseManager
+from mini_quant_fund.data.universe_manager import UnifiedUniverseManager
 
 def main():
     db_path = "runtime/institutional_trading.db"

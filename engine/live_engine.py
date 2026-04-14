@@ -7,9 +7,9 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Callable, Optional, Any
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from agents.orchestrator import HeadOfTrading
+from mini_quant_fund.agents.orchestrator import HeadOfTrading
 
-from utils.time import to_utc, get_now_utc
+from mini_quant_fund.utils.time import to_utc, get_now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class LiveEngine:
         current_prices = await self.provider.get_latest_prices_async(tickers)
 
         # 3. Decision Logic
-        from backtest.portfolio import Portfolio
+        from mini_quant_fund.backtest.portfolio import Portfolio
         self.portfolio = Portfolio(self.portfolio_value)
         self.portfolio.update_market_value(current_prices, get_now_utc())
         self.portfolio.ledger.position_book.positions = current_positions
@@ -118,7 +118,7 @@ class LiveEngine:
             risk_tier = self.risk_manager.get_risk_tier(self.portfolio_value)
 
             if risk_tier == "EXTREME":
-                from monitoring.alerts import alert
+                from mini_quant_fund.monitoring.alerts import alert
                 diag = self.risk_manager.explain_diagnostics(self.portfolio_value)
                 msg = f"🚨 **EXTREME RISK DETECTED** 🚨\n\n{diag}\n\n⚠️ **MANUAL APPROVAL REQUIRED**\nReply 'APPROVE' to proceed with trading."
                 alert(msg, level="CRITICAL")
@@ -126,7 +126,7 @@ class LiveEngine:
                 return []
 
             elif risk_tier == "HIGH":
-                from monitoring.alerts import alert
+                from mini_quant_fund.monitoring.alerts import alert
                 diag = self.risk_manager.explain_diagnostics(self.portfolio_value)
                 msg = f"⚠️ **HIGH RISK MODE** ⚠️\n\n{diag}\n\nSystem will proceed automatically with defensive sizing."
                 alert(msg, level="WARNING")
@@ -138,7 +138,7 @@ class LiveEngine:
 
             # Institutional Fix: Ensure baskets_returns is a DataFrame for RiskManager
             baskets_returns = full_panel.xs('Close', axis=1, level=1).pct_change(fill_method=None).dropna()
-            from data.utils.schema import ensure_dataframe
+            from mini_quant_fund.data.utils.schema import ensure_dataframe
             baskets_returns = ensure_dataframe(baskets_returns)
 
             # EXTRACT TARGET WEIGHTS FROM ORDERS
@@ -256,7 +256,7 @@ class LiveEngine:
              return
 
         # 3. Instantiate a 'Mock' Portfolio for the Strategy
-        from backtest.portfolio import Portfolio
+        from mini_quant_fund.backtest.portfolio import Portfolio
         self.portfolio = Portfolio(self.portfolio_value)
         # Manually force positions into the ledger snapshot
         self.portfolio.update_market_value(current_prices, get_now_utc())
@@ -302,7 +302,7 @@ class LiveEngine:
         self.broadcast_summary(ts)
 
     def broadcast_summary(self, ts: pd.Timestamp):
-        from monitoring.alerts import alert
+        from mini_quant_fund.monitoring.alerts import alert
 
         # Determine if this is an evening summary (after 3 PM ET)
         hour_et = (ts.hour - 9) % 24  # Rough ET conversion
@@ -383,7 +383,7 @@ class LiveEngine:
         Triggers Hard Fail-Safe.
         """
         logger.critical("🛑 ENTERING SAFE MODE. TERMINATING OPERATIONS.")
-        from monitoring.alerts import alert
+        from mini_quant_fund.monitoring.alerts import alert
         alert("🚨 **CRASH SWITCH TRIGGERED** 🚨\n\nSystem has entered SAFE MODE.\n- All orders cancelled.\n- Trading loop paused.\n- Manual intervention required.", level="CRITICAL")
 
         # Attempt to cancel all orders

@@ -43,7 +43,7 @@ START_DATE = "2007-01-01"  # Covers 2008 crisis
 
 def ingest_backtest_data():
     """Ingest historical data for backtesting."""
-    from data.storage.core import DataStore
+    from mini_quant_fund.data.storage.core import DataStore
 
     logger.info("=" * 60)
     logger.info("BACKTEST DATA INGESTION")

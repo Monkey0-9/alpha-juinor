@@ -2,7 +2,7 @@
 import pytest
 import pandas as pd
 import numpy as np
-from strategies.alpha import safe_pct_change, safe_clip
+from mini_quant_fund.strategies.alpha import safe_pct_change, safe_clip
 
 def test_safe_pct_change_no_inf():
     s = pd.Series([100, 0, 100, 110])

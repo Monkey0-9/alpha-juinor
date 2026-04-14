@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from strategy_factory.sentiment_engine import SentimentStrategy
+from mini_quant_fund.strategy_factory.sentiment_engine import SentimentStrategy
 
 try:
     s = SentimentStrategy()

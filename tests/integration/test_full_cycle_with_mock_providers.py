@@ -14,9 +14,9 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 )
 
-from orchestration.cycle_orchestrator import CycleOrchestrator  # noqa: E402
+from mini_quant_fund.orchestration.cycle_orchestrator import CycleOrchestrator  # noqa: E402
 from contracts import decision_enum  # noqa: E402
-from audit.decision_log import (  # noqa: E402
+from mini_quant_fund.audit.decision_log import (  # noqa: E402
     get_cycle_decisions, get_decision_counts, AUDIT_DB_PATH
 )
 

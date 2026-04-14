@@ -1,6 +1,6 @@
 # tests/test_circuit_breaker.py
 import os, tempfile
-from safety.circuit_breaker import CircuitBreaker, CircuitConfig
+from mini_quant_fund.safety.circuit_breaker import CircuitBreaker, CircuitConfig
 
 def test_circuit_breaker_triggers(tmp_path):
     p = tmp_path / "state.json"

@@ -8,9 +8,9 @@ import logging
 import time
 import os
 from datetime import datetime, timedelta
-from data.ingestion_agent import InstitutionalIngestionAgent
-from data.universe_manager import UnifiedUniverseManager
-from database.manager import DatabaseManager
+from mini_quant_fund.data.ingestion_agent import InstitutionalIngestionAgent
+from mini_quant_fund.data.universe_manager import UnifiedUniverseManager
+from mini_quant_fund.database.manager import DatabaseManager
 
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s')
 logger = logging.getLogger("INGEST_HISTORY")
@@ -79,7 +79,7 @@ def main():
     # FINAL VERIFICATION
     logger.info("[INGESTION] Pipeline finished. Verifying compliance...")
 
-    from data.governance.governance_agent import SymbolGovernor
+    from mini_quant_fund.data.governance.governance_agent import SymbolGovernor
     gov = SymbolGovernor(db)
     gov.classify_all()
 

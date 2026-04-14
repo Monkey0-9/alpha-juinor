@@ -5,7 +5,7 @@ Requirement: 403 blocks provider.
 import unittest
 from unittest.mock import MagicMock, patch
 from scripts.ingest_5y_batch import BatchIngestionAgent
-from data.router.entitlement_router import router
+from mini_quant_fund.data.router.entitlement_router import router
 
 class Test403Handling(unittest.TestCase):
     def setUp(self):

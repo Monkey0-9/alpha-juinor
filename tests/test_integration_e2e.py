@@ -24,7 +24,7 @@ print("=" * 70)
 
 # Test 1: Data Quality Module
 print("\n1. Testing Data Quality Module...")
-from data.quality import compute_data_quality, validate_data_for_trading, validate_data_for_ml
+from mini_quant_fund.data.quality import compute_data_quality, validate_data_for_trading, validate_data_for_ml
 
 # Create good quality data
 # 1. Create Mock Data
@@ -85,7 +85,7 @@ else:
 
 # Test 5: ML Readiness Gate
 print("\n5. Testing ML Readiness Gate...")
-from alpha_families.ml_alpha import MLAlpha
+from mini_quant_fund.alpha_families.ml_alpha import MLAlpha
 
 ml_alpha = MLAlpha()
 is_ready, reasons = ml_alpha.ml_training_ready(good_data)
@@ -96,7 +96,7 @@ print("   ✓ ML readiness gate works")
 
 # Test 6: Strategy with Defensive Checks
 print("\n6. Testing Strategy Defensive Checks...")
-from strategies.institutional_strategy import InstitutionalStrategy
+from mini_quant_fund.strategies.institutional_strategy import InstitutionalStrategy
 
 strategy = InstitutionalStrategy()
 
@@ -122,9 +122,9 @@ except Exception as e:
 
 # Test 7: Alpha Models
 print("\n7. Testing Alpha Models...")
-from alpha_families.fundamental_alpha import FundamentalAlpha
-from alpha_families.statistical_alpha import StatisticalAlpha
-from alpha_families.alternative_alpha import AlternativeAlpha
+from mini_quant_fund.alpha_families.fundamental_alpha import FundamentalAlpha
+from mini_quant_fund.alpha_families.statistical_alpha import StatisticalAlpha
+from mini_quant_fund.alpha_families.alternative_alpha import AlternativeAlpha
 
 test_market_data = pd.DataFrame({
     'Open': prices[-252:] * 0.99,

@@ -11,8 +11,8 @@ import logging
 # Path hack to allow running from scripts/ or root
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestration.cycle_orchestrator import CycleOrchestrator  # noqa: E402
-from audit.decision_log import SystemHalt  # noqa: E402
+from mini_quant_fund.orchestration.cycle_orchestrator import CycleOrchestrator  # noqa: E402
+from mini_quant_fund.audit.decision_log import SystemHalt  # noqa: E402
 from contracts import decision_enum  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)

@@ -10,10 +10,10 @@ from unittest.mock import MagicMock, patch
 # Adjust path to root
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from risk.kill_switch import DistributedKillSwitch, KillSwitchReason
-from data.governance.quality_engine import DataQualityEngine
-from execution.gates import ExecutionGatekeeper
-from database.manager import DatabaseManager
+from mini_quant_fund.risk.kill_switch import DistributedKillSwitch, KillSwitchReason
+from mini_quant_fund.data.governance.quality_engine import DataQualityEngine
+from mini_quant_fund.execution.gates import ExecutionGatekeeper
+from mini_quant_fund.database.manager import DatabaseManager
 
 class TestEliteComponents(unittest.TestCase):
     """
@@ -38,7 +38,7 @@ class TestEliteComponents(unittest.TestCase):
         }
 
         # Initialize DB with Schema
-        from database.schema import SCHEMA_SQL
+        from mini_quant_fund.database.schema import SCHEMA_SQL
         self.db = DatabaseManager(self.db_path)
         with self.db.get_connection() as conn:
             conn.executescript(SCHEMA_SQL)

@@ -17,10 +17,10 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 
 # Import System Components
-from execution.trade_manager import TradeManager, ExitReason
-from risk.portfolio_guardian import PortfolioGuardian
-from production.safety_guards import SafetyGuard
-from alpha.network_alpha import NetworkAlpha
+from mini_quant_fund.execution.trade_manager import TradeManager, ExitReason
+from mini_quant_fund.risk.portfolio_guardian import PortfolioGuardian
+from mini_quant_fund.production.safety_guards import SafetyGuard
+from mini_quant_fund.alpha.network_alpha import NetworkAlpha
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)

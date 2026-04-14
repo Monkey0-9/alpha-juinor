@@ -1,9 +1,0 @@
-{
-  "ticker": "MSFT",
-  "start_date": "2023-03-28",
-  "end_date": "2025-05-01",
-  "data_type": "ohlcv",
-  "cached_at": "2026-01-19T20:55:25.058056",
-  "rows": 527,
-  "ttl_hours": 24.0
-}

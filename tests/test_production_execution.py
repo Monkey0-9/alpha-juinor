@@ -3,8 +3,8 @@ import pytest
 import time
 from datetime import datetime
 from unittest.mock import MagicMock, patch
-from orchestration.live_decision_loop import LiveDecisionLoop, LiveSignal, DECISION_BUY, DECISION_SELL
-from execution.oms import OrderStatus
+from mini_quant_fund.orchestration.live_decision_loop import LiveDecisionLoop, LiveSignal, DECISION_BUY, DECISION_SELL
+from mini_quant_fund.execution.oms import OrderStatus
 
 class TestProductionExecution:
     @pytest.fixture
@@ -21,9 +21,9 @@ class TestProductionExecution:
 
     @pytest.fixture
     def decision_loop(self, mock_broker):
-        with patch('orchestration.live_decision_loop.DataRouter'), \
-             patch('orchestration.live_decision_loop.MetaBrain'), \
-             patch('orchestration.live_decision_loop.LifecycleManager'):
+        with patch('mini_quant_fund.orchestration.live_decision_loop.DataRouter'), \
+             patch('mini_quant_fund.orchestration.live_decision_loop.MetaBrain'), \
+             patch('mini_quant_fund.orchestration.live_decision_loop.LifecycleManager'):
             loop = LiveDecisionLoop(
                 tick_interval=0.1,
                 paper_mode=False,
@@ -82,7 +82,7 @@ class TestProductionExecution:
         decision_loop._execute_trades = MagicMock()
         
         # Run one tick
-        with patch('orchestration.live_decision_loop.metrics'):
+        with patch('mini_quant_fund.orchestration.live_decision_loop.metrics'):
             decision_loop._run_decision_tick()
             
         # Check heartbeat logs or state if we had a way to verify them

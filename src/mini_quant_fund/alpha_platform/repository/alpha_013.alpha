@@ -1,0 +1,3 @@
+# Alpha Strategy 013
+alpha = ts_mean(close, 65) / ts_std(close, 26)
+alpha = rank(alpha)

@@ -2,7 +2,7 @@
 tests/backtest/test_crisis_survivability.py
 """
 import unittest
-from backtest.scenario_runner import ScenarioRunner
+from mini_quant_fund.backtest.scenario_runner import ScenarioRunner
 
 class TestCrisisSurvivability(unittest.TestCase):
     def test_runner_logic(self):

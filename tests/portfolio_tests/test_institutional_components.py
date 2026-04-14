@@ -9,12 +9,12 @@ import logging
 from unittest.mock import MagicMock
 
 sys.path.insert(0, r'c:\mini-quant-fund')
-from portfolio.opportunity_cost import OpportunityCostManager
-from portfolio.capital_competition import CapitalCompetitionEngine
-from risk.portfolio_stress_simulator import PortfolioStressSimulator
-from risk.kill_switch import GlobalKillSwitch
-from risk.regime_controller import RegimeController
-from ui.terminal_dashboard import TerminalDashboard
+from mini_quant_fund.portfolio.opportunity_cost import OpportunityCostManager
+from mini_quant_fund.portfolio.capital_competition import CapitalCompetitionEngine
+from mini_quant_fund.risk.portfolio_stress_simulator import PortfolioStressSimulator
+from mini_quant_fund.risk.kill_switch import GlobalKillSwitch
+from mini_quant_fund.risk.regime_controller import RegimeController
+from mini_quant_fund.ui.terminal_dashboard import TerminalDashboard
 from contracts.allocation import AllocationRequest
 from contracts.alpha_contract import AlphaOutput
 

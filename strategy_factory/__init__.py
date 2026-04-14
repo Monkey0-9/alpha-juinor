@@ -1,1 +1,0 @@
-# Strategy Factory Package

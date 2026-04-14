@@ -2,7 +2,7 @@
 Test institutional alert system.
 """
 import pytest
-from monitoring.institutional_alerts import (
+from mini_quant_fund.monitoring.institutional_alerts import (
     InstitutionalAlertManager,
     AlertSeverity,
     AlertDeduplicator
@@ -26,7 +26,7 @@ def test_alert_deduplication():
 
 def test_alert_severity_routing():
     """Test that severity routing is correct."""
-    from monitoring.institutional_alerts import SEVERITY_ROUTING, AlertChannel
+    from mini_quant_fund.monitoring.institutional_alerts import SEVERITY_ROUTING, AlertChannel
     
     # DEBUG and INFO should only go to file
     assert SEVERITY_ROUTING[AlertSeverity.DEBUG] == [AlertChannel.FILE_LOG]

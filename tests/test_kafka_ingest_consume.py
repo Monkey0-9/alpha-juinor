@@ -21,7 +21,7 @@ class TestSchemaRegistry:
 
     def test_default_schemas_registered(self):
         """Test that default schemas are registered."""
-        from data.ingest_streaming.schema_registry import SchemaRegistry
+        from mini_quant_fund.data.ingest_streaming.schema_registry import SchemaRegistry
 
         registry = SchemaRegistry()
 
@@ -35,7 +35,7 @@ class TestSchemaRegistry:
 
     def test_get_schema(self):
         """Test getting schema by name."""
-        from data.ingest_streaming.schema_registry import SchemaRegistry
+        from mini_quant_fund.data.ingest_streaming.schema_registry import SchemaRegistry
 
         registry = SchemaRegistry()
 
@@ -48,7 +48,7 @@ class TestSchemaRegistry:
 
     def test_validate_valid_record(self):
         """Test validating a valid record."""
-        from data.ingest_streaming.schema_registry import SchemaRegistry
+        from mini_quant_fund.data.ingest_streaming.schema_registry import SchemaRegistry
 
         registry = SchemaRegistry()
 
@@ -68,7 +68,7 @@ class TestSchemaRegistry:
 
     def test_validate_invalid_record(self):
         """Test validating an invalid record (missing required field)."""
-        from data.ingest_streaming.schema_registry import SchemaRegistry
+        from mini_quant_fund.data.ingest_streaming.schema_registry import SchemaRegistry
 
         registry = SchemaRegistry()
 
@@ -85,7 +85,7 @@ class TestSchemaRegistry:
 
     def test_serialize_deserialize(self):
         """Test serialization and deserialization."""
-        from data.ingest_streaming.schema_registry import SchemaRegistry
+        from mini_quant_fund.data.ingest_streaming.schema_registry import SchemaRegistry
 
         registry = SchemaRegistry()
 
@@ -115,7 +115,7 @@ class TestStreamingProducer:
 
     def test_producer_initialization(self):
         """Test producer initializes correctly."""
-        from data.ingest_streaming.producer import StreamingProducer, ProducerConfig
+        from mini_quant_fund.data.ingest_streaming.producer import StreamingProducer, ProducerConfig
 
         config = ProducerConfig(bootstrap_servers="localhost:9092")
         producer = StreamingProducer(config)
@@ -126,7 +126,7 @@ class TestStreamingProducer:
 
     def test_topic_name_generation(self):
         """Test topic name generation."""
-        from data.ingest_streaming.producer import StreamingProducer
+        from mini_quant_fund.data.ingest_streaming.producer import StreamingProducer
 
         producer = StreamingProducer()
 
@@ -136,7 +136,7 @@ class TestStreamingProducer:
 
     def test_producer_start_stop(self):
         """Test producer start and stop."""
-        from data.ingest_streaming.producer import StreamingProducer
+        from mini_quant_fund.data.ingest_streaming.producer import StreamingProducer
 
         producer = StreamingProducer()
 
@@ -148,7 +148,7 @@ class TestStreamingProducer:
 
     def test_produce_bar_with_mock(self):
         """Test producing bar messages with mock producer."""
-        from data.ingest_streaming.producer import StreamingProducer, MockKafkaProducer
+        from mini_quant_fund.data.ingest_streaming.producer import StreamingProducer, MockKafkaProducer
 
         producer = StreamingProducer()
         producer._use_confluent = False
@@ -180,7 +180,7 @@ class TestStreamingConsumer:
 
     def test_consumer_initialization(self):
         """Test consumer initializes correctly."""
-        from data.ingest_streaming.consumer import StreamingConsumer, ConsumerConfig
+        from mini_quant_fund.data.ingest_streaming.consumer import StreamingConsumer, ConsumerConfig
 
         config = ConsumerConfig(
             bootstrap_servers="localhost:9092",
@@ -194,7 +194,7 @@ class TestStreamingConsumer:
 
     def test_consumer_subscribe(self):
         """Test consumer subscription."""
-        from data.ingest_streaming.consumer import StreamingConsumer
+        from mini_quant_fund.data.ingest_streaming.consumer import StreamingConsumer
 
         consumer = StreamingConsumer()
         consumer._use_confluent = False
@@ -206,7 +206,7 @@ class TestStreamingConsumer:
 
     def test_handler_registration(self):
         """Test handler registration."""
-        from data.ingest_streaming.consumer import StreamingConsumer
+        from mini_quant_fund.data.ingest_streaming.consumer import StreamingConsumer
 
         consumer = StreamingConsumer()
 
@@ -220,7 +220,7 @@ class TestStreamingConsumer:
 
     def test_consumer_with_mock_messages(self):
         """Test consuming messages with mock consumer."""
-        from data.ingest_streaming.consumer import StreamingConsumer, MockKafkaConsumer
+        from mini_quant_fund.data.ingest_streaming.consumer import StreamingConsumer, MockKafkaConsumer
 
         consumer = StreamingConsumer()
         consumer._use_confluent = False
@@ -299,7 +299,7 @@ class TestMockProducers:
 
     def test_mock_producer_messages(self):
         """Test mock producer stores messages."""
-        from data.ingest_streaming.producer import MockKafkaProducer
+        from mini_quant_fund.data.ingest_streaming.producer import MockKafkaProducer
 
         producer = MockKafkaProducer()
 
@@ -314,7 +314,7 @@ class TestMockProducers:
 
     def test_mock_consumer_messages(self):
         """Test mock consumer stores and returns messages."""
-        from data.ingest_streaming.consumer import MockKafkaConsumer
+        from mini_quant_fund.data.ingest_streaming.consumer import MockKafkaConsumer
 
         consumer = MockKafkaConsumer()
 

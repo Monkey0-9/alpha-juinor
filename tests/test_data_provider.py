@@ -4,8 +4,8 @@ import shutil
 import os
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from data.providers.yahoo import YahooDataProvider
-from data.storage.core import DataStore
+from mini_quant_fund.data.providers.yahoo import YahooDataProvider
+from mini_quant_fund.data.storage.core import DataStore
 
 class TestDataLayer(unittest.TestCase):
     

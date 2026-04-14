@@ -7,9 +7,9 @@ from datetime import datetime, timedelta
 # Add root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from alpha_families.statistical_alpha import StatisticalAlpha
+from mini_quant_fund.alpha_families.statistical_alpha import StatisticalAlpha
 
-# from data.manager import DataManager # Removed as it might not exist or be needed for synthetic test
+# from mini_quant_fund.data.manager import DataManager # Removed as it might not exist or be needed for synthetic test
 
 
 def debug_arima():

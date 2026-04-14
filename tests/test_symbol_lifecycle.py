@@ -3,8 +3,8 @@ import pytest
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timedelta
 import pandas as pd
-from governance.lifecycle_manager import LifecycleManager, SymbolState
-from database.manager import SymbolGovernanceRecord
+from mini_quant_fund.governance.lifecycle_manager import LifecycleManager, SymbolState
+from mini_quant_fund.database.manager import SymbolGovernanceRecord
 
 class TestLifecycleManager:
 
@@ -38,7 +38,7 @@ class TestLifecycleManager:
 
         # Mock Quality Check (implicit in logic or mocked out)
         # We'll rely on the real compute_data_quality for now or mock if it's external
-        with patch('governance.lifecycle_manager.compute_data_quality', return_value=(0.95, ["OK"])):
+        with patch('mini_quant_fund.governance.lifecycle_manager.compute_data_quality', return_value=(0.95, ["OK"])):
             manager.run_lifecycle_check(symbol)
 
         # Verify NO state change
@@ -63,7 +63,7 @@ class TestLifecycleManager:
         df = pd.DataFrame({"Close": [100.0] * 10}) # Too short?
         mock_data_router.get_daily_prices.return_value = df
 
-        with patch('governance.lifecycle_manager.compute_data_quality', return_value=(0.4, ["BAD_DATA"])):
+        with patch('mini_quant_fund.governance.lifecycle_manager.compute_data_quality', return_value=(0.4, ["BAD_DATA"])):
              manager.run_lifecycle_check(symbol)
 
         # Verify State Change
@@ -90,7 +90,7 @@ class TestLifecycleManager:
         # Data still bad
         mock_data_router.get_daily_prices.return_value = pd.DataFrame() # No data
 
-        with patch('governance.lifecycle_manager.compute_data_quality', return_value=(0.0, ["NO_DATA"])):
+        with patch('mini_quant_fund.governance.lifecycle_manager.compute_data_quality', return_value=(0.0, ["NO_DATA"])):
             manager.run_lifecycle_check(symbol)
 
         # Verify Retirement
@@ -113,7 +113,7 @@ class TestLifecycleManager:
         df = pd.DataFrame({"Close": [100.0] * 300})
         mock_data_router.get_daily_prices.return_value = df
 
-        with patch('governance.lifecycle_manager.compute_data_quality', return_value=(0.9, ["OK"])):
+        with patch('mini_quant_fund.governance.lifecycle_manager.compute_data_quality', return_value=(0.9, ["OK"])):
              manager.run_lifecycle_check(symbol)
 
         args = mock_db.upsert_symbol_governance.call_args[0][0]

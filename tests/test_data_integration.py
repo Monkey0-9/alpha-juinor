@@ -8,10 +8,10 @@ from datetime import datetime, timedelta
 # Add project root
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from data.collectors.data_router import DataRouter
-from data.providers.binance import BinanceDataProvider
-from data.providers.fred import FredDataProvider
-from data.providers.stooq import StooqDataProvider
+from mini_quant_fund.data.collectors.data_router import DataRouter
+from mini_quant_fund.data.providers.binance import BinanceDataProvider
+from mini_quant_fund.data.providers.fred import FredDataProvider
+from mini_quant_fund.data.providers.stooq import StooqDataProvider
 
 class TestDataIntegration(unittest.TestCase):
     

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ml.baselines import get_baselines
+from mini_quant_fund.ml.baselines import get_baselines
 
 
 class TestClassicalBaselines:

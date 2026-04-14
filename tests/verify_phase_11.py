@@ -26,7 +26,7 @@ class TestPhase11Components(unittest.TestCase):
     def test_hmm_predictor(self):
         """Test Hidden Markov Model predictor."""
         print("\n[TEST] HMM Predictor...")
-        from ml.hmm_predictor import get_hmm_predictor, MarketState
+        from mini_quant_fund.ml.hmm_predictor import get_hmm_predictor, MarketState
 
         hmm = get_hmm_predictor()
         hmm.fit(self.returns)
@@ -42,7 +42,7 @@ class TestPhase11Components(unittest.TestCase):
     def test_kernel_features(self):
         """Test kernel feature transformation."""
         print("\n[TEST] Kernel Features...")
-        from ml.kernel_features import KernelFeatureTransformer, KernelPCA
+        from mini_quant_fund.ml.kernel_features import KernelFeatureTransformer, KernelPCA
 
         # Test transformer
         X = np.random.randn(100, 5)
@@ -62,7 +62,7 @@ class TestPhase11Components(unittest.TestCase):
     def test_rl_agent(self):
         """Test RL trading agent."""
         print("\n[TEST] RL Trading Agent...")
-        from ml.rl_trading_agent import get_rl_agent
+        from mini_quant_fund.ml.rl_trading_agent import get_rl_agent
 
         agent = get_rl_agent()
         state = np.random.randn(20)
@@ -78,7 +78,7 @@ class TestPhase11Components(unittest.TestCase):
     def test_kelly_optimizer(self):
         """Test Kelly criterion optimizer."""
         print("\n[TEST] Kelly Optimizer...")
-        from portfolio.kelly_optimizer import get_kelly_optimizer
+        from mini_quant_fund.portfolio.kelly_optimizer import get_kelly_optimizer
 
         kelly = get_kelly_optimizer()
 
@@ -99,7 +99,7 @@ class TestPhase11Components(unittest.TestCase):
     def test_market_neutral(self):
         """Test market neutral constructor."""
         print("\n[TEST] Market Neutral...")
-        from portfolio.market_neutral import get_market_neutral_constructor
+        from mini_quant_fund.portfolio.market_neutral import get_market_neutral_constructor
 
         constructor = get_market_neutral_constructor()
 
@@ -117,7 +117,7 @@ class TestPhase11Components(unittest.TestCase):
     def test_risk_parity(self):
         """Test risk parity optimizer."""
         print("\n[TEST] Risk Parity...")
-        from portfolio.risk_parity import get_risk_parity_optimizer
+        from mini_quant_fund.portfolio.risk_parity import get_risk_parity_optimizer
 
         optimizer = get_risk_parity_optimizer()
 
@@ -139,7 +139,7 @@ class TestPhase11Components(unittest.TestCase):
     def test_volatility_arb(self):
         """Test volatility arbitrage."""
         print("\n[TEST] Volatility Arb...")
-        from strategies.volatility_arb import get_volatility_arb
+        from mini_quant_fund.strategies.volatility_arb import get_volatility_arb
 
         vol_arb = get_volatility_arb()
 
@@ -153,7 +153,7 @@ class TestPhase11Components(unittest.TestCase):
     def test_event_driven(self):
         """Test event-driven alpha."""
         print("\n[TEST] Event-Driven Alpha...")
-        from strategies.event_driven import get_event_driven_alpha
+        from mini_quant_fund.strategies.event_driven import get_event_driven_alpha
 
         engine = get_event_driven_alpha()
 
@@ -170,7 +170,7 @@ class TestPhase11Components(unittest.TestCase):
     def test_deep_ensemble(self):
         """Test deep learning ensemble."""
         print("\n[TEST] Deep Ensemble...")
-        from ml.deep_ensemble import get_deep_ensemble
+        from mini_quant_fund.ml.deep_ensemble import get_deep_ensemble
 
         ensemble = get_deep_ensemble()
 
@@ -211,7 +211,7 @@ class TestPhase11Components(unittest.TestCase):
     def test_ultra_fast_router(self):
         """Test ultra-fast router."""
         print("\n[TEST] Ultra-Fast Router...")
-        from execution.ultra_fast_router import get_ultra_fast_router, OrderType
+        from mini_quant_fund.execution.ultra_fast_router import get_ultra_fast_router, OrderType
         import time
 
         router = get_ultra_fast_router()

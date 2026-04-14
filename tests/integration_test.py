@@ -21,9 +21,9 @@ def test_alternative_data_pipeline():
     print("PHASE 1: Alternative Data Integration")
     print("="*60)
 
-    from alternative_data.integrations.credit_card_adapter import CreditCardAdapter
-    from alternative_data.integrations.geolocation_adapter import GeolocationAdapter
-    from alternative_data.integrations.satellite_adapter import SatelliteAdapter
+    from mini_quant_fund.alternative_data.integrations.credit_card_adapter import CreditCardAdapter
+    from mini_quant_fund.alternative_data.integrations.geolocation_adapter import GeolocationAdapter
+    from mini_quant_fund.alternative_data.integrations.satellite_adapter import SatelliteAdapter
 
     # Test satellite data
     satellite = SatelliteAdapter()
@@ -53,9 +53,9 @@ def test_derivatives_trading():
     print("PHASE 1: Derivatives & Options Engine")
     print("="*60)
 
-    from derivatives.exotic_options import BarrierOption, price_barrier_option
-    from derivatives.volatility_surface import OptionQuote, SABRModel, VolatilitySurface
-    from strategies.delta_hedging import DeltaHedgingStrategy, OptionPosition
+    from mini_quant_fund.derivatives.exotic_options import BarrierOption, price_barrier_option
+    from mini_quant_fund.derivatives.volatility_surface import OptionQuote, SABRModel, VolatilitySurface
+    from mini_quant_fund.strategies.delta_hedging import DeltaHedgingStrategy, OptionPosition
 
     # Test SABR calibration
     sabr = SABRModel(alpha=0.25, beta=0.5, rho=-0.3, nu=0.4)
@@ -89,7 +89,7 @@ def test_multi_asset_trading():
     print("PHASE 1: Multi-Asset Global Trading")
     print("="*60)
 
-    from brokers.ib_broker import FuturesRollCalendar, IBBrokerAdapter
+    from mini_quant_fund.brokers.ib_broker import FuturesRollCalendar, IBBrokerAdapter
 
     # Test IB broker
     broker = IBBrokerAdapter()
@@ -123,7 +123,7 @@ def test_hft_infrastructure():
 
     import time
 
-    from hft.low_latency_engine import (
+    from mini_quant_fund.hft.low_latency_engine import (
         CoLocationSimulator,
         FPGATickProcessor,
         HFTAlphaModel,
@@ -164,7 +164,7 @@ def test_advanced_risk():
     print("PHASE 2: Advanced Risk Modeling")
     print("="*60)
 
-    from risk.advanced_risk_models import (
+    from mini_quant_fund.risk.advanced_risk_models import (
         ExtremeValueTheory,
         NetworkContagionModel,
         StressTestingFramework,
@@ -243,8 +243,8 @@ def test_quantum_and_market_making():
     print("PHASE 3: Quantum Finance & Market Making")
     print("="*60)
 
-    from quantum.quantum_finance import QuantumPortfolioOptimizer
-    from strategies.market_making.advanced_mm import (
+    from mini_quant_fund.quantum.quantum_finance import QuantumPortfolioOptimizer
+    from mini_quant_fund.strategies.market_making.advanced_mm import (
         AdverseSelectionProtection,
         InventoryManagementModel,
     )

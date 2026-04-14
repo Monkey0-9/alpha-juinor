@@ -1,6 +1,6 @@
 
 import pytest
-from governance.execution_decision import decide_execution
+from mini_quant_fund.governance.execution_decision import decide_execution
 
 @pytest.fixture
 def default_config():

@@ -6,11 +6,11 @@ import shutil
 import os
 import json
 from unittest.mock import MagicMock
-from orchestration.cycle_orchestrator import CycleOrchestrator
-from meta_intelligence.pm_brain import PMBrain
-from data_intelligence.confidence_agent import ConfidenceAgent
-from data_intelligence.quality_agent import QualityAgent
-from risk.cvar import CVaRGate
+from mini_quant_fund.orchestration.cycle_orchestrator import CycleOrchestrator
+from mini_quant_fund.meta_intelligence.pm_brain import PMBrain
+from mini_quant_fund.data_intelligence.confidence_agent import ConfidenceAgent
+from mini_quant_fund.data_intelligence.quality_agent import QualityAgent
+from mini_quant_fund.risk.cvar import CVaRGate
 
 class TestInstitutionalCompleteness(unittest.TestCase):
     def setUp(self):

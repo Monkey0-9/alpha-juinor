@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from database.manager import DatabaseManager
+from mini_quant_fund.database.manager import DatabaseManager
 
 st.set_page_config(layout="wide", page_title="Institutional Data Governance Dashboard")
 

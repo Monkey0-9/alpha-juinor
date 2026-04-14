@@ -53,8 +53,8 @@ def test_broker_compatibility():
     logger.info("=" * 70)
 
     try:
-        from brokers.alpaca_broker import AlpacaExecutionHandler
-        from brokers.mock_broker import MockBroker
+        from mini_quant_fund.brokers.alpaca_broker import AlpacaExecutionHandler
+        from mini_quant_fund.brokers.mock_broker import MockBroker
 
         # Test MockBroker
         logger.info("  Testing MockBroker...")
@@ -85,7 +85,7 @@ def test_execution_methods():
     logger.info("=" * 70)
 
     try:
-        from orchestration.live_decision_loop import LiveDecisionLoop
+        from mini_quant_fund.orchestration.live_decision_loop import LiveDecisionLoop
 
         # Check methods exist
         methods = {
@@ -123,7 +123,7 @@ def test_signal_to_order_conversion():
     logger.info("=" * 70)
 
     try:
-        from orchestration.live_decision_loop import LiveDecisionLoop, LiveSignal
+        from mini_quant_fund.orchestration.live_decision_loop import LiveDecisionLoop, LiveSignal
 
         # Create test loop
         loop = LiveDecisionLoop(
@@ -194,7 +194,7 @@ def test_order_execution():
     logger.info("=" * 70)
 
     try:
-        from orchestration.live_decision_loop import LiveDecisionLoop
+        from mini_quant_fund.orchestration.live_decision_loop import LiveDecisionLoop
 
         # Create test loop
         loop = LiveDecisionLoop(

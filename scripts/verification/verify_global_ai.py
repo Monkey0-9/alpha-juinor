@@ -1,7 +1,7 @@
-from core.global_session_tracker import get_global_session_tracker
-from data.edgar.scraper import EdgarScraper
-from research.network_analyzer import get_network_analyzer
-from alpha.network_alpha import get_network_alpha
+from mini_quant_fund.core.global_session_tracker import get_global_session_tracker
+from mini_quant_fund.data.edgar.scraper import EdgarScraper
+from mini_quant_fund.research.network_analyzer import get_network_analyzer
+from mini_quant_fund.alpha.network_alpha import get_network_alpha
 from control.rl_meta_controller import get_rl_controller
 import logging
 

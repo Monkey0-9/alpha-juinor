@@ -4,8 +4,8 @@ tests/ingest/test_atomic_ingest.py
 import unittest
 import os
 import sqlite3
-from database.manager import DatabaseManager
-from database.schema import DailyPriceRecord, IngestionAuditRecord
+from mini_quant_fund.database.manager import DatabaseManager
+from mini_quant_fund.database.schema import DailyPriceRecord, IngestionAuditRecord
 
 class TestAtomicIngest(unittest.TestCase):
     def setUp(self):
@@ -32,6 +32,7 @@ class TestAtomicIngest(unittest.TestCase):
         prices = [{
             "symbol": "TEST_ATOMIC", "date": "2025-01-01",
             "open": 100, "high":105, "low":95, "close":102, "volume":1000,
+            "adjusted_close": 102, "vwap": 100.5, "trade_count": 500,
             "provider":"test", "ingestion_timestamp":"2025-01-01", "raw_hash":"test"
         }]
         audit = {
@@ -60,6 +61,7 @@ class TestAtomicIngest(unittest.TestCase):
         prices = [{
             "symbol": "TEST_FAIL", "date": "2025-01-01",
             "open": 100, "high":105, "low":95, "close":102, "volume":1000,
+            "adjusted_close": 102, "vwap": 100.5, "trade_count": 500,
             "provider":"test", "ingestion_timestamp":"2025-01-01", "raw_hash":"test"
         }]
 

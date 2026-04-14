@@ -4,14 +4,14 @@ import numpy as np
 import os
 import sys
 from unittest.mock import MagicMock, patch
-from alpha_families.agent_runner import run_agent
-from alpha_families.statistical_alpha import StatisticalAlpha
-from data.collectors.data_router import DataRouter
+from mini_quant_fund.alpha_families.agent_runner import run_agent
+from mini_quant_fund.alpha_families.statistical_alpha import StatisticalAlpha
+from mini_quant_fund.data.collectors.data_router import DataRouter
 
 # 1. Pre-flight exit checks
 def test_preflight_exit():
     # We can't easily test sys.exit(1) without a subprocess or catching SystemExit
-    from ops.checklists import PreFlightChecklist
+    from mini_quant_fund.ops.checklists import PreFlightChecklist
     with patch.dict(os.environ, {}, clear=True):
         with pytest.raises(SystemExit) as excinfo:
             PreFlightChecklist.run_checks()
