@@ -1,0 +1,22 @@
+[
+  {
+    "test": "Market Impact Model",
+    "status": "PASSED",
+    "duration": 0.005585
+  },
+  {
+    "test": "Smart Order Router",
+    "status": "PASSED",
+    "duration": 0.004792
+  },
+  {
+    "test": "Multi-Asset Trading",
+    "status": "PASSED",
+    "duration": 0.00413
+  },
+  {
+    "test": "Integrated Execution",
+    "status": "PASSED",
+    "duration": 0.001994
+  }
+]

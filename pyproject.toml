@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mini-quant-fund"
+name = "nexus-core"
 version = "0.2.0"
-description = "Institutional-grade quantitative investment engine"
+description = "Institutional-grade heterogeneous execution and quant platform"
 authors = [{name = "Antigravity", email = "antigravity@deepmind.com"}]
 readme = "README.md"
 requires-python = ">=3.9"
@@ -121,7 +121,7 @@ force_single_line = false
 where = ["src"]
 
 [tool.coverage.run]
-source = ["mini_quant_fund"]
+source = ["nexus"]
 omit = ["tests/*", "*/__pycache__/*"]
 
 [tool.coverage.report]

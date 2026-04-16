@@ -28,6 +28,13 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass, asdict
 from enum import Enum
 
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -208,7 +215,7 @@ class TradingSystemDiagnostics:
     def _check_dependencies(self):
         """Check critical Python dependencies."""
         required_packages = [
-            "pandas", "numpy", "scipy", "scikit-learn",
+            "pandas", "numpy", "scipy", "sklearn",
             "yfinance", "requests", "sqlalchemy"
         ]
         
@@ -386,7 +393,7 @@ class TradingSystemDiagnostics:
         """Verify broker configurations are accessible."""
         try:
             sys.path.insert(0, str(self.project_root / "src"))
-            from mini_quant_fund.brokers.alpaca_broker import AlpacaBroker
+            from mini_quant_fund.brokers.alpaca_broker import AlpacaExecutionHandler as AlpacaBroker
             from mini_quant_fund.brokers.mock_broker import MockBroker
             
             brokers_available = {
@@ -518,8 +525,12 @@ class TradingSystemDiagnostics:
         try:
             sys.path.insert(0, str(self.project_root / "src"))
             from mini_quant_fund.governance.lifecycle_manager import LifecycleManager
+            from mini_quant_fund.database.manager import DatabaseManager
+            from mini_quant_fund.data.collectors.data_router import DataRouter
             
-            lm = LifecycleManager()
+            db = DatabaseManager()
+            router = DataRouter()
+            lm = LifecycleManager(db_manager=db, data_router=router)
             
             self.checks.append(DiagnosticCheck(
                 name="Risk Gates",
@@ -687,11 +698,11 @@ class TradingSystemDiagnostics:
         # Print detailed results
         for check in self.checks:
             icon = {
-                CheckStatus.PASS: "✅",
-                CheckStatus.FAIL: "❌",
-                CheckStatus.WARN: "⚠️",
-                CheckStatus.SKIP: "⏭️"
-            }.get(check.status, "❓")
+                CheckStatus.PASS: "[OK]",
+                CheckStatus.FAIL: "[FAIL]",
+                CheckStatus.WARN: "[WARN]",
+                CheckStatus.SKIP: "[SKIP]"
+            }.get(check.status, "[?]")
             
             logger.info(f"{icon} {check.name}: {check.message}")
         
@@ -701,12 +712,12 @@ class TradingSystemDiagnostics:
         logger.info("-" * 80)
         
         if failed > 0:
-            logger.info("STATUS: ❌ CRITICAL ISSUES FOUND - DO NOT TRADE")
+            logger.info("STATUS: [FAIL] CRITICAL ISSUES FOUND - DO NOT TRADE")
             logger.info("Run with --fix flag to auto-fix issues where possible")
         elif warnings > 0:
-            logger.info("STATUS: ⚠️ WARNINGS ONLY - TRADING POSSIBLE BUT SUBOPTIMAL")
+            logger.info("STATUS: [WARN] WARNINGS ONLY - TRADING POSSIBLE BUT SUBOPTIMAL")
         else:
-            logger.info("STATUS: ✅ ALL SYSTEMS READY FOR TRADING")
+            logger.info("STATUS: [OK] ALL SYSTEMS READY FOR TRADING")
         
         logger.info("=" * 80)
         
