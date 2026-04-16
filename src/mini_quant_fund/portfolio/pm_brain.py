@@ -12,8 +12,8 @@ import numpy as np
 import pandas as pd
 
 from mini_quant_fund.alpha_families.normalization import AlphaNormalizer
-from contracts.allocation import RejectedAsset
-from contracts.alpha_model import AlphaOutput
+from mini_quant_fund.contracts.allocation import RejectedAsset
+from mini_quant_fund.contracts.alpha_model import AlphaOutput
 from mini_quant_fund.risk.quantum.entanglement_detector import EntanglementDetector
 from mini_quant_fund.risk.quantum.state_space import RegimeStateSpace
 

@@ -8,8 +8,8 @@ from typing import List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 
-from contracts import DecisionRecord
-# from contracts import Decision, decision_enum # Removed/Replaced
+from mini_quant_fund.contracts import DecisionRecord
+# from mini_quant_fund.contracts import Decision, decision_enum # Removed/Replaced
 from mini_quant_fund.orchestration.symbol_worker import SymbolWorker
 from mini_quant_fund.data.universe_manager import UnifiedUniverseManager
 from mini_quant_fund.data.collectors.data_router import DataRouter

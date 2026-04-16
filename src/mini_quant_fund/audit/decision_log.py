@@ -9,7 +9,7 @@ from typing import Any, Dict
 
 import pandas as pd
 
-from contracts import DecisionRecord
+from mini_quant_fund.contracts import DecisionRecord
 
 logger = logging.getLogger(__name__)
 

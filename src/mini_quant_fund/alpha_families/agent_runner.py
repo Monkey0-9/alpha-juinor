@@ -43,7 +43,7 @@ def run_agent(agent: Any, *args, **kwargs) -> Dict[str, Any]:
         # Elite-Tier Upgrade: Enforce AlphaDistribution Contract
         # Elite-Tier Upgrade: Enforce AlphaDistribution Contract
         try:
-            from contracts import AlphaDistribution
+            from mini_quant_fund.contracts import AlphaDistribution
             from mini_quant_fund.alpha_families.normalization import AlphaNormalizer
 
             normalizer = AlphaNormalizer()

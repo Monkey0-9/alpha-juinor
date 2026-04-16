@@ -5,7 +5,7 @@ import pandas as pd
 import time
 from typing import List, Dict, Any, Optional
 from enum import Enum
-from contracts import DecisionRecord, OrderInfo, AllocationRequest
+from mini_quant_fund.contracts import DecisionRecord, OrderInfo, AllocationRequest
 from mini_quant_fund.data.collectors.data_router import DataRouter
 from mini_quant_fund.data_intelligence.quality_agent import QualityAgent
 from mini_quant_fund.data_intelligence.confidence_agent import ConfidenceAgent

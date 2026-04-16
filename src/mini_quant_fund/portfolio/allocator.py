@@ -1,5 +1,5 @@
 from mini_quant_fund.portfolio.capital_auction import CapitalAuctionEngine
-from contracts import AllocationRequest
+from mini_quant_fund.contracts import AllocationRequest
 from typing import Dict, Any, Optional, List
 import pandas as pd
 import numpy as np

@@ -2,7 +2,7 @@
 from typing import Dict, Any, List
 from abc import ABC, abstractmethod
 import pandas as pd
-from contracts import AgentResult
+from mini_quant_fund.contracts import AgentResult
 
 class BaseAgent(ABC):
     """

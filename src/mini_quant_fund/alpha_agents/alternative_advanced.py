@@ -1,7 +1,7 @@
 
 import numpy as np
 import pandas as pd
-from contracts import BaseAgent, AgentResult
+from mini_quant_fund.contracts import BaseAgent, AgentResult
 
 # --- ALTERNATIVE ---
 

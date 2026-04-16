@@ -17,7 +17,7 @@ import pandas as pd
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 
-from contracts.allocation import AllocationRequest
+from mini_quant_fund.contracts.allocation import AllocationRequest
 
 logger = logging.getLogger("CAPITAL_COMPETITION")
 

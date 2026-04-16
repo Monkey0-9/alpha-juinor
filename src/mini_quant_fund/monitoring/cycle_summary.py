@@ -6,8 +6,8 @@ Provides structured, readable summary of cycle execution.
 import logging
 from typing import List, Dict, Any
 from collections import Counter
-from contracts import DecisionRecord
-# from contracts import Decision, decision_enum # Removed
+from mini_quant_fund.contracts import DecisionRecord
+# from mini_quant_fund.contracts import Decision, decision_enum # Removed
 
 logger = logging.getLogger(__name__)
 

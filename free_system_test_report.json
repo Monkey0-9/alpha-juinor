@@ -1,0 +1,137 @@
+{
+  "test_summary": {
+    "total_tests": 11,
+    "passed_tests": 11,
+    "failed_tests": 0,
+    "success_rate": 100.0,
+    "elapsed_time": 3.282811164855957,
+    "timestamp": "2026-04-15T21:27:01.094880"
+  },
+  "test_results": {
+    "FPGA Components": {
+      "status": "PASSED",
+      "message": "All FPGA components present",
+      "files": [
+        "fpga/rtl/order_book.vhd",
+        "fpga/rtl/matching_engine.vhd",
+        "fpga/rtl/pcie_dma.vhd",
+        "fpga/rtl/eth_mac.vhd",
+        "fpga/rtl/top_level.vhd"
+      ],
+      "elapsed_time": 0.0
+    },
+    "Python Greeks Calculator": {
+      "status": "PASSED",
+      "single_greeks": {
+        "delta": 0.7542524951860263,
+        "gamma": 0.03148797683362462,
+        "theta": -0.026529148962040765,
+        "vega": 0.1574398841681231,
+        "rho": 16.92772002209977
+      },
+      "batch_size": 3,
+      "portfolio_delta": 44.28413427547953,
+      "elapsed_time": 0.34473538398742676
+    },
+    "Free Satellite Data": {
+      "status": "PASSED",
+      "data_sources": [
+        "NASA_MODIS",
+        "ESA_Sentinel2",
+        "USGS_Landsat",
+        "OpenStreetMap"
+      ],
+      "avg_yoy_growth": 0.06357802167277385,
+      "num_sources": 4,
+      "elapsed_time": 0.301105260848999
+    },
+    "Free Alternative Data": {
+      "status": "PASSED",
+      "data_sources": [
+        "Federal_Reserve_FRED",
+        "Public_Economic_Data",
+        "Social_Media_Sentiment",
+        "Job_Postings_Web_Data",
+        "News_Sentiment_Analysis"
+      ],
+      "composite_sentiment_score": 0.3194613510884102,
+      "composite_growth_rate": -0.24603332776974704,
+      "elapsed_time": 0.0027294158935546875
+    },
+    "Free Market Data": {
+      "status": "PASSED",
+      "quote_data": {
+        "symbol": "AAPL",
+        "price": 264.4700012207031,
+        "volume": 18137014,
+        "sources": [
+          "Alpha_Vantage_Mock",
+          "Yahoo_Finance"
+        ]
+      },
+      "historical_data_available": true,
+      "elapsed_time": 1.5559923648834229
+    },
+    "Alpha Factory": {
+      "status": "PASSED",
+      "expressions_tested": 3,
+      "results": {
+        "(close - ts_mean(close, 20)) / ts_std(close, 20)": {
+          "success": true,
+          "signal_length": 100,
+          "signal_mean": -0.5130046353956774,
+          "signal_std": 1.335089676785224
+        },
+        "rank(close - ts_mean(close, 10))": {
+          "success": true,
+          "signal_length": 100,
+          "signal_mean": 0.5054945054945055,
+          "signal_std": 0.29025692799498215
+        },
+        "ts_delta(close, 1) / ts_std(close, 20)": {
+          "success": true,
+          "signal_length": 100,
+          "signal_mean": -0.07788580466267779,
+          "signal_std": 0.5669101805294947
+        }
+      },
+      "elapsed_time": 1.0630419254302979
+    },
+    "Execution Algorithms": {
+      "status": "PASSED",
+      "vwap_slices": 8,
+      "twap_slices": 240,
+      "elapsed_time": 0.004190206527709961
+    },
+    "ETF Arbitrage": {
+      "status": "PASSED",
+      "arbitrage_action": "create",
+      "expected_profit": 1794.017946161544,
+      "premium_discount": 0.001994017946161544,
+      "elapsed_time": 0.001161336898803711
+    },
+    "Risk Management": {
+      "status": "PASSED",
+      "test_cases": 4,
+      "rejected_count": 2,
+      "validation_rate": 0.5,
+      "elapsed_time": 0.0026636123657226562
+    },
+    "Free Broker Integration": {
+      "status": "PASSED",
+      "broker_type": "paper_trading",
+      "initial_capital": 1000000.0,
+      "total_value": 1000196.4908273558,
+      "total_return_pct": 0.019649082735576667,
+      "elapsed_time": 0.0
+    },
+    "Performance Benchmarks": {
+      "status": "PASSED",
+      "single_calc_avg_ms": 0.0003307,
+      "batch_1000_calc_ms": 1.135,
+      "performance_ratio": 3.4321136982159057,
+      "elapsed_time": 0.004441738128662109
+    }
+  },
+  "system_status": "OPERATIONAL"
+}

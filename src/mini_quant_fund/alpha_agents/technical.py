@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from mini_quant_fund.alpha_families.normalization import AlphaNormalizer
-from contracts import AgentResult, BaseAgent
+from mini_quant_fund.contracts import AgentResult, BaseAgent
 
 # Shared Normalizer
 normalizer = AlphaNormalizer()

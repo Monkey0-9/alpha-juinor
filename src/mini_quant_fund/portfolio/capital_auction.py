@@ -12,7 +12,7 @@ import logging
 import numpy as np
 import pandas as pd
 from typing import List, Dict, Any, Optional
-from contracts import AllocationRequest, OrderInfo
+from mini_quant_fund.contracts import AllocationRequest, OrderInfo
 from mini_quant_fund.maths.financial import fractional_kelly
 from mini_quant_fund.risk.cvar import compute_cvar
 

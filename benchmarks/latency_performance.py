@@ -1,13 +1,17 @@
+import sys
+import os
+from pathlib import Path
+
+# Ensure institutional source paths are prioritized
+project_root = Path(__file__).parent.parent.absolute()
+src_path = project_root / "src"
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
 import time
 import numpy as np
-import os
-import sys
-
-# Ensure project root is in path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from src.mini_quant_fund.options.greeks_calculator import RealTimeGreeksCalculator
-from src.mini_quant_fund.execution.algorithms.implementation_shortfall import ImplementationShortfallAlgorithm
+from mini_quant_fund.options.greeks_calculator import RealTimeGreeksCalculator
+from mini_quant_fund.execution.algorithms.implementation_shortfall import ImplementationShortfallAlgorithm
 
 def benchmark_latency():
     print("ELITE TIER LATENCY PERFORMANCE BENCHMARK")
@@ -23,13 +27,13 @@ def benchmark_latency():
     end = time.perf_counter()
     
     avg_latency = (end - start) / n_runs * 1_000_000 # Convert to us
-    print(f"    - Greeks Calculation (Python/NumPy): {avg_latency:.2f} us per call")
+    print(f"    - Greeks Calculation (Numba JIT): {avg_latency:.2f} us per call")
 
     # 2. IS Algorithm Optimization Benchmark
     is_algo = ImplementationShortfallAlgorithm()
     start = time.perf_counter()
     for _ in range(1000):
-        _ = is_algo.execute("AAPL", 10000, "buy", 0.02, 1000000)
+        _ = is_algo.execute("AAPL", 10000, "buy", 0.2, 1000000)
     end = time.perf_counter()
     
     avg_latency_is = (end - start) / 1000 * 1_000_000

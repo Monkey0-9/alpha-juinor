@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, Any, List, Optional
 import numpy as np
-from contracts import AgentResult
+from mini_quant_fund.contracts import AgentResult
 from mini_quant_fund.alpha_agents.technical import MomentumAgent, MeanReversionAgent, VolatilityAgent
 
 logger = logging.getLogger(__name__)

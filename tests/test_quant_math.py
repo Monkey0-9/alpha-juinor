@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
-from src.mini_quant_fund.options.greeks_calculator import RealTimeGreeksCalculator
-from src.mini_quant_fund.options.volatility_surface import VolatilitySurfaceEngine
+from src.options.greeks_calculator import RealTimeGreeksCalculator
+from src.options.volatility_surface import VolatilitySurfaceEngine
 
 def test_black_scholes_delta():
     calc = RealTimeGreeksCalculator()

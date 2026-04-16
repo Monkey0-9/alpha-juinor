@@ -1,52 +1,75 @@
 import numpy as np
 import pandas as pd
-from typing import Dict, Any
+from typing import Dict, Any, Union
+from numba import njit
+
+@njit
+def fast_ts_mean(x, d):
+    res = np.empty_like(x)
+    for i in range(len(x)):
+        if i < d - 1:
+            res[i] = np.nan
+        else:
+            res[i] = np.mean(x[i-d+1:i+1])
+    return res
+
+@njit
+def fast_ts_std(x, d):
+    res = np.empty_like(x)
+    for i in range(len(x)):
+        if i < d - 1:
+            res[i] = np.nan
+        else:
+            res[i] = np.std(x[i-d+1:i+1])
+    return res
 
 class AlphaDSL:
-    """Alpha Expression Language (WorldQuant Style)"""
-    
+    """Alpha Expression Language (WorldQuant Style) - Numba Accelerated"""
+
     def __init__(self, data: pd.DataFrame):
         self.data = data # Expected columns: open, high, low, close, volume, returns
-        
-    def ts_mean(self, x: pd.Series, d: int) -> pd.Series:
-        return x.rolling(window=d).mean()
-        
-    def ts_std(self, x: pd.Series, d: int) -> pd.Series:
-        return x.rolling(window=d).std()
-        
-    def rank(self, x: pd.Series) -> pd.Series:
-        return x.rank(pct=True)
-        
-    def zscore(self, x: pd.Series) -> pd.Series:
-        return (x - x.mean()) / x.std()
-        
-    def group_neutralize(self, x: pd.Series, group: pd.Series) -> pd.Series:
-        return x - x.groupby(group).transform("mean")
-        
-    def winsorize(self, x: pd.Series, pct: float) -> pd.Series:
-        lower = x.quantile(pct)
-        upper = x.quantile(1 - pct)
-        return x.clip(lower, upper)
-
-    def evaluate(self, expression: str) -> pd.Series:
-        """
-        Evaluate a string expression.
-        Simplified: this would normally be a real parser.
-        For now, we assume simple Python-like expressions using local methods.
-        """
-        # This is a dangerous implementation, but serves as a scaffold
-        # In production, use a safe AST-based parser
-        local_dict = {
+        self.raw_data = {c: data[c].values for c in data.columns}
+        self.local_dict = {
             "ts_mean": self.ts_mean,
             "ts_std": self.ts_std,
+            "ts_delta": self.ts_delta,
             "rank": self.rank,
             "zscore": self.zscore,
-            "group_neutralize": self.group_neutralize,
-            "winsorize": self.winsorize,
-            "close": self.data["close"],
-            "open": self.data["open"],
-            "high": self.data["high"],
-            "low": self.data["low"],
-            "volume": self.data["volume"]
+            "close": self.raw_data["close"],
+            "open": self.raw_data["open"],
+            "high": self.raw_data["high"],
+            "low": self.raw_data["low"],
+            "volume": self.raw_data["volume"]
         }
-        return eval(expression, {"__builtins__": None}, local_dict)
+
+    def ts_mean(self, x, d: int):
+        if isinstance(x, pd.Series): x = x.values
+        return fast_ts_mean(x, d)
+
+    def ts_std(self, x, d: int):
+        if isinstance(x, pd.Series): x = x.values
+        return fast_ts_std(x, d)
+
+    def ts_delta(self, x, d: int):
+        if isinstance(x, pd.Series): x = x.values
+        res = np.empty_like(x)
+        res[:d] = np.nan
+        res[d:] = x[d:] - x[:-d]
+        return res
+
+    def rank(self, x):
+        if isinstance(x, pd.Series): x = x.values
+        return pd.Series(x).rank(pct=True).values
+
+    def zscore(self, x):
+        if isinstance(x, pd.Series): x = x.values
+        return (x - np.nanmean(x)) / np.nanstd(x)
+
+    def evaluate(self, expression: str, return_series: bool = True) -> Union[pd.Series, np.ndarray]:
+        """
+        Evaluate a string expression.
+        """
+        res = eval(expression, {"__builtins__": None, "np": np}, self.local_dict)
+        if return_series:
+            return pd.Series(res, index=self.data.index)
+        return res

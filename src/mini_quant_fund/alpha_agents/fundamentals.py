@@ -8,7 +8,7 @@ Checks for valuation ratios (PE, PB) in input data or features.
 import numpy as np
 import pandas as pd
 from typing import Any, Dict
-from contracts import BaseAgent, AgentResult
+from mini_quant_fund.contracts import BaseAgent, AgentResult
 from mini_quant_fund.alpha_families.normalization import AlphaNormalizer
 
 # Shared Normalizer

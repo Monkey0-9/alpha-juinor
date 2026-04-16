@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 from typing import Optional, List, Any
 
-from contracts.alpha_model import AlphaOutput
+from mini_quant_fund.contracts.alpha_model import AlphaOutput
 from mini_quant_fund.ml.safe_input import align_features
 from mini_quant_fund.ml.input_schema_guard import FeatureSchemaGuard
 from mini_quant_fund.ml.governor import ModelGovernor

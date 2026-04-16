@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Tuple, Optional
 import math
 import numpy as np
 import pandas as pd
-from contracts import AgentResult, AllocationRequest
+from mini_quant_fund.contracts import AgentResult, AllocationRequest
 from mini_quant_fund.meta_intelligence.disagreement import ModelDisagreement
 from mini_quant_fund.meta_intelligence.opportunity_cost import OpportunityCostEngine
 from mini_quant_fund.meta_intelligence.bayesian_scorer import BayesianScorer
