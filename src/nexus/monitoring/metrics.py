@@ -1,78 +1,41 @@
-
-import logging
-import json
-import pandas as pd
-from datetime import datetime
+import time
 from typing import Dict, Any
-
-logger = logging.getLogger(__name__)
+from collections import deque
 
 class MetricsCollector:
     """
-    Institutional Observability Layer.
-    Tracks core KPIs and logs them in structured format for ingestion (ELK/Splunk ready).
+    In-memory metrics accumulator for real-time monitoring and statistics.
+    Provides snapshots of system health and trading performance.
     """
-    def __init__(self, log_path: str = "logs/metrics.jsonl"):
-        self.log_path = log_path
-        self._previous_equity = None
-        self._initial_capital = None
+    def __init__(self, window_size: int = 100):
+        self.window_size = window_size
+        self.latencies = deque(maxlen=window_size)
+        self.order_outcomes = {"success": 0, "failure": 0}
+        self.cumulative_pnl = 0.0
+        self.start_time = time.time()
+
+    def record_latency(self, latency_ms: float):
+        self.latencies.append(latency_ms)
+
+    def record_order(self, success: bool):
+        key = "success" if success else "failure"
+        self.order_outcomes[key] += 1
+
+    def update_pnl(self, pnl: float):
+        self.cumulative_pnl += pnl
+
+    def get_snapshot(self) -> Dict[str, Any]:
+        """Returns a snapshot of current system metrics."""
+        uptime = time.time() - self.start_time
+        avg_latency = sum(self.latencies) / len(self.latencies) if self.latencies else 0
         
-    def log_cycle(self, 
-                  timestamp: pd.Timestamp, 
-                  equity: float, 
-                  positions: Dict[str, float], 
-                  orders: list,
-                  risk_state: str,
-                  regime: str):
-        """
-        Record signals, execution, and portfolio state after a cycle.
-        """
-        if self._initial_capital is None:
-            self._initial_capital = equity
-        
-        # 1. PnL Calculation
-        daily_pnl = 0.0
-        daily_ret = 0.0
-        if self._previous_equity:
-            daily_pnl = equity - self._previous_equity
-            daily_ret = daily_pnl / self._previous_equity
-            
-        self._previous_equity = equity
-        
-        # 2. Drawdown
-        # (Simplified calculation here, typically passed from RiskEngine)
-        total_ret = (equity - self._initial_capital) / self._initial_capital
-        
-        # 3. Leverage
-        # Approximate: sum(abs(pos_value)) / equity
-        # Needs prices... we assume positions dict has quantities here? 
-        # Actually positions from handler is just Qty. We usually need value.
-        # For this lightweight logger, we just log counts.
-        
-        metrics = {
-            "timestamp": timestamp.isoformat(),
-            "nav": round(equity, 2),
-            "daily_pnl": round(daily_pnl, 2),
-            "daily_return_bps": round(daily_ret * 10000, 1),
-            "total_return_pct": round(total_ret * 100, 2),
-            "positions_count": len([p for p in positions.values() if abs(p) > 0]),
-            "orders_count": len(orders),
-            "risk_state": risk_state,
-            "market_regime": regime,
-            "leverage_utilization": "N/A" # Calculated upstream usually
+        total_orders = sum(self.order_outcomes.values())
+        success_rate = (self.order_outcomes["success"] / total_orders) if total_orders > 0 else 1.0
+
+        return {
+            "uptime_seconds": round(uptime, 2),
+            "avg_latency_ms": round(avg_latency, 4),
+            "order_success_rate": round(success_rate, 4),
+            "cumulative_pnl": round(self.cumulative_pnl, 2),
+            "total_orders": total_orders
         }
-        
-        # Structured Log Output
-        log_entry = json.dumps(metrics)
-        
-        # 1. Console (Human)
-        logger.info(f"📊 METRICS: NAV=${equity:,.0f} | Day={daily_ret:.2%} | Risk={risk_state}")
-        
-        # 2. JSONL File (Machine)
-        try:
-            with open(self.log_path, 'a') as f:
-                f.write(log_entry + "\n")
-        except Exception as e:
-            logger.error(f"Failed to write metrics: {e}")
-            
-        return metrics

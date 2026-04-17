@@ -1,81 +1,22 @@
-
-version: "3.8"
+version: '3.8'
 
 services:
-  # Main application service (Trading Engine)
-  trading-engine:
-    build:
-      context: .
-      target: runtime
-    image: quant-fund-os:latest
-    volumes:
-      - .:/app
+  nexus-engine:
+    build: .
+    container_name: nexus-engine
     environment:
-      - PYTHONPATH=/app/src
-      - DB_ENGINE=${DB_ENGINE:-sqlite}
+      - ENVIRONMENT=PRODUCTION
+      - TRADING_ENABLED=FALSE
       - ALPACA_API_KEY=${ALPACA_API_KEY}
       - ALPACA_SECRET_KEY=${ALPACA_SECRET_KEY}
-    depends_on:
-      - postgres
-    command: ["--mode", "paper"]
-    networks:
-      - quant-network
-
-  # Streamlit Dashboard
-  dashboard:
-    build:
-      context: .
-      target: runtime
-    image: quant-fund-os:latest
-    ports:
-      - "8501:8501"
     volumes:
-      - .:/app
-    environment:
-      - PYTHONPATH=/app/src
-    command: ["streamlit", "run", "src/mini_quant_fund/ui/streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
-    depends_on:
-      - trading-engine
-    networks:
-      - quant-network
+      - ./data:/app/data
+      - ./logs:/app/logs
+    command: ["--mode", "sim", "--config", "config/production.yaml"]
+    restart: unless-stopped
 
-  # TimescaleDB for metrics and history
-  postgres:
-    image: timescale/timescaledb:latest-pg15
-    environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quant_secure_pass}
-      POSTGRES_DB: quantfund
-      POSTGRES_USER: quantadmin
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    networks:
-      - quant-network
-
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./src/mini_quant_fund/infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-    networks:
-      - quant-network
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-    depends_on:
-      - prometheus
-    networks:
-      - quant-network
-
-networks:
-  quant-network:
-    driver: bridge
-
-volumes:
-  postgres_data:
+  # Placeholder for future components (e.g., Redis for inter-process communication)
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"

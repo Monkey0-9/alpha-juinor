@@ -1,43 +1,31 @@
+# Institutional-grade Dockerfile for Nexus Quant Platform
+FROM python:3.11-slim-bullseye
 
-# Multi-stage Dockerfile for Institutional Quant Fund
-# Phase 1: Build dependencies
-FROM python:3.11-slim as builder
-
-WORKDIR /build
-
-# Install build dependencies
+# System dependencies for numerical libraries
 RUN apt-get update && apt-get install -y \
-    gcc \
-    python3-dev \
+    build-essential \
+    git \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
-
-# Copy pyproject.toml and install package
-COPY pyproject.toml .
-COPY src/ src/
-RUN pip install --user --no-cache-dir .
-
-# Phase 2: Runtime
-FROM python:3.11-slim-bookworm as runtime
 
 WORKDIR /app
 
-# Copy installed packages from builder
-COPY --from=builder /root/.local /root/.local
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Ensure packages are in PATH
-ENV PATH=/root/.local/bin:$PATH
-ENV PYTHONPATH=/app/src
+# Copy source code
+COPY src/ /app/src/
+COPY main.py /app/
+COPY config/ /app/config/
+
+# Environment setup
+ENV PYTHONPATH="/app/src"
 ENV PYTHONUNBUFFERED=1
 
-# Application metadata
-LABEL maintainer="Institutional Trading Team"
-LABEL version="0.2.0"
+# Initialize local directories for data and logs
+RUN mkdir -p /app/data/parquet /app/logs
 
-# Copy application code
-COPY . .
-
-# Create necessary directories
-RUN mkdir -p output/backtests logs runtime/audit
-
-# Entrypoint to allow passing arguments to main.py
+# Run the engine
 ENTRYPOINT ["python", "main.py"]
+CMD ["--mode", "sim"]

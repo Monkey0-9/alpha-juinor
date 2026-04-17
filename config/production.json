@@ -1,0 +1,291 @@
+{
+  "market_data": {
+    "feeds": [
+      {
+        "source": "bloomberg",
+        "enabled": true,
+        "priority": 1,
+        "api_key": "${BLOOMBERG_API_KEY}",
+        "host": "bloomberg.api.com",
+        "port": 8194
+      },
+      {
+        "source": "reuters",
+        "enabled": true,
+        "priority": 2,
+        "api_key": "${REUTERS_API_KEY}",
+        "host": "reuters.api.com",
+        "port": 443
+      },
+      {
+        "source": "alpaca",
+        "enabled": true,
+        "priority": 3,
+        "api_key": "${ALPACA_API_KEY}",
+        "secret_key": "${ALPACA_SECRET_KEY}",
+        "base_url": "https://api.alpaca.markets"
+      },
+      {
+        "source": "polygon",
+        "enabled": true,
+        "priority": 4,
+        "api_key": "${POLYGON_API_KEY}",
+        "host": "api.polygon.io",
+        "port": 443
+      }
+    ],
+    "verify_data": true,
+    "quality_threshold": 0.85
+  },
+  "brokers": [
+    {
+      "type": "alpaca",
+      "enabled": true,
+      "priority": 1,
+      "api_key": "${ALPACA_API_KEY}",
+      "secret_key": "${ALPACA_SECRET_KEY}",
+      "base_url": "https://api.alpaca.markets",
+      "paper": false
+    },
+    {
+      "type": "interactive_brokers",
+      "enabled": true,
+      "priority": 2,
+      "host": "localhost",
+      "port": 7497,
+      "client_id": 1
+    }
+  ],
+  "risk_management": {
+    "position_limits": [
+      {
+        "symbol": "AAPL",
+        "asset_class": "equity",
+        "max_position": 10000,
+        "max_notional": 1500000,
+        "max_percentage": 0.10
+      },
+      {
+        "symbol": "GOOGL",
+        "asset_class": "equity",
+        "max_position": 5000,
+        "max_notional": 1000000,
+        "max_percentage": 0.08
+      },
+      {
+        "symbol": "MSFT",
+        "asset_class": "equity",
+        "max_position": 8000,
+        "max_notional": 2500000,
+        "max_percentage": 0.12
+      },
+      {
+        "symbol": "TSLA",
+        "asset_class": "equity",
+        "max_position": 3000,
+        "max_notional": 600000,
+        "max_percentage": 0.05
+      }
+    ],
+    "circuit_breakers": [
+      {
+        "name": "portfolio_drawdown",
+        "type": "drawdown_limit",
+        "threshold": 100000,
+        "action": "stop_trading",
+        "auto_reset": true,
+        "reset_minutes": 30
+      },
+      {
+        "name": "daily_loss_limit",
+        "type": "loss_limit",
+        "threshold": 50000,
+        "action": "stop_trading",
+        "auto_reset": true,
+        "reset_minutes": 60
+      },
+      {
+        "name": "price_movement",
+        "type": "price_movement",
+        "symbol": "SPY",
+        "threshold": 0.05,
+        "action": "reduce_positions",
+        "auto_reset": true,
+        "reset_minutes": 15
+      },
+      {
+        "name": "volatility_spike",
+        "type": "volatility_spike",
+        "threshold": 0.03,
+        "action": "reduce_risk",
+        "auto_reset": true,
+        "reset_minutes": 20
+      }
+    ],
+    "max_portfolio_var": 100000,
+    "max_leverage": 3.0
+  },
+  "compliance": {
+    "regulations": ["FINRA", "SEC", "MiFID_II", "AML"],
+    "reporting_schedule": {
+      "trade_reports": "hourly",
+      "position_reports": "daily",
+      "compliance_reports": "weekly"
+    },
+    "encryption_password": "${COMPLIANCE_ENCRYPTION_PASSWORD}"
+  },
+  "security": {
+    "master_password": "${SECURITY_MASTER_PASSWORD}",
+    "ssl_cert_file": "/etc/ssl/certs/miniquantfund.crt",
+    "ssl_key_file": "/etc/ssl/private/miniquantfund.key",
+    "session_timeout_hours": 8,
+    "max_failed_attempts": 5,
+    "lockout_minutes": 30
+  },
+  "high_availability": {
+    "consul": {
+      "enabled": true,
+      "host": "consul.service.consul",
+      "port": 8500
+    },
+    "etcd": {
+      "enabled": true,
+      "host": "etcd.service.consul",
+      "port": 2379
+    },
+    "redis": {
+      "enabled": true,
+      "host": "redis.service.consul",
+      "port": 6379,
+      "db": 0
+    },
+    "database": {
+      "enabled": true,
+      "host": "postgres.service.consul",
+      "port": 5432,
+      "database": "miniquantfund",
+      "user": "postgres",
+      "password": "${DB_PASSWORD}",
+      "sslmode": "require",
+      "min_connections": 5,
+      "max_connections": 20
+    },
+    "kubernetes": {
+      "enabled": true,
+      "namespace": "production"
+    },
+    "services": [
+      {
+        "name": "trading_engine",
+        "type": "http",
+        "endpoint": "/health",
+        "port": 9090
+      },
+      {
+        "name": "risk_manager",
+        "type": "http",
+        "endpoint": "/health",
+        "port": 9091
+      },
+      {
+        "name": "database",
+        "type": "database",
+        "port": 5432
+      }
+    ]
+  },
+  "monitoring": {
+    "prometheus": {
+      "enabled": true,
+      "port": 9090
+    },
+    "grafana": {
+      "enabled": true,
+      "host": "grafana.service.consul",
+      "port": 3000,
+      "auth": "${GRAFANA_AUTH}"
+    },
+    "thresholds": [
+      {
+        "metric_name": "cpu_usage",
+        "component": "trading_engine",
+        "warning_threshold": 80,
+        "critical_threshold": 90,
+        "operator": ">",
+        "duration_seconds": 300
+      },
+      {
+        "metric_name": "memory_usage",
+        "component": "trading_engine",
+        "warning_threshold": 80,
+        "critical_threshold": 90,
+        "operator": ">",
+        "duration_seconds": 300
+      },
+      {
+        "metric_name": "portfolio_var_1d",
+        "component": "risk_manager",
+        "warning_threshold": 80000,
+        "critical_threshold": 100000,
+        "operator": ">",
+        "duration_seconds": 60
+      }
+    ]
+  },
+  "deployment": {
+    "kubernetes": {
+      "namespace": "production"
+    },
+    "services": [
+      {
+        "service_name": "trading-engine",
+        "service_type": "trading_engine",
+        "environment": "production",
+        "image": "miniquantfund/trading-engine:latest",
+        "version": "4.0.0",
+        "replicas": 3,
+        "resources": {
+          "cpu": "500m",
+          "memory": "512Mi",
+          "cpu_limit": "1000m",
+          "memory_limit": "1Gi"
+        },
+        "environment_variables": {
+          "ENV": "production",
+          "LOG_LEVEL": "INFO"
+        },
+        "secrets": ["database_password", "api_keys"],
+        "volumes": [
+          {
+            "name": "logs",
+            "type": "persistent_volume_claim",
+            "claim_name": "logs-pvc",
+            "mount_path": "/app/logs"
+          }
+        ],
+        "health_checks": {
+          "liveness": {
+            "httpGet": {
+              "path": "/health",
+              "port": 9090
+            },
+            "initialDelaySeconds": 30,
+            "periodSeconds": 10
+          },
+          "readiness": {
+            "httpGet": {
+              "path": "/ready",
+              "port": 9090
+            },
+            "initialDelaySeconds": 5,
+            "periodSeconds": 5
+          }
+        }
+      }
+    ]
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  }
+}

@@ -1,11 +1,11 @@
 import time
 import functools
 import numpy as np
-import logging
 from typing import Dict, List, Optional
 from collections import defaultdict
+from ..core.enterprise_logger import get_enterprise_logger
 
-logger = logging.getLogger("Profiler")
+logger = get_enterprise_logger("profiler")
 
 class LatencyProfiler:
     """
@@ -40,13 +40,16 @@ class LatencyProfiler:
     def reset(self):
         self.metrics.clear()
 
-    def report(self):
         logger.info("--- Institutional Latency Report (ms) ---")
         for component in sorted(self.metrics.keys()):
             stats = self.get_stats(component)
             logger.info(
-                f"{component: <25} | count: {stats['count']: <4} | "
-                f"p50: {stats['p50']: >8.2f} | p95: {stats['p95']: >8.2f} | p99: {stats['p99']: >8.2f}"
+                f"LtncyReport: {component}",
+                component=component,
+                count=stats['count'],
+                p50_ms=round(stats['p50'], 4),
+                p95_ms=round(stats['p95'], 4),
+                p99_ms=round(stats['p99'], 4)
             )
 
 def profile_ns(component: str):

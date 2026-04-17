@@ -1,9 +1,0 @@
-{
-  "ticker": "LMT",
-  "start_date": "2020-01-01",
-  "end_date": "2026-04-11",
-  "data_type": "ohlcv",
-  "cached_at": "2026-04-11T22:10:23.774232",
-  "rows": 1576,
-  "ttl_hours": 24.0
-}

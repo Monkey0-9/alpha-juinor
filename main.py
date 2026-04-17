@@ -1,87 +1,67 @@
 #!/usr/bin/env python3
 """
-Nexus Core - Research and Execution Orchestrator
-Initializes the heterogeneous compute environment, connecting the C++ hot-path,
-Rust ledger, and Python stochastic modeling engine via lock-free shared memory arrays.
+Nexus Quant Platform - Institutional Entry Point
+================================================
+Standardized entry point for historical research, backtesting, and live execution.
 """
 
 import argparse
 import sys
 import os
-import time
+import signal
+from pathlib import Path
 
-# Add src directory to PYTHONPATH so it can locate internal packages
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
+# Ensure src is in the path
+sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-# Attempt to bind the native C++/Rust extensions. 
-# If not compiled via Bazel, we fallback to the pure-python stochastic simulator.
-try:
-    # In a fully compiled environment, this imports the pybind11/maturin artifacts
-    import nexus_native_core 
-    NATIVE_BINDINGS_ACTIVE = True
-except ImportError:
-    NATIVE_BINDINGS_ACTIVE = False
+from nexus.core.context import engine_context
 
-def _set_thread_affinity(core_id: int):
-    """Pin the Python orchestrator to a specific core to prevent OS jitter."""
-    try:
-        p = os.getpid()
-        os.sched_setaffinity(p, {core_id})
-        return True
-    except AttributeError:
-        # Windows or unsupported OS (fails gracefully)
-        return False
+def handle_shutdown(signum, frame):
+    """Graceful shutdown handler."""
+    engine_context.logger.info("Shutdown signal received")
+    engine_context.set_running(False)
+    sys.exit(0)
 
 def main():
-    parser = argparse.ArgumentParser(description="Nexus Heterogeneous Research Core")
-    parser.add_argument("--mode", type=str, choices=["backtest", "sim", "prod"], default="sim",
-                        help="Execution mode (sim uses zero-copy market replay)")
-    parser.add_argument("--config", type=str, default="config/hyperparameters.yaml",
-                        help="Path to stochastic hyperparameters and structural config")
-    parser.add_argument("--core", type=int, default=0,
-                        help="CPU core ID to pin the Python orchestration thread")
+    parser = argparse.ArgumentParser(description="Nexus Institutional Quant Platform")
+    parser.add_argument("--mode", type=str, choices=["backtest", "live", "sim"], default="sim",
+                        help="Execution mode")
+    parser.add_argument("--config", type=str, help="Path to config file")
     
     args = parser.parse_args()
     
-    print("\n" + "="*65)
-    print("      NEXUS CORE - HETEROGENEOUS EXECUTION ENVIRONMENT")
-    print("="*65 + "\n")
-
-    # Isolate CPU thread for low jitter
-    affinity_set = _set_thread_affinity(args.core)
-    if affinity_set:
-        print(f"[SYSTEM] Orchestrator thread pinned to CPU core {args.core} (0-jitter mode).")
-    else:
-        print(f"[SYSTEM] Strict thread affinity bypassed (OS limitation). Running standard scheduler.")
-
-    if not NATIVE_BINDINGS_ACTIVE:
-        print("[WARN] Native C++/Rust bindings (nexus_native_core) not detected.")
-        print("[WARN] Bypassing EFVI/DPDK kernel-bypass. Falling back to software simulation mode.")
-
-    print(f"\n[INIT] Launching Orchestrator in {args.mode.upper()} mode...")
-    time.sleep(0.5)
-    print("[INIT] Allocating hugepages (`memfd`) for lock-free MPSC ring buffers...")
-    time.sleep(0.5)
-    print("[INIT] Initializing Neuromorphic Spiking Neural Network (SNN) event loops...")
-    time.sleep(0.5)
-    print("[INIT] Calibrating to hardware PTP grandmaster clock (IEEE 1588)...")
-    time.sleep(0.5)
-    print("[INIT] Compiling JAX Fisher Information Matrix (FIM) gradients (JIT)...")
-    time.sleep(0.8)
+    # Register signals
+    signal.signal(signal.SIGINT, handle_shutdown)
+    signal.signal(signal.SIGTERM, handle_shutdown)
     
-    print("\n[READY] Nexus Stochastic Tensor Engine is ONLINE.")
-    print("[READY] Subsystem listening on primary multicast interface...")
-    print("[READY] (Press Ctrl+C to initiate safe shutdown sequence)\n")
+    # Initialize Engine
+    engine_context.logger.info("Initializing Nexus Quant Platform Engine...")
     
+    # Start Engine
+    engine_context.set_running(True)
+    
+    # Placeholder for Engine Loop (Phase 1-5 will populate this with actual components)
     try:
-        # Simulate the main event loop keeping the orchestrator alive
-        while True:
+        if args.mode == "backtest":
+            engine_context.logger.info("Backtest mode initialized. Ready for research phase.")
+        elif args.mode == "sim":
+            engine_context.logger.info("Market simulation mode active.")
+        elif args.mode == "live":
+            # Extra safety check for live mode
+            if not engine_context.config.trading_enabled:
+                engine_context.logger.fatal("TRADING_ENABLED is False in config. Cannot start live mode.")
+                sys.exit(1)
+            engine_context.logger.warn("LIVE TRADING MODE INITIALIZED. EXECUTING IN PRODUCTION ENVIRONMENT.")
+            
+        # Keep engine alive if needed or run a specific task
+        # For now, we wait for a signal
+        import time
+        while engine_context.engine_state["is_running"]:
             time.sleep(1)
-    except KeyboardInterrupt:
-        print("\n[SHUTDOWN] Interrupt received. Flushing zero-copy ring buffers...")
-        time.sleep(0.3)
-        print("[SHUTDOWN] Detaching from NIC and releasing hardware locks. Goodbye.")
-        sys.exit(0)
+            
+    except Exception as e:
+        engine_context.logger.fatal(f"System failure: {e}", exc_info=True)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
