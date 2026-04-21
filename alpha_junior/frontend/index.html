@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpha Junior - Fund Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0a0f1e 0%, #1a1f2e 100%);
+            color: #fff;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* Header */
+        header {
+            background: rgba(10, 15, 30, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+        }
+        
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+        }
+        
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        
+        .logo span {
+            color: #4F46E5;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+        
+        .nav-links a {
+            color: #9ca3af;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        
+        .nav-links a:hover {
+            color: #fff;
+        }
+        
+        /* Hero */
+        .hero {
+            padding: 150px 0 80px;
+            text-align: center;
+        }
+        
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, #fff 0%, #4F46E5 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .hero p {
+            font-size: 1.25rem;
+            color: #9ca3af;
+            max-width: 600px;
+            margin: 0 auto 2rem;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.875rem 2rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s;
+            cursor: pointer;
+            border: none;
+        }
+        
+        .btn-primary {
+            background: #4F46E5;
+            color: #fff;
+        }
+        
+        .btn-primary:hover {
+            background: #4338CA;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
+        }
+        
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            margin-left: 1rem;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        
+        /* Stats */
+        .stats {
+            background: rgba(255,255,255,0.02);
+            padding: 60px 0;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2rem;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #fff;
+        }
+        
+        .stat-value.gold {
+            color: #F59E0B;
+        }
+        
+        .stat-label {
+            color: #6b7280;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+        
+        /* Features */
+        .features {
+            padding: 80px 0;
+        }
+        
+        .features h2 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 3rem;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+        }
+        
+        .feature-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            transition: all 0.3s;
+        }
+        
+        .feature-card:hover {
+            border-color: #4F46E5;
+            transform: translateY(-5px);
+        }
+        
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            background: rgba(79, 70, 229, 0.1);
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+        
+        .feature-card h3 {
+            font-size: 1.125rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .feature-card p {
+            color: #6b7280;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+        
+        /* CTA */
+        .cta {
+            padding: 80px 0;
+            text-align: center;
+            background: linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, transparent 50%);
+        }
+        
+        .cta h2 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+        
+        .cta p {
+            color: #6b7280;
+            margin-bottom: 2rem;
+        }
+        
+        /* Footer */
+        footer {
+            border-top: 1px solid rgba(255,255,255,0.05);
+            padding: 40px 0;
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+        
+        /* API Status */
+        .api-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #10B981;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .api-status::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #10B981;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+            
+            .stats-grid,
+            .features-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .nav-links {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav class="container">
+            <div class="logo">Alpha <span>Junior</span></div>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#api">API</a></li>
+                <li><a href="http://localhost:8000/api/v1/docs" target="_blank">Docs</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <section class="hero">
+        <div class="container">
+            <h1>Institutional Fund<br>Management Platform</h1>
+            <p>Professional-grade fund management for accredited investors and fund managers. Access private equity, hedge funds, and alternative investments.</p>
+            <a href="http://localhost:8000/api/v1/docs" class="btn btn-primary" target="_blank">API Documentation</a>
+            <a href="#features" class="btn btn-secondary">Learn More</a>
+        </div>
+    </section>
+
+    <section class="stats">
+        <div class="container">
+            <div class="stats-grid">
+                <div>
+                    <div class="stat-value">$2.5B+</div>
+                    <div class="stat-label">Assets Under Management</div>
+                </div>
+                <div>
+                    <div class="stat-value">50+</div>
+                    <div class="stat-label">Active Funds</div>
+                </div>
+                <div>
+                    <div class="stat-value">1,200+</div>
+                    <div class="stat-label">Investors</div>
+                </div>
+                <div>
+                    <div class="stat-value gold">24.8%</div>
+                    <div class="stat-label">Avg Annual Return</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="features" id="features">
+        <div class="container">
+            <h2>Why Choose Alpha Junior?</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📈</div>
+                    <h3>Performance Tracking</h3>
+                    <p>Real-time NAV updates, benchmark comparisons, and detailed analytics for informed decisions.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Bank-Grade Security</h3>
+                    <p>2FA authentication, encrypted data, and comprehensive audit logging for compliance.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">✓</div>
+                    <h3>Accredited Access</h3>
+                    <p>Rigorous KYC verification ensures only qualified investors participate in funds.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Diverse Strategies</h3>
+                    <p>Access hedge funds, private equity, venture capital, and real estate investments.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta" id="api">
+        <div class="container">
+            <h2>Ready to Start?</h2>
+            <p>Access our REST API with comprehensive documentation and examples.</p>
+            <a href="http://localhost:8000/api/v1/docs" class="btn btn-primary" target="_blank">View API Docs</a>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p>© 2024 Alpha Junior. Built for institutional investors. Past performance is not indicative of future results.</p>
+        </div>
+    </footer>
+
+    <div class="api-status" id="apiStatus">
+        API: Connecting...
+    </div>
+
+    <script>
+        // Check API status
+        async function checkApiStatus() {
+            try {
+                const response = await fetch('http://localhost:8000/health', {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('apiStatus').innerHTML = `API: ${data.status} ✓`;
+                    document.getElementById('apiStatus').style.background = 'rgba(16, 185, 129, 0.1)';
+                    document.getElementById('apiStatus').style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                    document.getElementById('apiStatus').style.color = '#10B981';
+                } else {
+                    throw new Error('API not ready');
+                }
+            } catch (error) {
+                document.getElementById('apiStatus').innerHTML = 'API: Starting...';
+                document.getElementById('apiStatus').style.background = 'rgba(245, 158, 11, 0.1)';
+                document.getElementById('apiStatus').style.borderColor = 'rgba(245, 158, 11, 0.3)';
+                document.getElementById('apiStatus').style.color = '#F59E0B';
+                setTimeout(checkApiStatus, 3000);
+            }
+        }
+        
+        // Check on load and every 5 seconds
+        checkApiStatus();
+        setInterval(checkApiStatus, 5000);
+    </script>
+</body>
+</html>
