@@ -3,7 +3,7 @@
 HUGE FUNDS - LIVE TRADE MONITOR
 =================================
 Real-time terminal dashboard for Alpaca paper trading.
-Shows account, positions, and orders updating live.
+Shows account, positions, orders, and ALL trades in terminal.
 
 Usage: python live_monitor.py
 """
@@ -13,6 +13,7 @@ import json
 import sys
 import os
 from datetime import datetime
+from collections import deque
 
 # Try to import requests, fallback to urllib
 try:
@@ -24,7 +25,8 @@ except ImportError:
     import urllib.error
 
 BASE_URL = "http://localhost:8000"
-REFRESH_SECONDS = 5
+REFRESH_SECONDS = 2  # Faster refresh for real-time trades
+MAX_TRADE_HISTORY = 50
 
 # Windows-safe colors (no unicode)
 class Colors:
@@ -164,10 +166,40 @@ def print_quick_commands():
     print("    Kill All:  curl -X DELETE http://localhost:8000/api/alpaca/positions")
     print(f"{Colors.END}")
 
+def print_trade_history(trade_history):
+    print(f"{Colors.BOLD}{Colors.BLUE}  [LIVE TRADE HISTORY]{Colors.END}")
+    if len(trade_history) > 0:
+        print(f"    {'Time':<8} {'Symbol':<8} {'Side':<6} {'Qty':>8} {'Price':>12} {'Status':<12}")
+        print(f"    {'-'*65}")
+        for trade in list(trade_history)[-15:]:  # Show last 15 trades
+            time_str = trade.get('time', 'N/A')[:8] if trade.get('time') else 'N/A'
+            sym = trade.get('symbol', 'N/A')
+            side = trade.get('side', 'N/A').upper()
+            qty = trade.get('qty', '0')
+            price = trade.get('price', '0')
+            status = trade.get('status', 'unknown')
+            side_color = Colors.GREEN if side == 'BUY' else Colors.RED
+            print(f"    {time_str:<8} {sym:<8} {side_color}{side:<6}{Colors.END} {qty:>8} {format_money(price):>12} {status:<12}")
+    else:
+        print(f"    {Colors.YELLOW}No trades yet{Colors.END}")
+    print()
+
+def detect_new_orders(old_orders, new_orders):
+    """Detect new orders that appeared"""
+    if not old_orders:
+        return new_orders
+    
+    old_ids = {o.get('id', o.get('order_id', '')) for o in old_orders}
+    new_orders_list = [o for o in new_orders if o.get('id', o.get('order_id', '')) not in old_ids]
+    return new_orders_list
+
 def main():
     print("HugeFunds Live Monitor starting...")
     print("Connecting to backend at", BASE_URL)
     time.sleep(1)
+
+    trade_history = deque(maxlen=MAX_TRADE_HISTORY)
+    last_orders = []
 
     try:
         while True:
@@ -179,10 +211,31 @@ def main():
             positions = api_get("/api/alpaca/positions")
             orders = api_get("/api/alpaca/orders")
 
+            # Detect new orders
+            new_orders = detect_new_orders(last_orders, orders) if orders else []
+            if new_orders:
+                for order in new_orders:
+                    trade = {
+                        'time': datetime.now().strftime('%H:%M:%S'),
+                        'symbol': order.get('symbol', 'N/A'),
+                        'side': order.get('side', 'N/A'),
+                        'qty': order.get('qty', '0'),
+                        'price': order.get('filled_avg_price', order.get('limit_price', '0')),
+                        'status': order.get('status', 'unknown')
+                    }
+                    trade_history.append(trade)
+                    # Print immediate trade alert
+                    side_color = Colors.GREEN if trade['side'].upper() == 'BUY' else Colors.RED
+                    print(f"{Colors.BOLD}{side_color}[NEW TRADE]{Colors.END} {trade['time']} {trade['symbol']} {trade['side']} {trade['qty']} @ {format_money(trade['price'])} - {trade['status']}")
+                    time.sleep(0.5)  # Brief pause to see the alert
+
+            last_orders = orders if orders else []
+
             # Display
             print_account(account)
             print_positions(positions)
             print_orders(orders)
+            print_trade_history(trade_history)
             print_quick_commands()
 
             # Countdown

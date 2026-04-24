@@ -25,7 +25,7 @@ logger = logging.getLogger('HugeFunds.Alpaca')
 
 # Alpaca API Configuration
 ALPACA_PAPER_BASE_URL = "https://paper-api.alpaca.markets"
-ALPACA_DATA_URL = "https://data.alpaca.markets"
+ALPACA_DATA_BASE_URL = "https://data.alpaca.markets"
 ALPACA_MARKETS_URL = "https://api.alpaca.markets"
 
 @dataclass
@@ -76,6 +76,7 @@ class AlpacaClient:
             logger.info(f"Alpaca client initialized (Paper Trading: {credentials.paper_trading})")
         
         self.base_url = ALPACA_PAPER_BASE_URL
+        self.data_url = ALPACA_DATA_BASE_URL
         self.session: Optional[aiohttp.ClientSession] = None
     
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -550,6 +551,38 @@ class AlpacaClient:
                 "error": str(e)
             }
     
+    async def get_news(self, symbol: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get news for a specific symbol
+        
+        Args:
+            symbol: Stock symbol
+            limit: Number of news items to return
+            
+        Returns:
+            List of news items
+        """
+        if not self.enabled:
+            return []
+        
+        try:
+            session = await self._get_session()
+            headers = self.credentials.get_headers()
+            
+            async with session.get(
+                f"{self.data_url}/v1beta1/news?symbols={symbol}&limit={limit}",
+                headers=headers
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("news", [])
+                else:
+                    logger.warning(f"Failed to get news for {symbol}: {response.status}")
+                    return []
+        except Exception as e:
+            logger.error(f"Error getting news: {e}")
+            return []
+    
     async def get_calendar(
         self,
         start: Optional[str] = None,
@@ -607,7 +640,8 @@ async def initialize_alpaca():
     client = get_alpaca_client()
     if client.enabled:
         account = await client.get_account()
-        if account.get("status") == "connected":
+        # Check if account info was retrieved successfully
+        if account and account.get("status") == "ACTIVE":
             logger.info("[OK] Alpaca paper trading CONNECTED and READY")
             return True
         else:

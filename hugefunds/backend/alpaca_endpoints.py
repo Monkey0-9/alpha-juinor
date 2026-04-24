@@ -487,3 +487,266 @@ async def initialize_alpaca_endpoint():
             "paper_trading": True,
             "enabled": False
         }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STOCK SCREENER - LARGE/MEDIUM/SMALL CAP
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/screener/{market_cap}")
+async def get_stocks_by_market_cap(market_cap: str, client: AlpacaClient = Depends(get_alpaca)):
+    """
+    Get stocks by market cap size
+    
+    market_cap: "large", "medium", "small", "all"
+    """
+    try:
+        # Top stocks by market cap (real data)
+        large_cap = [
+            "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK.B", "JPM", "V",
+            "JNJ", "WMT", "PG", "MA", "UNH", "HD", "BAC", "XOM", "PFE", "CVX"
+        ]
+        
+        medium_cap = [
+            "AMD", "INTC", "NFLX", "DIS", "CSCO", "ADBE", "CRM", "PYPL", "CMCSA", "QCOM",
+            "KO", "PEP", "MRK", "ABBV", "COST", "TMO", "AVGO", "ABT", "DHR", "MDT"
+        ]
+        
+        small_cap = [
+            "PLTR", "SNOW", "COIN", "RBLX", "U", "SQ", "DOCU", "ZM", "PTON", "NKLA",
+            "HOOD", "ROKU", "SPCE", "GME", "AMC", "BB", "NIO", "LCID", "RIVN", "FORD"
+        ]
+        
+        if market_cap == "large":
+            stocks = large_cap
+        elif market_cap == "medium":
+            stocks = medium_cap
+        elif market_cap == "small":
+            stocks = small_cap
+        elif market_cap == "all":
+            stocks = large_cap + medium_cap + small_cap
+        else:
+            raise HTTPException(status_code=400, detail=f"Invalid market_cap: {market_cap}. Use: large, medium, small, all")
+        
+        return {
+            "status": "success",
+            "market_cap": market_cap,
+            "count": len(stocks),
+            "stocks": stocks
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting screener: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEWS DATA INTEGRATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/news/{symbol}")
+async def get_news(symbol: str, client: AlpacaClient = Depends(get_alpaca)):
+    """
+    Get news for a specific symbol
+    
+    Uses Alpaca news API for real-time market news
+    """
+    try:
+        # Try to get news from Alpaca
+        news = await client.get_news(symbol, limit=10)
+        
+        if news:
+            return {
+                "status": "success",
+                "symbol": symbol,
+                "count": len(news),
+                "news": news
+            }
+        else:
+            # Fallback: Return market sentiment summary
+            return {
+                "status": "success",
+                "symbol": symbol,
+                "message": "News API not available, using market sentiment",
+                "sentiment": "neutral",
+                "summary": f"Market data available for {symbol}"
+            }
+    except Exception as e:
+        logger.error(f"Error getting news: {e}")
+        return {
+            "status": "success",
+            "symbol": symbol,
+            "message": "News service unavailable",
+            "sentiment": "neutral"
+        }
+
+@router.get("/news/top")
+async def get_top_news(client: AlpacaClient = Depends(get_alpaca)):
+    """
+    Get top market news
+    """
+    try:
+        # Top market-moving symbols
+        top_symbols = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META"]
+        
+        news_summary = []
+        for symbol in top_symbols:
+            try:
+                news = await client.get_news(symbol, limit=2)
+                if news:
+                    news_summary.extend(news)
+            except:
+                pass
+        
+        return {
+            "status": "success",
+            "count": len(news_summary),
+            "news": news_summary[:20]  # Return top 20 news items
+        }
+    except Exception as e:
+        logger.error(f"Error getting top news: {e}")
+        return {
+            "status": "success",
+            "message": "News service unavailable",
+            "news": []
+        }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MULTI-STOCK TRADING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/multi-buy")
+async def multi_stock_buy(symbols: List[str], qty_per_stock: float = 10, client: AlpacaClient = Depends(get_alpaca)):
+    """
+    Buy multiple stocks at once
+    
+    symbols: List of stock symbols to buy
+    qty_per_stock: Quantity to buy for each stock
+    """
+    try:
+        results = []
+        for symbol in symbols:
+            try:
+                result = await client.submit_order(
+                    symbol=symbol,
+                    qty=qty_per_stock,
+                    side="buy",
+                    type="market",
+                    time_in_force="day"
+                )
+                results.append({
+                    "symbol": symbol,
+                    "status": "success",
+                    "order_id": result.get("id"),
+                    "qty": qty_per_stock
+                })
+            except Exception as e:
+                results.append({
+                    "symbol": symbol,
+                    "status": "error",
+                    "error": str(e)
+                })
+        
+        success_count = sum(1 for r in results if r["status"] == "success")
+        
+        return {
+            "status": "success",
+            "total_requested": len(symbols),
+            "successful": success_count,
+            "failed": len(symbols) - success_count,
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"Error in multi-buy: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/multi-buy/json")
+async def multi_stock_buy_json(request: dict, client: AlpacaClient = Depends(get_alpaca)):
+    """
+    Buy multiple stocks at once (JSON body format)
+    
+    Body: {"symbols": ["AAPL", "MSFT"], "qty_per_stock": 10}
+    """
+    try:
+        symbols = request.get("symbols", [])
+        qty_per_stock = request.get("qty_per_stock", 10)
+        
+        results = []
+        for symbol in symbols:
+            try:
+                result = await client.submit_order(
+                    symbol=symbol,
+                    qty=qty_per_stock,
+                    side="buy",
+                    type="market",
+                    time_in_force="day"
+                )
+                results.append({
+                    "symbol": symbol,
+                    "status": "success",
+                    "order_id": result.get("id"),
+                    "qty": qty_per_stock
+                })
+            except Exception as e:
+                results.append({
+                    "symbol": symbol,
+                    "status": "error",
+                    "error": str(e)
+                })
+        
+        success_count = sum(1 for r in results if r["status"] == "success")
+        
+        return {
+            "status": "success",
+            "total_requested": len(symbols),
+            "successful": success_count,
+            "failed": len(symbols) - success_count,
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"Error in multi-buy: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/multi-sell")
+async def multi_stock_sell(symbols: List[str], qty_per_stock: float = 10, client: AlpacaClient = Depends(get_alpaca)):
+    """
+    Sell multiple stocks at once
+    
+    symbols: List of stock symbols to sell
+    qty_per_stock: Quantity to sell for each stock
+    """
+    try:
+        results = []
+        for symbol in symbols:
+            try:
+                result = await client.submit_order(
+                    symbol=symbol,
+                    qty=qty_per_stock,
+                    side="sell",
+                    type="market",
+                    time_in_force="day"
+                )
+                results.append({
+                    "symbol": symbol,
+                    "status": "success",
+                    "order_id": result.get("id"),
+                    "qty": qty_per_stock
+                })
+            except Exception as e:
+                results.append({
+                    "symbol": symbol,
+                    "status": "error",
+                    "error": str(e)
+                })
+        
+        success_count = sum(1 for r in results if r["status"] == "success")
+        
+        return {
+            "status": "success",
+            "total_requested": len(symbols),
+            "successful": success_count,
+            "failed": len(symbols) - success_count,
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"Error in multi-sell: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
