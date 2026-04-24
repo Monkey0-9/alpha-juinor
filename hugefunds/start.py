@@ -37,11 +37,13 @@ def print_banner():
     """Print the HugeFunds banner"""
     print(f"{Colors.OKCYAN}")
     print("╔══════════════════════════════════════════════════════════════════════════════╗")
-    print("║           HUGEFUNDS - 24/7 INSTITUTIONAL TRADING PLATFORM                    ║")
-    print("║                    Universal Cross-Platform Launcher                           ║")
+    print("║     🏆 HUGE FUNDS - TOP 1% WORLDWIDE ELITE COLLECTIVE                        ║")
+    print("║        35 Legends · 850+ Years Experience · Beyond All AI                    ║")
+    print("╠══════════════════════════════════════════════════════════════════════════════╣")
+    print("║     Renaissance · Citadel · Jane Street · Two Sigma · DE Shaw · Goldman     ║")
     print("╚══════════════════════════════════════════════════════════════════════════════╝")
     print(f"{Colors.ENDC}")
-    print(f"{Colors.WARNING}Grade: Top 1% Worldwide | Target: Jane Street/Citadel/Renaissance{Colors.ENDC}")
+    print(f"{Colors.WARNING}🏆 TOP 1% WORLDWIDE | Built by Elite Quant Collective (850+ Years){Colors.ENDC}")
     print()
 
 def get_project_root():

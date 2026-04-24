@@ -608,13 +608,13 @@ async def initialize_alpaca():
     if client.enabled:
         account = await client.get_account()
         if account.get("status") == "connected":
-            logger.info("✅ Alpaca paper trading CONNECTED and READY")
+            logger.info("[OK] Alpaca paper trading CONNECTED and READY")
             return True
         else:
-            logger.warning(f"⚠️ Alpaca connection issue: {account.get('error', 'Unknown')}")
+            logger.warning(f"[WARN] Alpaca connection issue: {account.get('error', 'Unknown')}")
             return False
     else:
-        logger.info("ℹ️ Alpaca not configured. Set ALPACA_API_KEY and ALPACA_API_SECRET env vars")
+        logger.info("[INFO] Alpaca not configured. Set ALPACA_API_KEY and ALPACA_API_SECRET env vars")
         return False
 
 async def close_alpaca():

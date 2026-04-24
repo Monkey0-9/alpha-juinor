@@ -700,9 +700,9 @@ async def lifespan(app: FastAPI):
         if alpaca_initialized:
             logger.info("[OK] Alpaca Paper Trading: CONNECTED")
         else:
-            logger.info("[ℹ] Alpaca Paper Trading: Not configured (set ALPACA_API_KEY and ALPACA_API_SECRET)")
+            logger.info("[INFO] Alpaca Paper Trading: Not configured (set ALPACA_API_KEY and ALPACA_API_SECRET)")
     except Exception as e:
-        logger.warning(f"[ℹ] Alpaca initialization skipped: {e}")
+        logger.warning(f"[INFO] Alpaca initialization skipped: {e}")
     
     logger.info("[OK] HugeFunds backend operational")
     yield
@@ -735,8 +735,8 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Include elite endpoints router
-app.include_router(enhanced_router, prefix="/api/elite")
+# Include elite endpoints router (router already has /api/elite prefix)
+app.include_router(enhanced_router)
 
 # Include Alpaca trading router
 app.include_router(alpaca_router)
@@ -751,60 +751,54 @@ app.add_middleware(
 )
 
 async def broadcast_market_data(app: FastAPI):
-    """Background task to broadcast live market data"""
+    """Background task to broadcast live market data from Alpaca"""
+    from alpaca_integration import get_alpaca_client
+    
     while True:
         try:
-            # Generate demo market data
-            market_data = {
-                'type': 'market_data',
-                'timestamp': datetime.now().isoformat(),
-                'indices': {
-                    'SPX': {'price': 4200 + np.random.randn() * 10, 'change': np.random.randn() * 0.5},
-                    'NDX': {'price': 13000 + np.random.randn() * 30, 'change': np.random.randn() * 0.6},
-                    'VIX': {'price': 18 + np.random.randn() * 2, 'change': np.random.randn() * 0.3},
-                    'DXY': {'price': 103 + np.random.randn() * 0.5, 'change': np.random.randn() * 0.1},
-                    '10Y': {'price': 4.2 + np.random.randn() * 0.05, 'change': np.random.randn() * 0.02},
-                    'BTC': {'price': 42000 + np.random.randn() * 500, 'change': np.random.randn() * 2}
-                }
-            }
+            # Get real Alpaca data
+            client = get_alpaca_client()
             
-            await manager.broadcast(market_data)
-            
-            # Portfolio snapshot
-            portfolio = {
-                'type': 'portfolio',
-                'timestamp': datetime.now().isoformat(),
-                'nav': 10000000 + np.random.randn() * 50000,
-                'daily_pnl': np.random.randn() * 100000,
-                'daily_return_pct': np.random.randn() * 1,
-                'sharpe_ratio': 2.1 + np.random.randn() * 0.1,
-                'max_drawdown_pct': 8 + np.random.randn() * 0.5,
-                'var_95': 150000 + np.random.randn() * 10000,
-                'beta': 0.85 + np.random.randn() * 0.05
-            }
-            
-            await manager.broadcast(portfolio)
-            
-            # Alpha signals heatmap
-            symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'JPM', 'BAC', 'XOM', 
-                      'JNJ', 'V', 'PG', 'UNH', 'HD', 'MA', 'ABBV', 'PFE', 'KO', 'PEP',
-                      'TMO', 'AVGO', 'COST', 'DIS', 'WMT', 'MRK', 'CSCO', 'VZ', 'ADBE', 'CRM']
-            
-            heatmap = {
-                'type': 'alpha_heatmap',
-                'timestamp': datetime.now().isoformat(),
-                'signals': [
-                    {
-                        'symbol': symbol,
-                        'score': np.random.randint(-100, 100),
-                        'confidence': np.random.random() * 0.4 + 0.6,
-                        'strategy': np.random.choice(['Momentum', 'Mean Reversion', 'Breakout', 'Trend'])
+            # Real portfolio data from Alpaca
+            if client and client.enabled:
+                try:
+                    account = await client.get_account()
+                    positions = await client.get_positions()
+                    
+                    # Calculate real portfolio metrics
+                    total_value = account.get('portfolio_value', 0)
+                    cash = account.get('cash', 0)
+                    equity = account.get('equity', 0)
+                    
+                    # Calculate total P/L from positions
+                    total_pl = sum(p.get('unrealized_pl', 0) for p in positions) if positions else 0
+                    
+                    portfolio = {
+                        'type': 'portfolio',
+                        'timestamp': datetime.now().isoformat(),
+                        'nav': equity,
+                        'cash': cash,
+                        'portfolio_value': total_value,
+                        'daily_pnl': total_pl,
+                        'daily_return_pct': (total_pl / total_value * 100) if total_value > 0 else 0,
+                        'positions_count': len(positions) if positions else 0,
+                        'account_number': account.get('account_number', 'N/A'),
+                        'buying_power': account.get('buying_power', 0)
                     }
-                    for symbol in symbols[:15]
-                ]
-            }
-            
-            await manager.broadcast(heatmap)
+                    
+                    await manager.broadcast(portfolio)
+                    
+                    # Broadcast positions
+                    if positions:
+                        positions_data = {
+                            'type': 'positions',
+                            'timestamp': datetime.now().isoformat(),
+                            'positions': positions
+                        }
+                        await manager.broadcast(positions_data)
+                    
+                except Exception as e:
+                    logger.error(f"Error fetching Alpaca data: {e}")
             
             await asyncio.sleep(5)  # Update every 5 seconds
             
@@ -820,15 +814,47 @@ async def broadcast_market_data(app: FastAPI):
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
-    return {
-        "service": "HugeFunds - Institutional Quantitative Trading Platform",
-        "version": "1.0.0",
-        "status": "operational",
-        "grade": "Renaissance Technologies / Jane Street / Citadel",
-        "documentation": "/docs",
-        "websocket": "/ws"
-    }
+    """Root endpoint - Real status from Alpaca"""
+    from alpaca_integration import get_alpaca_client
+    
+    try:
+        client = get_alpaca_client()
+        if client and client.enabled:
+            account = await client.get_account()
+            return {
+                "service": "HugeFunds - Top 1% Worldwide Elite Collective",
+                "version": "1.0.0 ELITE",
+                "status": "operational",
+                "grade": "TOP 1% WORLDWIDE",
+                "alpaca_status": "CONNECTED",
+                "account_number": account.get('account_number', 'N/A'),
+                "portfolio_value": account.get('portfolio_value', 0),
+                "buying_power": account.get('buying_power', 0),
+                "documentation": "/docs",
+                "websocket": "/ws",
+                "alpaca_api": "/api/alpaca"
+            }
+        else:
+            return {
+                "service": "HugeFunds - Top 1% Worldwide Elite Collective",
+                "version": "1.0.0 ELITE",
+                "status": "operational",
+                "grade": "TOP 1% WORLDWIDE",
+                "alpaca_status": "NOT CONFIGURED",
+                "documentation": "/docs",
+                "websocket": "/ws"
+            }
+    except Exception as e:
+        return {
+            "service": "HugeFunds - Top 1% Worldwide Elite Collective",
+            "version": "1.0.0 ELITE",
+            "status": "operational",
+            "grade": "TOP 1% WORLDWIDE",
+            "alpaca_status": "ERROR",
+            "error": str(e),
+            "documentation": "/docs",
+            "websocket": "/ws"
+        }
 
 @app.get("/api/health")
 async def health_check():
@@ -846,28 +872,42 @@ async def health_check():
 
 @app.get("/api/portfolio/summary")
 async def portfolio_summary():
-    """Get portfolio summary"""
-    return {
-        "nav": 10000000,
-        "cash": 2000000,
-        "long_exposure": 7500000,
-        "short_exposure": -500000,
-        "gross_exposure": 8000000,
-        "net_exposure": 7000000,
-        "daily_pnl": 125000,
-        "daily_return_pct": 1.25,
-        "mtd_return_pct": 8.5,
-        "ytd_return_pct": 45.2,
-        "sharpe_ratio": 2.15,
-        "sortino_ratio": 3.2,
-        "max_drawdown_pct": 8.3,
-        "var_95": 180000,
-        "cvar_95": 220000,
-        "beta": 0.82,
-        "correlation_to_spx": 0.75,
-        "active_positions": 23,
-        "timestamp": datetime.now().isoformat()
-    }
+    """Get portfolio summary from Alpaca"""
+    from alpaca_integration import get_alpaca_client
+    
+    try:
+        client = get_alpaca_client()
+        if client and client.enabled:
+            account = await client.get_account()
+            positions = await client.get_positions()
+            
+            total_value = account.get('portfolio_value', 0)
+            cash = account.get('cash', 0)
+            equity = account.get('equity', 0)
+            
+            # Calculate real metrics
+            total_pl = sum(p.get('unrealized_pl', 0) for p in positions) if positions else 0
+            long_exposure = sum(p.get('market_value', 0) for p in positions if p.get('side') == 'long') if positions else 0
+            
+            return {
+                "nav": equity,
+                "cash": cash,
+                "portfolio_value": total_value,
+                "long_exposure": long_exposure,
+                "short_exposure": 0,  # Paper trading long only
+                "gross_exposure": long_exposure,
+                "net_exposure": long_exposure,
+                "daily_pnl": total_pl,
+                "daily_return_pct": (total_pl / total_value * 100) if total_value > 0 else 0,
+                "active_positions": len(positions) if positions else 0,
+                "account_number": account.get('account_number', 'N/A'),
+                "buying_power": account.get('buying_power', 0),
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {"error": "Alpaca not connected"}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.post("/api/risk/cvar")
 async def calculate_cvar(returns: List[float], confidence: float = 0.95):
@@ -927,42 +967,85 @@ async def check_track_record(strategy_id: str):
 
 @app.get("/api/factor/exposure")
 async def factor_exposure():
-    """Get factor exposure breakdown"""
-    return {
-        "factors": {
-            "Market (SPX)": {"exposure": 0.82, "contribution": 45},
-            "Size (SMB)": {"exposure": 0.15, "contribution": 8},
-            "Value (HML)": {"exposure": -0.25, "contribution": -12},
-            "Momentum (UMD)": {"exposure": 0.45, "contribution": 25},
-            "Quality": {"exposure": 0.30, "contribution": 15},
-            "Low Volatility": {"exposure": -0.15, "contribution": -7},
-            "Dividend Yield": {"exposure": 0.10, "contribution": 5},
-            "Liquidity": {"exposure": -0.05, "contribution": -3}
-        },
-        "total_factor_exposure": 1.42,
-        "unexplained_return": 12,
-        "r_squared": 0.88,
-        "timestamp": datetime.now().isoformat()
-    }
+    """Get factor exposure breakdown - Real data from positions"""
+    from alpaca_integration import get_alpaca_client
+    
+    try:
+        client = get_alpaca_client()
+        if client and client.enabled:
+            positions = await client.get_positions()
+            
+            if not positions:
+                return {"error": "No positions to calculate factor exposure"}
+            
+            # Simple factor exposure based on position weights
+            total_value = sum(p.get('market_value', 0) for p in positions)
+            
+            factors = {}
+            for pos in positions:
+                symbol = pos.get('symbol', 'N/A')
+                weight = pos.get('market_value', 0) / total_value if total_value > 0 else 0
+                factors[symbol] = {"exposure": weight, "contribution": weight * 100}
+            
+            return {
+                "factors": factors,
+                "total_factor_exposure": 1.0,
+                "unexplained_return": 0,
+                "r_squared": 1.0,
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {"error": "Alpaca not connected"}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/api/strategies/attribution")
 async def strategy_attribution():
-    """Get strategy P&L attribution"""
-    return {
-        "strategies": [
-            {"name": "Momentum Master", "pnl": 450000, "contribution_pct": 35, "trades": 156},
-            {"name": "Mean Reversion", "pnl": 280000, "contribution_pct": 22, "trades": 234},
-            {"name": "Breakout Pro", "pnl": 190000, "contribution_pct": 15, "trades": 89},
-            {"name": "Trend Rider", "pnl": 165000, "contribution_pct": 13, "trades": 45},
-            {"name": "Swing Trading", "pnl": 125000, "contribution_pct": 10, "trades": 112},
-            {"name": "Volatility Arb", "pnl": 45000, "contribution_pct": 4, "trades": 67},
-            {"name": "Pairs Trading", "pnl": 12000, "contribution_pct": 1, "trades": 34}
-        ],
-        "total_pnl": 1267000,
-        "winning_strategies": 6,
-        "losing_strategies": 1,
-        "timestamp": datetime.now().isoformat()
-    }
+    """Get strategy P&L attribution - Real data from positions"""
+    from alpaca_integration import get_alpaca_client
+    
+    try:
+        client = get_alpaca_client()
+        if client and client.enabled:
+            positions = await client.get_positions()
+            
+            if not positions:
+                return {"error": "No positions for attribution"}
+            
+            # Calculate attribution by symbol (treat each symbol as a strategy)
+            strategies = []
+            total_pnl = 0
+            
+            for pos in positions:
+                symbol = pos.get('symbol', 'N/A')
+                pnl = pos.get('unrealized_pl', 0)
+                contribution_pct = 0  # Will calculate after total
+                strategies.append({
+                    "name": symbol,
+                    "pnl": pnl,
+                    "contribution_pct": contribution_pct,
+                    "trades": 1  # Each position treated as 1 trade
+                })
+                total_pnl += pnl
+            
+            # Calculate percentages
+            for s in strategies:
+                s["contribution_pct"] = (s["pnl"] / total_pnl * 100) if total_pnl != 0 else 0
+            
+            winning = len([s for s in strategies if s["pnl"] > 0])
+            losing = len([s for s in strategies if s["pnl"] < 0])
+            
+            return {
+                "strategies": strategies,
+                "total_pnl": total_pnl,
+                "winning_strategies": winning,
+                "losing_strategies": losing,
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {"error": "Alpaca not connected"}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.post("/api/killswitch")
 async def kill_switch(confirm: bool = False, reason: str = ""):
@@ -970,7 +1053,7 @@ async def kill_switch(confirm: bool = False, reason: str = ""):
     if not confirm:
         raise HTTPException(status_code=400, detail="Must confirm=true to activate kill switch")
     
-    logger.critical(f"🚨 KILL SWITCH ACTIVATED - Reason: {reason}")
+    logger.critical(f"[KILL SWITCH] ACTIVATED - Reason: {reason}")
     
     # Broadcast to all clients
     await manager.broadcast({
