@@ -1,3 +1,0 @@
-# Alpha Strategy 098
-alpha = ts_mean(close, 490) / ts_std(close, 196)
-alpha = rank(alpha)

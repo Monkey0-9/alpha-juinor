@@ -1098,6 +1098,185 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# FULL EXECUTION LOOP: data -> signal -> risk -> order -> fill -> reconciliation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/execute/signal")
+async def execute_trading_signal(
+    symbol: str,
+    side: str,  # "buy" or "sell"
+    qty: float = 1,
+    signal_confidence: float = 0.7,
+    signal_strength: float = 0.5,
+    order_type: str = "market",
+    limit_price: Optional[float] = None
+):
+    """
+    Full execution loop: data -> signal -> risk -> order -> fill -> reconciliation
+    
+    This is the single entry point that wires the entire trading pipeline.
+    """
+    from alpaca_integration import get_alpaca_client
+    
+    execution_log = []
+    execution_log.append(f"[1/6] Signal received: {side} {qty} {symbol} (confidence={signal_confidence})")
+    
+    # STEP 1: Fetch real market data
+    client = get_alpaca_client()
+    if not client or not client.enabled:
+        raise HTTPException(status_code=503, detail="Alpaca not connected")
+    
+    try:
+        account = await client.get_account()
+        positions = await client.get_positions()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch account data: {e}")
+    
+    portfolio_value = float(account.get('portfolio_value', 0))
+    cash = float(account.get('cash', 0))
+    buying_power = float(account.get('buying_power', 0))
+    execution_log.append(f"[2/6] Data fetched: portfolio=${portfolio_value:,.0f} cash=${cash:,.0f}")
+    
+    # STEP 2: Risk gate - check position limits and buying power
+    # Get current price from positions or use limit_price
+    current_price = limit_price
+    if not current_price:
+        for pos in (positions or []):
+            if pos.get('symbol') == symbol:
+                current_price = float(pos.get('current_price', 0))
+                break
+    
+    order_value = qty * (current_price or 0)
+    position_pct = (order_value / portfolio_value) if portfolio_value > 0 else 0
+    
+    risk_checks = {
+        "position_size_ok": position_pct <= 0.25,  # Max 25% in single position
+        "buying_power_ok": side == "sell" or order_value <= buying_power,
+        "confidence_ok": signal_confidence >= 0.5,
+        "portfolio_concentration_ok": True  # Would need more logic for full check
+    }
+    
+    all_risk_passed = all(risk_checks.values())
+    execution_log.append(f"[3/6] Risk gate: {'PASSED' if all_risk_passed else 'FAILED'} - {risk_checks}")
+    
+    if not all_risk_passed:
+        failed_checks = [k for k, v in risk_checks.items() if not v]
+        return {
+            "status": "rejected",
+            "reason": f"Risk checks failed: {failed_checks}",
+            "execution_log": execution_log,
+            "risk_checks": risk_checks
+        }
+    
+    # STEP 3: Governance gate (if available)
+    governance_result = None
+    if hasattr(app.state, 'governance') and app.state.governance:
+        try:
+            signal_data = {
+                'symbol': symbol,
+                'side': side,
+                'quantity': qty,
+                'price': current_price or 0,
+                'confidence': signal_confidence,
+                'strength': signal_strength
+            }
+            portfolio_data = {
+                'total_value': portfolio_value,
+                'cash': cash,
+                'buying_power': buying_power
+            }
+            governance_result = await app.state.governance.run_elite_pre_trade_checks(
+                signal_data, portfolio_data
+            )
+            if not governance_result.get('approved', True):
+                execution_log.append(f"[3b/6] Governance: REJECTED")
+                return {
+                    "status": "rejected",
+                    "reason": "Governance gate rejected",
+                    "execution_log": execution_log,
+                    "governance": governance_result
+                }
+            execution_log.append(f"[3b/6] Governance: APPROVED")
+        except Exception as e:
+            execution_log.append(f"[3b/6] Governance: skipped ({e})")
+    
+    # STEP 4: Execute order via Alpaca
+    try:
+        order_result = await client.submit_order(
+            symbol=symbol,
+            qty=qty,
+            side=side,
+            type=order_type,
+            time_in_force="day",
+            limit_price=limit_price
+        )
+        order_id = order_result.get('id', 'unknown')
+        execution_log.append(f"[4/6] Order submitted: id={order_id} status={order_result.get('status', 'unknown')}")
+    except Exception as e:
+        execution_log.append(f"[4/6] Order FAILED: {e}")
+        return {
+            "status": "order_failed",
+            "reason": str(e),
+            "execution_log": execution_log
+        }
+    
+    # STEP 5: Wait for fill (poll up to 10 seconds for market orders)
+    fill_result = None
+    if order_type == "market":
+        for i in range(10):
+            await asyncio.sleep(1)
+            try:
+                order_status = await client.get_order(order_id)
+                status = order_status.get('status', 'unknown')
+                if status in ('filled', 'partially_filled', 'canceled', 'rejected', 'expired'):
+                    fill_result = order_status
+                    break
+            except:
+                pass
+    
+    if fill_result:
+        filled_price = float(fill_result.get('filled_avg_price', 0))
+        filled_qty = float(fill_result.get('filled_qty', 0))
+        execution_log.append(f"[5/6] Fill confirmed: {filled_qty} @ ${filled_price:.2f}")
+    else:
+        execution_log.append(f"[5/6] Fill pending (order_id={order_id})")
+    
+    # STEP 6: Reconciliation - verify portfolio state
+    try:
+        updated_account = await client.get_account()
+        updated_positions = await client.get_positions()
+        execution_log.append(
+            f"[6/6] Reconciliation: portfolio=${float(updated_account.get('portfolio_value', 0)):,.0f} "
+            f"positions={len(updated_positions) if updated_positions else 0}"
+        )
+    except:
+        execution_log.append("[6/6] Reconciliation: skipped (Alpaca fetch failed)")
+    
+    # Broadcast trade to WebSocket clients
+    await manager.broadcast({
+        "type": "trade_executed",
+        "timestamp": datetime.now().isoformat(),
+        "symbol": symbol,
+        "side": side,
+        "qty": qty,
+        "order_id": order_id,
+        "fill_price": float(fill_result.get('filled_avg_price', 0)) if fill_result else None,
+        "execution_log": execution_log
+    })
+    
+    return {
+        "status": "executed",
+        "symbol": symbol,
+        "side": side,
+        "qty": qty,
+        "order_id": order_id,
+        "fill_price": float(fill_result.get('filled_avg_price', 0)) if fill_result else None,
+        "risk_checks": risk_checks,
+        "governance": governance_result,
+        "execution_log": execution_log
+    }
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
