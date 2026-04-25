@@ -27,6 +27,7 @@ from scipy import stats
 from scipy.optimize import minimize
 import warnings
 warnings.filterwarnings('ignore')
+import os
 
 
 # Configure logging
@@ -677,7 +678,7 @@ async def lifespan(app: FastAPI):
     app.state.stress_framework = AdvancedStressTestingFramework(app.state.cvar_engine)
     
     # Initialize Database (if configured)
-    db_dsn = "postgresql://user:pass@localhost/hugefunds"  # Update with real credentials
+    db_dsn = os.getenv('DATABASE_DSN', "postgresql://user:pass@localhost/hugefunds")
     app.state.db_manager = TimescaleDBManager(db_dsn)
     
     try:
@@ -858,6 +859,10 @@ async def root():
 
 @app.get("/api/health")
 async def health_check():
+    return {"status": "ok", "timestamp": datetime.now().isoformat()}
+
+@app.get("/api/cvar/calculate")
+async def get_cvar():
     """Health check endpoint"""
     return {
         "status": "healthy",

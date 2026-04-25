@@ -583,6 +583,27 @@ class AlpacaClient:
             logger.error(f"Error getting news: {e}")
             return []
     
+    async def get_bars(self, symbol: str, timeframe: str = "1Min", limit: int = 100) -> List[Dict[str, Any]]:
+        """Fetch historical bars for a symbol"""
+        if not self.enabled:
+            return []
+        try:
+            session = await self._get_session()
+            headers = self.credentials.get_headers()
+            async with session.get(
+                f"{self.data_url}/v2/stocks/{symbol}/bars",
+                headers=headers,
+                params={"timeframe": timeframe, "limit": limit}
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("bars", [])
+                else:
+                    return []
+        except Exception as e:
+            logger.error(f"Error fetching bars for {symbol}: {e}")
+            return []
+
     async def get_calendar(
         self,
         start: Optional[str] = None,

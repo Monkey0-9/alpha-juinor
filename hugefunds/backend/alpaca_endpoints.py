@@ -405,6 +405,28 @@ async def get_market_calendar(
         logger.error(f"Error getting calendar: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/bars")
+async def get_bars(
+    symbol: str,
+    timeframe: str = "1Min",
+    limit: int = 100,
+    client: AlpacaClient = Depends(get_alpaca)
+):
+    """
+    Get historical bars for a symbol
+    """
+    try:
+        bars = await client.get_bars(symbol, timeframe, limit)
+        return {
+            "status": "success",
+            "symbol": symbol,
+            "count": len(bars),
+            "bars": bars
+        }
+    except Exception as e:
+        logger.error(f"Error getting bars for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PORTFOLIO SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════════
