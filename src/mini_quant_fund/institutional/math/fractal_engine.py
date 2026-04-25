@@ -1,3 +1,4 @@
+import numpy as np
 from numba import jit
 
 class SovereignFractalEngine:
@@ -11,11 +12,13 @@ class SovereignFractalEngine:
         n = len(prices)
         if n < 30: return 1.5
         
-        diffs = np.abs(prices[1:] - prices[:-1])
-        variation = np.sum(diffs)
+        # We must avoid np.diff in nopython mode for some versions, or use manual diff
+        variation = 0.0
+        for i in range(1, n):
+            variation += abs(prices[i] - prices[i-1])
         
         if variation == 0: return 1.0
-        fd = 1.0 + (np.log(variation) / np.log(n))
+        fd = 1.0 + (np.log(variation) / np.log(float(n)))
         return min(2.0, max(1.0, fd))
 
     def calculate_fractal_dimension(self, prices):

@@ -16,8 +16,14 @@ class SovereignStrategyMutator:
         self.generation += 1
         logger.info(f"[EVOLVE] Genetic Generation {self.generation} active.")
         
+        # Guard for empty history
+        if not success_metrics or len(success_metrics) == 0:
+            logger.info("[GENETIC] Incubation Period: History empty. Using base genome.")
+            return current_genome
+
         # If success is high, keep genome stable. If low, mutate heavily.
-        mutation_rate = 0.05 if np.mean(success_metrics) > 0 else 0.2
+        mean_success = np.mean(success_metrics)
+        mutation_rate = 0.05 if mean_success > 0 else 0.2
         
         new_genome = current_genome.copy()
         for key in new_genome:

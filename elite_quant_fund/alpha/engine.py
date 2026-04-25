@@ -64,7 +64,8 @@ class AlphaEngine:
 
         # 2. Intensity Layer (Hawkes Process)
         returns = pd.Series(denoised_prices).pct_change().dropna()
-        burst_threshold = returns.std() * 2
+        # Calibrating for more active signals
+        burst_threshold = returns.std() * 1.5 
         burst_events = returns[abs(returns) > burst_threshold].index.values
         burst_events = burst_events.astype(float)
 
@@ -73,12 +74,13 @@ class AlphaEngine:
 
         # 3. Alpha Strategy: Trend following + Volatility scaling
         recent_trend = 0
-        if len(denoised_prices) >= 5:
-            recent_trend = (denoised_prices[-1] / denoised_prices[-5]) - 1
+        if len(denoised_prices) >= 3:
+            recent_trend = (denoised_prices[-1] / denoised_prices[-3]) - 1
 
         # Scale signal by inverse of intensity
         vol_scaler = 1.0 / (1.0 + intensity)
-        signal = np.tanh(recent_trend * 20) * vol_scaler
+        # Using a higher multiplier for more aggressive signal detection
+        signal = np.tanh(recent_trend * 50) * vol_scaler
 
         return float(signal)
 

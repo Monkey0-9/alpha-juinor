@@ -33,6 +33,8 @@ from src.mini_quant_fund.institutional.math.algo_signature import SovereignAlgoS
 from src.mini_quant_fund.institutional.math.attention_engine import SovereignAttentionEngine
 from src.mini_quant_fund.institutional.math.strategy_mutator import SovereignStrategyMutator
 from src.mini_quant_fund.institutional.math.l2_wall_detector import SovereignL2WallDetector
+from src.mini_quant_fund.institutional.math.sentiment_engine_v2 import SovereignSentimentV2
+from src.mini_quant_fund.institutional.math.vpin_toxic_detector import SovereignVPINDetector
 from src.mini_quant_fund.execution_ai.execution_rl import RL_ExecutionAgent
 from elite_quant_fund.alpha.engine import AlphaEngine
 
@@ -69,6 +71,8 @@ class EliteQuantSystem:
         self.attention_engine = SovereignAttentionEngine()
         self.mutator = SovereignStrategyMutator()
         self.l2_detector = SovereignL2WallDetector()
+        self.sentiment_v2 = SovereignSentimentV2()
+        self.vpin_detector = SovereignVPINDetector()
         self.alpha_engine = AlphaEngine(backend_url=backend_url)
         self.execution_agent = RL_ExecutionAgent()
 
@@ -245,12 +249,23 @@ class EliteQuantSystem:
 
                 side = "buy" if strength > 0 else "sell"
 
-                # 14. Level-2 Book Deep Wall Audit
+                # 14. Order Flow Toxicity (VPIN) Audit
+                toxicity = self.vpin_detector.calculate_toxicity([1000, 2000, 1500])
+                if self.vpin_detector.is_ghost_required(toxicity):
+                    logger.warning(f"[GHOST MODE] {symbol} Order Flow is Toxic. Hiding from Predators.")
+                    continue
+
+                # 15. Emotional Velocity Alpha (Sentiment V2)
+                emotional_state = self.sentiment_v2.analyze_emotional_velocity(symbol, [])
+                emo_alpha = self.sentiment_v2.get_emotional_alpha(emotional_state)
+                logger.info(f"[OMEGA] {symbol} Emotional State: {emotional_state}")
+
+                # 16. Level-2 Book Deep Wall Audit
                 wall_type = self.l2_detector.detect_walls([])
                 wall_influence = self.l2_detector.get_wall_influence(wall_type)
                 logger.info(f"[L2 DEPTH] {symbol} Order Book Wall: {wall_type}")
 
-                # 15. Regime-Adaptive Celestial Overdrive Sizing
+                # 17. Regime-Adaptive Celestial Overdrive Sizing
                 regime_multipliers = {"BULL": 1.5, "SIDEWAYS": 1.0, "BEAR": 0.5, "TURBULENT": 0.1}
                 multiplier = regime_multipliers.get(self.market_regime, 1.0)
                 
@@ -260,8 +275,9 @@ class EliteQuantSystem:
                     logger.info(f"[OVERDRIVE] Aggression Multiplier Applied.")
 
                 obi_adjustment = 1.0 + (obi_pressure if side == "buy" else -obi_pressure)
-                # Final Overdrive Sizing: Weight * Regime * Confidence * OBI * Wall_Influence
-                kelly_pct = weight * multiplier * confidence * max(0.5, min(1.5, obi_adjustment + wall_influence))
+                # Final Omega Sizing: Weight * Regime * Confidence * OBI * Wall_Influence + Emotional_Alpha
+                total_alpha_boost = 1.0 + emo_alpha
+                kelly_pct = weight * multiplier * confidence * total_alpha_boost * max(0.5, min(1.5, obi_adjustment + wall_influence))
                 qty = max(1, int((self.portfolio_value * kelly_pct) / 150))
 
                 trade_request = {

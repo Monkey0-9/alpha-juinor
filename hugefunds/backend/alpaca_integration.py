@@ -584,22 +584,47 @@ class AlpacaClient:
             return []
     
     async def get_bars(self, symbol: str, timeframe: str = "1Min", limit: int = 100) -> List[Dict[str, Any]]:
-        """Fetch historical bars for a symbol"""
+        """Fetch historical bars for a symbol with 90-day lookback resilience."""
         if not self.enabled:
             return []
+        
+        from datetime import timedelta
+        start_time = (datetime.utcnow() - timedelta(days=90)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        
         try:
             session = await self._get_session()
             headers = self.credentials.get_headers()
-            async with session.get(
-                f"{self.data_url}/v2/stocks/{symbol}/bars",
-                headers=headers,
-                params={"timeframe": timeframe, "limit": limit}
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data.get("bars", [])
-                else:
-                    return []
+            
+            # Implementation of exponential backoff for high-fidelity data
+            for attempt in range(3):
+                async with session.get(
+                    f"{self.data_url}/v2/stocks/{symbol.upper()}/bars",
+                    headers=headers,
+                    params={
+                        "timeframe": timeframe, 
+                        "limit": limit,
+                        "start": start_time,
+                        "feed": "sip" # Using SIP for institutional depth
+                    }
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        bars = data.get("bars", [])
+                        if bars:
+                            logger.info(f"[DATA] Successfully retrieved {len(bars)} bars for {symbol}")
+                        return bars
+                    elif response.status == 429: # Rate limit
+                        await asyncio.sleep(0.5 * (attempt + 1))
+                        continue
+                    else:
+                        error_text = await response.text()
+                        logger.warning(f"[DATA] Attempt {attempt+1} failed for {symbol}: {response.status} - {error_text}")
+                        if attempt == 2: return []
+                        await asyncio.sleep(0.1)
+            return []
+        except Exception as e:
+            logger.error(f"Error fetching bars for {symbol}: {e}")
+            return []
         except Exception as e:
             logger.error(f"Error fetching bars for {symbol}: {e}")
             return []
