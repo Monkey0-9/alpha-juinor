@@ -1,60 +1,27 @@
-name: HugeFunds CI
+name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [ main, master ]
   pull_request:
-    branches: [main]
-
-env:
-  PYTHON_VERSION: "3.11"
+    branches: [ main, master ]
 
 jobs:
-  verify:
-    name: Verify Imports & Compile
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install dependencies
-        run: pip install -r hugefunds/requirements.txt
-      - name: Verify all modules compile
-        run: |
-          python -m py_compile hugefunds/backend/main.py
-          python -m py_compile hugefunds/backend/alpaca_integration.py
-          python -m py_compile hugefunds/backend/alpaca_endpoints.py
-          python -m py_compile hugefunds/backend/elite_classes.py
-          python -m py_compile hugefunds/backend/enhanced_endpoints.py
-          python -m py_compile hugefunds/live_monitor.py
-          python -m py_compile hugefunds/start.py
-
-  test:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    needs: verify
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install dependencies
-        run: pip install -r hugefunds/requirements.txt
-      - name: Run tests
-        run: |
-          cd hugefunds/backend
-          python -m pytest tests/ -v --tb=short
-
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install Bandit
-        run: pip install bandit
-      - name: Run Security Scan
-        run: bandit -r hugefunds/ -ll --skip B101
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.9"
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install ruff mypy pytest -r requirements.txt
+    - name: Lint with ruff
+      run: ruff check nexus
+    - name: Type check with mypy
+      run: mypy nexus
+    - name: Run tests
+      run: pytest

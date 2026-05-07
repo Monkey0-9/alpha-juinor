@@ -1,26 +1,21 @@
-# SOVEREIGN ELITE - UNIFIED SYSTEM REQUIREMENTS
-# Core
-fastapi
-uvicorn[standard]
-streamlit
-requests
-httpx
-aiohttp
-python-dotenv
-numpy
-pandas
-scipy
-numba
-statsmodels
-rich
+# Core Framework
+fastapi>=0.100.0
+uvicorn>=0.23.0
+streamlit>=1.25.0
+pydantic>=2.0.0
+httpx>=0.24.0
+aiohttp>=3.8.0
 
-# Trading
-alpaca-py
+# Mathematical & Quantitative
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.11.0
+numba>=0.57.0
 
-# Utilities
-python-jose[cryptography]
-passlib[bcrypt]
-pyjwt
-python-multipart
-asyncpg
-redis
+# Environment & Utilities
+python-dotenv>=1.0.0
+python-multipart>=0.0.6
+PyJWT>=2.8.0
+passlib>=1.7.4
+bcrypt>=4.0.0
+requests>=2.31.0
