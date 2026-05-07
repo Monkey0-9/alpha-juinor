@@ -1,7 +1,7 @@
 import logging
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any, Union
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +11,7 @@ class TradeSimulator:
     def __init__(self, initial_cash: float = 1_000_000.0):
         self.cash = float(initial_cash)
         self.positions: Dict[str, Dict[str, float]] = {}
-        self.order_history: List[Dict[str, Optional[float]]] = []
+        self.order_history: List[Dict[str, Any]] = []
 
     def execute_market_order(self, symbol: str, qty: float, price: float, side: str, commission: float = 0.0005) -> Dict[str, float]:
         filled_qty = abs(qty)
@@ -25,7 +25,7 @@ class TradeSimulator:
             self.cash += notional - fee
             self._update_position(symbol, -filled_qty, price)
 
-        result = {
+        result: Dict[str, Any] = {
             "symbol": symbol,
             "qty": filled_qty,
             "side": side,
@@ -90,13 +90,13 @@ class TradeSimulator:
         side = "sell" if qty > 0 else "buy"
         return self.execute_market_order(symbol, abs(qty), price, side)
 
-    def get_positions(self) -> List[Dict[str, float]]:
+    def get_positions(self) -> List[Dict[str, Any]]:
         return [
             {"symbol": symbol, "qty": float(values["qty"]), "avg_price": float(values["avg_price"])}
             for symbol, values in self.positions.items()
         ]
 
-    def get_account(self, current_prices: Dict[str, float]) -> Dict[str, float]:
+    def get_account(self, current_prices: Dict[str, float]) -> Dict[str, Any]:
         market_value = sum(qty["qty"] * current_prices.get(symbol, 0.0) for symbol, qty in self.positions.items())
         total_value = self.cash + market_value
         return {

@@ -14,6 +14,7 @@ from nexus.math.risk import RiskEngine
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/monitor", tags=["monitoring"])
 
+
 class BacktestRequest(BaseModel):
     symbol: str
     timeframe: str = "1D"
@@ -31,26 +32,42 @@ async def health() -> Dict[str, Any]:
 
 
 @router.get("/brain")
-async def brain_snapshot(symbol: str = "SPY", timeframe: str = "1D", lookback: int = 120) -> Dict[str, Any]:
+async def brain_snapshot(
+    symbol: str = "SPY",
+    timeframe: str = "1D",
+    lookback: int = 120
+) -> Dict[str, Any]:
     alpha_engine = AlphaEngine()
     brain = MarketBrain()
-    bars = await alpha_engine.fetch_market_data(symbol, timeframe=timeframe, limit=lookback)
+    bars = await alpha_engine.fetch_market_data(
+        symbol,
+        timeframe=timeframe,
+        limit=lookback
+    )
     if bars.empty:
-        raise HTTPException(status_code=502, detail="Unable to fetch market bars for brain analysis.")
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to fetch market bars for brain analysis."
+        )
 
     positions = []
     try:
         positions = await get_client().get_positions()
     except Exception as exc:
-        logger.warning(f"Unable to load live positions for brain snapshot: {exc}")
+        logger.warning(
+            f"Unable to load live positions for brain snapshot: {exc}"
+        )
 
     analysis = brain.analyze_market(bars, positions)
     returns = bars["close"].pct_change().dropna().to_numpy()
     risk_engine = RiskEngine()
     analysis["risk_profile"] = risk_engine.assess_risk(returns)
+    volatility = (
+        float(np.std(returns)) if len(returns) > 0 else 0.0
+    )
     analysis["market_depth"] = {
         "universe_size": len(bars),
-        "recent_volatility": float(np.std(returns)) if len(returns) > 0 else 0.0,
+        "recent_volatility": volatility,
     }
     return {"status": "success", "analysis": analysis}
 
@@ -58,9 +75,16 @@ async def brain_snapshot(symbol: str = "SPY", timeframe: str = "1D", lookback: i
 @router.post("/backtest")
 async def run_backtest(request: BacktestRequest) -> Dict[str, Any]:
     alpha_engine = AlphaEngine()
-    bars = await alpha_engine.fetch_market_data(request.symbol, timeframe=request.timeframe, limit=request.lookback)
+    bars = await alpha_engine.fetch_market_data(
+        request.symbol,
+        timeframe=request.timeframe,
+        limit=request.lookback
+    )
     if bars.empty or "close" not in bars.columns:
-        raise HTTPException(status_code=502, detail="Insufficient historical data for backtest.")
+        raise HTTPException(
+            status_code=502,
+            detail="Insufficient historical data for backtest."
+        )
 
     prices = bars["close"].astype(float)
     signal = pd.Series(0.0, index=prices.index)

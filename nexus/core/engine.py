@@ -1,9 +1,10 @@
 import asyncio
 import logging
+import time
 import httpx
 import numpy as np
 import pandas as pd
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from nexus.core.governance import GovernanceEngine
 from nexus.core.alpha import AlphaEngine
@@ -17,6 +18,7 @@ from nexus.math.models import NeuralODE
 from nexus.math.governance import LatticeVoter, StrategySwitcher
 from nexus.utils.config import Config
 from nexus.utils.platform_logging import setup_logging
+from nexus.utils.polyglot_bridge import PolyglotBridge
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +49,9 @@ class NexusEngine:
 
         self.symbols: List[str] = []
         self.market_regime = "SIDEWAYS"
-        self.portfolio_value = 1_000_000.0
+        self.portfolio_value = Config.FALLBACK_EQUITY
         self.max_positions = Config.MAX_OPEN_POSITIONS
+        self.last_universe_refresh = 0.0
 
     async def initialize(self) -> bool:
         logger.info(f"Initializing Nexus engine with backend {self.backend_url}")
@@ -77,19 +80,56 @@ class NexusEngine:
                 )
                 return False
 
+            # High-speed Go Audit
+            audit = PolyglotBridge.audit_platform_go()
+            logger.info(f"Polyglot Audit Status: {audit.get('overall_health')}")
+            
             self.health_monitor.record("backend", True, "connected")
+            await self.refresh_universe(client)
 
-            try:
-                response = await client.get(f"{self.backend_url}/api/alpaca/assets", params={"asset_class": "us_equity", "status": "active", "tradable": True, "limit": Config.MAX_UNIVERSE_ASSETS}, timeout=20)
-                if response.status_code == 200:
-                    symbols = response.json().get("symbols", [])
-                    self.symbols = symbols[: Config.CANDIDATE_POOL_SIZE] if symbols else ["AAPL", "MSFT", "QQQ", "SPY", "NVDA"]
-                    logger.info(f"Loaded universe with {len(self.symbols)} symbols.")
+        return True
+
+    async def refresh_universe(self, client: Optional[httpx.AsyncClient] = None):
+        """Dynamic universe re-scanner for 24/7 institutional trading."""
+        logger.info("Refreshing tradable universe assets...")
+        
+        should_close = False
+        if client is None:
+            client = httpx.AsyncClient()
+            should_close = True
+
+        try:
+            params = {
+                "asset_class": "us_equity", 
+                "status": "active", 
+                "tradable": True, 
+                "limit": Config.MAX_UNIVERSE_ASSETS
+            }
+            response = await client.get(
+                f"{self.backend_url}/api/alpaca/assets", 
+                params=params, 
+                timeout=20
+            )
+            if response.status_code == 200:
+                symbols = response.json().get("symbols", [])
+                if symbols:
+                    self.symbols = symbols[: Config.CANDIDATE_POOL_SIZE]
                 else:
-                    raise ValueError(f"Asset scan returned {response.status_code}")
-            except Exception as exc:
-                logger.warning(f"Asset universe unavailable, using fallback universe: {exc}")
-                self.symbols = ["AAPL", "MSFT", "QQQ", "SPY", "NVDA", "IWM", "AMZN", "GOOG"]
+                    self.symbols = ["AAPL", "MSFT", "QQQ", "SPY", "NVDA"]
+                logger.info(f"Loaded universe with {len(self.symbols)} symbols.")
+                self.last_universe_refresh = time.time()
+            else:
+                raise ValueError(f"Asset scan returned {response.status_code}")
+        except Exception as exc:
+            logger.warning(
+                f"Asset universe unavailable, using fallback: {exc}"
+            )
+            self.symbols = [
+                "AAPL", "MSFT", "QQQ", "SPY", "NVDA", "IWM", "AMZN", "GOOG"
+            ]
+        finally:
+            if should_close:
+                await client.aclose()
 
         return True
 
@@ -158,10 +198,14 @@ class NexusEngine:
         return max(0.2, min(scale, 1.0))
 
     def scale_weights(self, weights: Dict[str, float], multiplier: float) -> Dict[str, float]:
-        return {symbol: float(weight * multiplier) for symbol, weight in weights.items()}
+        return {symbol: weight * multiplier for symbol, weight in weights.items()}
 
     async def run_cycle(self):
         logger.info("Starting new trading cycle.")
+
+        # Check for dynamic universe re-scan
+        if time.time() - self.last_universe_refresh > Config.UNIVERSE_RESCAN_INTERVAL:
+            await self.refresh_universe()
 
         async with httpx.AsyncClient() as client:
             try:
@@ -177,14 +221,17 @@ class NexusEngine:
 
         await self.manage_positions()
         account = await self.get_account_state()
-        positions = await self.get_positions()
+        current_positions = await self.get_positions()
+        
+        # Build symbol map of current holdings for quick lookup
+        holdings = {p["symbol"]: p for p in current_positions}
 
         symbols = self.symbols[: Config.CANDIDATE_POOL_SIZE]
         raw_signals = await self.alpha_engine.get_batch_signals(symbols, timeframe="15Min")
         history = await self.fetch_universe_history(symbols, timeframe="1D", limit=100)
         benchmark_data = await self.alpha_engine.fetch_market_data("SPY", timeframe="1D", limit=120)
 
-        market_insight = self.market_brain.analyze_market(benchmark_data, positions)
+        market_insight = self.market_brain.analyze_market(benchmark_data, current_positions)
         self.market_regime = market_insight.get("regime", self.market_regime)
         selected_strategy = market_insight.get("selected_strategy", "Mean Reversion")
         
@@ -204,103 +251,202 @@ class NexusEngine:
         top_targets = dict(list(ranked.items())[: self.max_positions])
         weights = self.optimizer.optimize_weights(list(top_targets.keys()), [top_targets[symbol] for symbol in top_targets])
 
-        returns = benchmark_data["close"].pct_change().dropna().to_numpy() if not benchmark_data.empty else np.array([])
-        risk_metrics = self.risk_engine.assess_risk(returns)
+        # Ultra-fast Rust Risk Assessment
+        returns_list: List[float] = benchmark_data["close"].pct_change().dropna().tolist() if not benchmark_data.empty else []
+        risk_metrics: Dict[str, float] = {"var": 0.0}
+        if returns_list:
+            rust_risk = PolyglotBridge.calculate_risk_rust(returns_list)
+            logger.info(f"Rust Risk Metrics: VaR={rust_risk.get('var')}, ES={rust_risk.get('expected_shortfall')}")
+            risk_metrics["var"] = float(rust_risk.get("var", 0.0))
+
         risk_scale = self.determine_risk_scale(market_insight, risk_metrics)
         weights = self.scale_weights(weights, risk_scale)
 
-        portfolio_state = self.build_portfolio_state(account, positions)
-        self.health_monitor.record("market", bool(benchmark_data.shape[0] > 0), details=selected_strategy)
+        portfolio_state = self.build_portfolio_state(account, current_positions)
+        self.health_monitor.record("market", benchmark_data.shape[0] > 0, details=selected_strategy)
         self.health_monitor.record("risk", risk_metrics.get("var", 0.0) > -0.25, details=str(risk_metrics))
         self.health_monitor.heartbeat()
 
+        # Rebalancing Logic
+        target_symbols = set(weights.keys())
+        current_symbols = set(holdings.keys())
+        
+        # 1. Close positions no longer desired by strategy
+        to_close = current_symbols - target_symbols
+        close_tasks = []
+        for symbol in to_close:
+            logger.info(f"Exiting position for {symbol} - no longer in target universe.")
+            close_tasks.append(self._close_position(symbol))
+        if close_tasks:
+            await asyncio.gather(*close_tasks)
+            
+        # 2. Rebalance existing or enter new positions
+        trade_tasks = []
         for symbol, weight in weights.items():
-            # Lowered threshold to 0.0001 to allow high-frequency institutional trading
-            if abs(weight) < 0.0001:
-                continue
-            if symbol not in history or history[symbol].empty:
-                continue
+            current_qty = float(holdings.get(symbol, {}).get("qty", 0.0))
+            trade_tasks.append(self._submit_trade(
+                symbol, weight, current_qty, top_targets, history, portfolio_state,
+                raw_signals, market_insight, selected_strategy, is_open=clock_data.get("is_open", False)
+            ))
 
-            current_price = float(history[symbol]["close"].iloc[-1])
-            score = top_targets.get(symbol, 0.0)
-            side = "buy" if score > 0 else "sell"
+        if trade_tasks:
+            await asyncio.gather(*trade_tasks)
 
-            # Safe quantity calculation with NaN handling
-            total_value = portfolio_state.get("total_value", self.portfolio_value)
-            if not isinstance(total_value, (int, float)) or np.isnan(total_value):
-                total_value = self.portfolio_value
+        self.execution_agent.learn(
+            reward=float(np.mean(list(portfolio_scores.values()) or [0.0]))
+        )
 
-            if not isinstance(weight, (int, float)) or np.isnan(weight):
-                weight = 0.0
+    async def _submit_trade(
+        self, symbol: str, weight: float, current_qty: float, top_targets: Dict[str, float],
+        history: Dict[str, pd.DataFrame], portfolio_state: Dict[str, Any],
+        raw_signals: Dict[str, float], market_insight: Dict[str, Any],
+        selected_strategy: str, is_open: bool = True
+    ):
+        """Helper to process and submit an individual trade concurrently."""
+        # Lowered threshold to 0.0001 to allow high-frequency institutional trading
+        if abs(weight) < 0.0001:
+            return
+        if symbol not in history or history[symbol].empty:
+            return
 
-            if not isinstance(current_price, (int, float)) or np.isnan(current_price) or current_price <= 0:
-                current_price = 1.0
+        current_price = float(history[symbol]["close"].iloc[-1])
+        score = top_targets.get(symbol, 0.0)
+        side = "buy" if score > 0 else "sell"
 
-            position_value = total_value * abs(weight)
-            qty = max(1, int(position_value / current_price))
+        # Safe quantity calculation with NaN handling
+        total_value = portfolio_state.get("total_value", self.portfolio_value)
+        if not isinstance(total_value, (int, float)) or np.isnan(total_value):
+            total_value = self.portfolio_value
 
-            order_type = "market"
-            time_in_force = "day"
-            limit_price = None
+        if not isinstance(weight, (int, float)) or np.isnan(weight):
+            weight = 0.0
 
-            if self.market_regime == "TURBULENT":
-                order_type = "limit"
-                limit_price = current_price * (1.002 if side == "buy" else 0.998)
-            elif self.market_regime == "BEAR" and side == "buy":
-                order_type = "stop"
-            elif self.market_regime == "BULL" and side == "sell":
-                order_type = "limit"
-                limit_price = current_price * 0.995
+        if (not isinstance(current_price, (int, float)) or 
+                np.isnan(current_price) or current_price <= 0):
+            current_price = 1.0
 
-            trade_request = {
-                "symbol": symbol,
-                "qty": qty,
-                "side": side,
-                "price": current_price,
-                "order_type": order_type,
-                "time_in_force": time_in_force,
-                "limit_price": limit_price,
-                "regime": self.market_regime,
-                "strategy": selected_strategy
-            }
+        position_value = total_value * abs(weight)
+        target_qty = int(position_value / current_price)
+        
+        # Calculate difference (target - current)
+        qty_diff = target_qty - abs(current_qty)
+        
+        # Professional Threshold: Only trade if difference is meaningful (>1 share and >$100 value)
+        if abs(qty_diff) < 1 or (abs(qty_diff) * current_price < 100):
+            return
 
-            approved, violations = self.governance.check_compliance(trade_request, portfolio_state)
-            if not approved:
-                logger.warning(f"Trade rejected: {violations}")
-                continue
+        side = "buy" if qty_diff > 0 else "sell"
+        qty = abs(qty_diff)
 
-            # Classify strategy
-            alpha = raw_signals.get(symbol, 0.0)
-            strategy_class = self.market_brain.classify_strategy(symbol, alpha, history.get(symbol, pd.DataFrame()), self.market_regime, market_insight.get("macro_profile", {}))
+        order_type = "market"
+        time_in_force = "day"
+        limit_price = None
 
-            action = self.execution_agent.get_action(np.random.rand(10))
-            logger.info(f"Executing {side} order for {symbol}: qty={qty}, type={order_type}, action={action}, strategy={strategy_class}")
+        if self.market_regime == "TURBULENT":
+            order_type = "limit"
+            limit_price = current_price * (1.002 if side == "buy" else 0.998)
+        elif self.market_regime == "BEAR":
+            order_type = "limit"
+            limit_price = current_price * (0.995 if side == "buy" else 1.002)
+        elif self.market_regime == "BULL":
+            order_type = "limit"
+            limit_price = current_price * (0.998 if side == "buy" else 1.002)
 
-            payload = {
-                "symbol": symbol,
-                "qty": qty,
-                "side": side,
-                "order_type": order_type,
-                "time_in_force": time_in_force,
-                "asset_class": "equity",
-                "strategy": strategy_class
-            }
-            if limit_price is not None:
-                payload["limit_price"] = round(limit_price, 4)
+        # Extended Hours Support for Professional 24/7 Trading
+        extended_hours = False
+        if not is_open:
+            extended_hours = True
+            order_type = "limit" # Alpaca requires limit orders for extended hours
+            if limit_price is None:
+                limit_price = current_price * (1.001 if side == "buy" else 0.999)
 
-            async with httpx.AsyncClient() as client:
-                try:
-                    response = await client.post(f"{self.backend_url}/api/alpaca/order", json=payload, timeout=15)
-                    if response.status_code not in {200, 201}:
-                        try:
-                            error_text = response.text
-                        except Exception:
-                            error_text = "Unknown error"
-                        logger.error(f"Order failed for {symbol}: {response.status_code} {error_text}")
-                except Exception as exc:
-                    logger.error(f"Order submission error for {symbol}: {exc}")
+        trade_request = {
+            "symbol": symbol,
+            "qty": qty,
+            "side": side,
+            "price": current_price,
+            "order_type": order_type,
+            "time_in_force": time_in_force,
+            "limit_price": limit_price,
+            "regime": self.market_regime,
+            "strategy": selected_strategy
+        }
 
-        self.execution_agent.learn(reward=float(np.mean(list(portfolio_scores.values()) or [0.0])))
+        # Hardware-level Zig Validation
+        validation = PolyglotBridge.validate_order_zig(trade_request)
+        if not validation.get("valid"):
+            logger.error(f"Zig Validation failed for {symbol}: {validation.get('error')}")
+            return
+
+        # Compliance Check with Current Positions
+        approved, violations = self.governance.check_compliance(
+            trade_request, portfolio_state, current_qty=current_qty
+        )
+        if not approved:
+            logger.warning(f"Trade rejected for {symbol}: {violations}")
+            return
+
+        # Classify strategy
+        alpha = raw_signals.get(symbol, 0.0)
+        strategy_class = self.market_brain.classify_strategy(
+            symbol, alpha, history.get(symbol, pd.DataFrame()),
+            self.market_regime, market_insight.get("macro_profile", {})
+        )
+
+        action = self.execution_agent.get_action(np.random.rand(10))
+        logger.info(
+            f"Executing {side} order for {symbol}: qty={qty}, "
+            f"type={order_type}, action={action}, strategy={strategy_class}"
+        )
+
+        payload = {
+            "symbol": symbol,
+            "qty": qty,
+            "side": side,
+            "order_type": order_type,
+            "time_in_force": time_in_force,
+            "asset_class": "equity",
+            "strategy": strategy_class
+        }
+        if limit_price is not None:
+            payload["limit_price"] = round(limit_price, 4)
+        
+        if extended_hours:
+            payload["extended_hours"] = True
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(
+                    f"{self.backend_url}/api/alpaca/order", 
+                    json=payload, 
+                    timeout=15
+                )
+                if response.status_code not in {200, 201}:
+                    try:
+                        error_text = response.text
+                    except Exception:
+                        error_text = "Unknown error"
+                    logger.error(
+                        f"Order failed for {symbol}: "
+                        f"{response.status_code} {error_text}"
+                    )
+            except Exception as exc:
+                logger.error(f"Order submission error for {symbol}: {exc}")
+
+    async def _close_position(self, symbol: str):
+        """Force close a position via API."""
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.delete(
+                    f"{self.backend_url}/api/alpaca/positions/{symbol}", 
+                    timeout=15
+                )
+                if response.status_code in {200, 201}:
+                    logger.info(f"Successfully closed position for {symbol}")
+                else:
+                    logger.error(f"Failed to close position for {symbol}: {response.text}")
+            except Exception as exc:
+                logger.error(f"Error closing position for {symbol}: {exc}")
 
 
     async def manage_positions(self):
@@ -316,10 +462,10 @@ class NexusEngine:
                     continue
                 try:
                     unrealized_plpc = float(pos.get("unrealized_plpc", 0.0))
-                    if unrealized_plpc >= 8.0:
+                    if unrealized_plpc >= Config.TAKE_PROFIT_THRESHOLD * 100:
                         logger.info(f"Take-profit triggered for {symbol} ({unrealized_plpc:.2f}%)")
                         await client.delete(f"{self.backend_url}/api/alpaca/positions/{symbol}", timeout=10)
-                    elif unrealized_plpc <= -4.0:
+                    elif unrealized_plpc <= Config.STOP_LOSS_THRESHOLD * 100:
                         logger.warning(f"Stop-loss triggered for {symbol} ({unrealized_plpc:.2f}%)")
                         await client.delete(f"{self.backend_url}/api/alpaca/positions/{symbol}", timeout=10)
                 except Exception as exc:

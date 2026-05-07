@@ -24,7 +24,10 @@ async def lifespan(app: FastAPI):
             if status == "ACTIVE":
                 logger.info("Alpaca execution link established.")
             else:
-                logger.warning(f"Alpaca account returned status: {status}")
+                error_msg = acc.get("error", "Unknown Error")
+                logger.warning(f"Alpaca account returned status: {status} | Error: {error_msg}")
+                if status == "UNAUTHORIZED":
+                    logger.error("CRITICAL: Alpaca API Keys are invalid or unauthorized. Please check your .env file.")
         except Exception as exc:
             logger.warning(f"Unable to verify Alpaca account during startup: {exc}")
 

@@ -8,7 +8,19 @@ logger = logging.getLogger(__name__)
 class KalmanFilter:
     """
     State-Space Model for Signal Denoising.
-    Estimates the 'True' Market Price by filtering out microstructure noise.
+    Estimates the 'True' Market Price by filtering out microstructure noise using 
+    a recursive Bayesian estimation process.
+
+    Mathematical Basis:
+    - Predict Step:
+        x_k^- = x_{k-1}  (State prediction)
+        P_k^- = P_{k-1} + Q  (Error covariance prediction)
+    - Update Step:
+        K_k = P_k^- / (P_k^- + R)  (Kalman Gain)
+        x_k = x_k^- + K_k * (z_k - x_k^-)  (State update)
+        P_k = (1 - K_k) * P_k^-  (Error covariance update)
+
+    Where Q is process variance and R is measurement variance.
     """
     def __init__(self, process_variance: float = 1e-5, measurement_variance: float = 1e-3):
         self.post_estimate = 0.0
@@ -47,6 +59,12 @@ class NeuralODE:
     """
     Continuous-Time Neural ODE concepts for modeling market trajectories.
     Predicts the "Flow" of prices as a continuous differential equation proxy.
+    
+    Implementation Logic:
+    Models the price path as dh/dt = f(h(t), t, θ), where f is a neural 
+    approximation of the market's instantaneous drift and diffusion. 
+    This proxy uses 1st and 2nd derivatives to estimate the force field 
+    shaping future price trajectories.
     """
     def predict_trajectory(self, prices: np.ndarray) -> float:
         if len(prices) < 10:
@@ -69,6 +87,12 @@ class TDAMapper:
     """
     Topological Data Analysis (TDA) Mapper proxy.
     Uses concepts from Persistence Homology to detect the "Shape" of market data.
+    
+    Mathematical Basis:
+    Captures invariant geometric features of high-dimensional price manifolds. 
+    Specifically focuses on Betti-0 (connected components) and Betti-1 (loops) 
+    as proxies for market stability and regime transitions. Entropy is used 
+    to measure the complexity of the persistent diagram.
     """
     def map_market_topology(self, data_points: np.ndarray) -> str:
         if len(data_points) < 50:
@@ -95,8 +119,14 @@ class TDAMapper:
 
 class FractalEngine:
     """
-    Calculates the Fractal Dimension of market structure.
-    Detects "Roughness" or "Persistence" in price action.
+    Calculates the Fractal Dimension (FD) of market structure.
+    Detects "Roughness" or "Persistence" in price action using Katz's algorithm.
+    
+    Mathematical Basis:
+    FD = log(L) / log(d), where L is total path length and d is the diameter.
+    - FD ≈ 1.0: Linear, highly persistent trend.
+    - FD ≈ 1.5: Brownian motion (Random Walk).
+    - FD ≈ 2.0: Space-filling, highly mean-reverting/chaotic.
     """
     @staticmethod
     @jit(nopython=True)

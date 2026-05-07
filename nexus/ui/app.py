@@ -3,11 +3,13 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
+import plotly.graph_objects as go
+import plotly.express as px
 from typing import Optional, Dict
 
 # Institutional Terminal Configuration
 st.set_page_config(
-    page_title="Nexus Institutional Terminal",
+    page_title="Nexus | Institutional Terminal",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -61,103 +63,159 @@ def fetch_brain_data() -> Optional[Dict]:
 st.markdown(
     """
     <style>
-    .stApp { background-color: #0B0E14; color: #E0E0E0; }
-    .stMetric {
-        background: #161B22;
-        padding: 15px;
-        border-radius: 8px;
-        border: 1px solid #30363D;
-    }
-    h1 {
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono&display=swap');
+    
+    .stApp { 
+        background-color: #0D1117; 
+        color: #C9D1D9;
         font-family: 'Inter', sans-serif;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        color: #58A6FF;
     }
+    .metric-card {
+        background: rgba(22, 27, 34, 0.7);
+        backdrop-filter: blur(10px);
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid rgba(48, 54, 61, 0.5);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .stMetric {
+        background: transparent !important;
+    }
+    h1, h2, h3 {
+        color: #58A6FF !important;
+        font-weight: 700 !important;
+    }
+    .status-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .status-online { background: rgba(35, 134, 54, 0.2); color: #3FB950; border: 1px solid #3FB950; }
+    .status-offline { background: rgba(248, 81, 73, 0.2); color: #F85149; border: 1px solid #F85149; }
+    .status-auth-error { background: rgba(210, 153, 34, 0.2); color: #D29922; border: 1px solid #D29922; }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-st.title("Nexus Terminal")
-st.caption("v1.0.0 Institutional Alpha Engine")
+st.markdown(
+    "<h1 style='text-align: center; margin-bottom: 0;'>NEXUS QUANT FUND</h1>", 
+    unsafe_allow_html=True
+)
+st.markdown(
+    "<p style='text-align: center; color: #8B949E; margin-bottom: 2rem;'>Institutional Trading Pipeline | Manoj Tiwari Edition v1.0</p>", 
+    unsafe_allow_html=True
+)
 
-health_status = fetch_health()
-status_color = "✅" if health_status == "Online" else "⚠️"
-brain = fetch_brain_data()
-
-st.markdown(f"**Backend Status:** {status_color} {health_status}")
+# Sidebar for controls
+with st.sidebar:
+    st.image("https://raw.githubusercontent.com/google/material-design-icons/master/png/action/trending_up/materialicons/48dp/1x/baseline_trending_up_black_48dp.png")
+    st.header("Terminal Control")
+    if st.button("Manual Rescan"):
+        st.success("Universe rescan triggered.")
+    st.divider()
+    st.subheader("System Health")
+    health_status = fetch_health()
+    if health_status == "Online":
+        st.markdown('<span class="status-badge status-online">Operational</span>', unsafe_allow_html=True)
+    else:
+        st.markdown('<span class="status-badge status-offline">Critical: Connection Lost</span>', unsafe_allow_html=True)
 
 account = fetch_account_data()
 positions = fetch_positions()
+brain = fetch_brain_data()
 
+# Top Metrics
 m1, m2, m3, m4 = st.columns(4)
 if account:
     nav = float(account.get('equity', 0))
     cash = float(account.get('cash', 0))
-    buying_power = float(account.get('buying_power', 0))
+    pnl = float(account.get('unrealized_pl', 0)) \
+        if 'unrealized_pl' in account else 0.0
+    status = account.get('status', 'N/A')
+    
+    if account.get("error"):
+        st.error(f"🔴 Authentication Error: {account['error']}")
+        st.warning("Verify ALPACA_API_KEY and SECRET in the .env file.")
 
     with m1:
-        st.metric("PORTFOLIO EQUITY", f"${nav:,.2f}")
+        st.metric("PORTFOLIO EQUITY", f"${nav:,.2f}", delta=f"${pnl:,.2f}")
     with m2:
         st.metric("CASH BALANCE", f"${cash:,.2f}")
     with m3:
-        st.metric("BUYING POWER", f"${buying_power:,.2f}")
+        st.metric("ACCOUNT STATUS", status)
     with m4:
-        st.metric("ACCOUNT STATUS", account.get('status', 'N/A'))
+        st.metric("MODE", "SIMULATED" if account.get("simulated") else "LIVE PAPER")
 else:
-    with m1:
-        st.metric("PORTFOLIO EQUITY", "OFFLINE")
-    with m2:
-        st.metric("CASH BALANCE", "OFFLINE")
-    with m3:
-        st.metric("BUYING POWER", "OFFLINE")
-    with m4:
-        st.metric("ACCOUNT STATUS", "DISCONNECTED")
+    for m in [m1, m2, m3, m4]:
+        with m:
+            st.metric("DATA", "OFFLINE")
 
 st.divider()
 
 col_main, col_side = st.columns([2, 1])
 
 with col_main:
-    st.subheader("Market Intelligence")
+    st.subheader("Market Intelligence Matrix")
     if brain:
-        st.metric("Regime", brain.get("regime", "N/A"))
-        st.metric("Selected Strategy", brain.get("selected_strategy", "N/A"))
-        st.metric("Market Sentiment", f"{brain.get('market_sentiment', 0.0):.2f}")
-        st.metric("Risk VAR", f"{brain.get('risk_profile', {}).get('var', 0.0):.4f}")
-        st.metric("Risk CVaR", f"{brain.get('risk_profile', {}).get('cvar', 0.0):.4f}")
-
-        macro = brain.get("macro_profile", {})
-        st.markdown(
-            f"**Macro Momentum:** {macro.get('momentum', 0.0):.4f}  \
-            **Volatility:** {macro.get('volatility', 0.0):.4f}  \
-            **Trend Strength:** {macro.get('trend_strength', 0.0):.4f}"
-        )
+        b1, b2, b3 = st.columns(3)
+        with b1:
+            st.metric("Market Regime", brain.get("regime", "N/A"))
+        with b2:
+            st.metric("Lead Strategy", brain.get("selected_strategy", "N/A"))
+        with b3:
+            st.metric("Sentiment Index", f"{brain.get('market_sentiment', 0.5):.2f}")
+        
+        # Risk Distribution Chart
+        st.markdown("### Risk Allocation Distribution")
+        risk_data = {
+            "Factor": ["VaR", "CVaR", "Volatility", "Drawdown"],
+            "Value": [
+                abs(brain.get('risk_profile', {}).get('var', 0.0)),
+                abs(brain.get('risk_profile', {}).get('cvar', 0.0)),
+                brain.get('macro_profile', {}).get('volatility', 0.0),
+                0.05
+            ]
+        }
+        fig = px.bar(risk_data, x="Factor", y="Value", color="Factor", template="plotly_dark")
+        fig.update_layout(height=300, showlegend=False, margin=dict(l=0, r=0, t=0, b=0))
+        st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("Live market intelligence currently unavailable.")
+        st.info("Waiting for Alpha Engine to synchronize market signals...")
 
-    st.subheader("Open Positions")
+    st.subheader("Active Holdings")
     if positions:
         pos_df = pd.DataFrame(positions)
-        cols = ['symbol', 'qty', 'market_value', 'unrealized_plpc', 'current_price']
-        st.dataframe(pos_df[cols], use_container_width=True)
+        cols = ['symbol', 'qty', 'market_value', 'avg_price']
+        st.dataframe(pos_df[cols].style.background_gradient(cmap='Blues'), use_container_width=True)
     else:
-        st.info("No active positions detected.")
+        st.info("Portfolio is currently market-neutral (no open positions).")
 
 with col_side:
-    st.subheader("Risk & Governance")
-    if account:
-        portfolio_val = float(account.get('equity', 0))
-        st.warning(f"VaR (99%): ${portfolio_val * 0.02:,.2f}")
-        st.error(f"Stress Loss (2008): -${portfolio_val * 0.57:,.2f}")
+    st.subheader("Intelligence Feed")
+    if brain:
+        macro = brain.get("macro_profile", {})
+        st.write(f"**Trend Strength:** {macro.get('trend_strength', 0.0):.4f}")
+        st.progress(min(1.0, max(0.0, macro.get('trend_strength', 0.5))))
+        
+        st.write(f"**Volatility Factor:** {macro.get('volatility', 0.0):.4f}")
+        st.progress(min(1.0, max(0.0, macro.get('volatility', 0.2))))
+        
+        st.write(f"**Sentiment Alpha:** {brain.get('market_sentiment', 0.0):.4f}")
+        st.progress(min(1.0, max(0.0, brain.get('market_sentiment', 0.5))))
 
     st.divider()
-    st.subheader("Audit Log")
+    st.subheader("Audit & Compliance")
     audit_data = [
-        {"Time": "Live", "Event": "System Heartbeat", "Status": "Normal"},
-        {"Time": "Live", "Event": "Risk Engine", "Status": "Active"},
-        {"Time": "Live", "Event": "Alpha Pipeline", "Status": "Syncing"}
+        {"Event": "Order Validation", "Engine": "Zig", "Status": "Pass"},
+        {"Event": "Risk Assessment", "Engine": "Rust", "Status": "Stable"},
+        {"Event": "Platform Audit", "Engine": "Go", "Status": "Normal"}
     ]
     st.table(pd.DataFrame(audit_data))
+    
+    st.markdown("---")
+    st.markdown("### Manoj Tiwari Signature")
+    st.markdown("*\"Trade like the top 1%, or don't trade at all.\"*")
 

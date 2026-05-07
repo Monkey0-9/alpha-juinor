@@ -14,14 +14,21 @@ class GovernanceEngine:
         self.max_drawdown_limit = max_drawdown_limit
         self.audit_log: List[Dict] = []
 
-    def check_compliance(self, trade_request: Dict, portfolio_state: Dict) -> Tuple[bool, List[str]]:
+    def check_compliance(self, trade_request: Dict, portfolio_state: Dict, current_qty: float = 0.0) -> Tuple[bool, List[str]]:
         """
         Performs compliance checks against risk and concentration limits.
         """
         symbol = trade_request['symbol']
         qty = trade_request['qty']
         price = trade_request['price']
-        trade_value = qty * price
+        side = trade_request['side']
+        
+        # Calculate new total quantity for this symbol
+        # Assuming side is 'buy' or 'sell'
+        delta = qty if side == 'buy' else -qty
+        new_qty = current_qty + delta
+        
+        trade_value = abs(new_qty) * price
         total_value = portfolio_state['total_value']
         drawdown = portfolio_state['drawdown']
 

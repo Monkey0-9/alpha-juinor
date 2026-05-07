@@ -1,11 +1,12 @@
 import asyncio
 import logging
-import httpx
 import numpy as np
 import pandas as pd
+from datetime import datetime, timedelta
 from typing import Dict, List
 from nexus.math.models import KalmanFilter
 from nexus.math.indicators import HawkesProcess
+from nexus.execution.alpaca import get_client
 from nexus.utils.config import Config
 
 logger = logging.getLogger(__name__)
@@ -18,28 +19,47 @@ class AlphaEngine:
         self.kf = KalmanFilter()
         self.hawkes = HawkesProcess()
         self.backend_url = backend_url
+        self.client = get_client()
 
     async def fetch_market_data(self, symbol: str, timeframe: str = "1Min", limit: int = 120) -> pd.DataFrame:
-        """Fetch market bars from the execution backend."""
+        """Fetch market bars from Alpaca directly, with yfinance fallback."""
+        bars = []
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{self.backend_url}/api/alpaca/bars",
-                    params={"symbol": symbol, "timeframe": timeframe, "limit": limit},
-                    timeout=10
-                )
-                if response.status_code == 200:
-                    bars = response.json().get("bars", [])
-                    if bars:
-                        df = pd.DataFrame(bars)
-                        if "close" not in df.columns and "c" in df.columns:
-                            df["close"] = df["c"]
-                        return df
+            if timeframe == "1D":
+                start_date = (datetime.utcnow() - timedelta(days=limit)).strftime("%Y-%m-%d")
+                bars = await self.client.get_bars(symbol, timeframe=timeframe, limit=limit, start=start_date)
+            else:
+                bars = await self.client.get_bars(symbol, timeframe=timeframe, limit=limit)
         except Exception as e:
-            logger.debug(f"Data fetch failed for {symbol} ({timeframe}): {e}")
-        return pd.DataFrame()
+            logger.debug(f"Alpaca data fetch failed for {symbol} ({timeframe}): {e}")
 
+        if bars:
+            df = pd.DataFrame(bars)
+            if "close" not in df.columns and "c" in df.columns:
+                df["close"] = df["c"]
+            return df
+            
+        # Fallback to yfinance if Alpaca fails (e.g., invalid keys or rate limits)
+        logger.debug(f"Falling back to yfinance for {symbol} data...")
+        try:
+            import yfinance as yf
+            interval = "1d" if timeframe == "1D" else "15m" if timeframe == "15Min" else "1m"
+            period = f"{limit}d" if timeframe == "1D" else "5d"
+            df = yf.download(symbol, period=period, interval=interval, progress=False)
+            if not df.empty:
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = [col[0].lower() for col in df.columns]
+                else:
+                    df.columns = df.columns.str.lower()
+                if "close" not in df.columns and "adj close" in df.columns:
+                    df["close"] = df["adj close"]
+                return df.tail(limit)
+        except Exception as e:
+            logger.warning(f"yfinance fallback failed for {symbol}: {e}")
+
+        return pd.DataFrame()
     def generate_signal(self, data: pd.DataFrame) -> float:
+        """Generate alpha signal from market data."""
         if data.empty or "close" not in data.columns:
             return 0.0
 
@@ -63,11 +83,20 @@ class AlphaEngine:
         signal = np.tanh(recent_trend * 40) * vol_scaler
         return float(signal)
 
-    async def get_batch_signals(self, symbols: List[str], timeframe: str = "15Min") -> Dict[str, float]:
+    async def get_batch_signals(
+        self,
+        symbols: List[str],
+        timeframe: str = "15Min"
+    ) -> Dict[str, float]:
+        """Generate signals for a batch of symbols."""
         signals: Dict[str, float] = {}
 
-        async def symbol_signal(symbol: str) -> tuple[str, float]:
-            data = await self.fetch_market_data(symbol, timeframe=timeframe, limit=120)
+        async def symbol_signal(symbol: str) -> tuple:
+            data = await self.fetch_market_data(
+                symbol,
+                timeframe=timeframe,
+                limit=120
+            )
             return symbol, self.generate_signal(data)
 
         tasks = [symbol_signal(symbol) for symbol in symbols]
@@ -75,7 +104,9 @@ class AlphaEngine:
 
         for symbol, result in zip(symbols, results):
             if isinstance(result, BaseException):
-                logger.warning(f"Signal generation failed for {symbol}: {result}")
+                logger.warning(
+                    f"Signal generation failed for {symbol}: {result}"
+                )
                 signals[symbol] = 0.0
             else:
                 signals[symbol] = result[1]

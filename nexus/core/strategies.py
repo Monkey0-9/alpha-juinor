@@ -70,6 +70,37 @@ class MacroOverlayStrategy(BaseStrategy):
             score -= 0.15
         return float(np.tanh(score * 8))
 
+class RSISetupStrategy(BaseStrategy):
+    name = "RSI_Tactical"
+
+    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+        if history.empty or "close" not in history.columns or len(history) < 14:
+            return 0.0
+        delta = history["close"].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        
+        last_rsi = rsi.iloc[-1]
+        if last_rsi < 30: return 0.8 # Oversold
+        if last_rsi > 70: return -0.8 # Overbought
+        return alpha * 0.5
+
+class BreakoutStrategy(BaseStrategy):
+    name = "InstitutionalBreakout"
+
+    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+        if history.empty or "close" not in history.columns or len(history) < 20:
+            return 0.0
+        high_20 = history["high"].rolling(20).max().iloc[-2]
+        low_20 = history["low"].rolling(20).min().iloc[-2]
+        current = history["close"].iloc[-1]
+        
+        if current > high_20: return 0.9
+        if current < low_20: return -0.9
+        return alpha * 0.2
+
 class StrategyFactory:
     @staticmethod
     def all_strategies() -> list[BaseStrategy]:
@@ -78,6 +109,8 @@ class StrategyFactory:
             MeanReversionStrategy(),
             VolatilityArbitrageStrategy(),
             MacroOverlayStrategy(),
+            RSISetupStrategy(),
+            BreakoutStrategy(),
         ]
 
     @staticmethod
