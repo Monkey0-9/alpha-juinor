@@ -127,6 +127,7 @@ class AlpacaClient:
                     return [{
                         "symbol": p.get("symbol"),
                         "qty": float(p.get("qty", 0)),
+                        "avg_price": float(p.get("avg_entry_price", 0)),
                         "market_value": float(p.get("market_value", 0)),
                         "unrealized_pl": float(p.get("unrealized_pl", 0)),
                         "unrealized_plpc": float(p.get("unrealized_plpc", 0)),

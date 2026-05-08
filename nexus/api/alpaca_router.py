@@ -3,6 +3,7 @@ from typing import Optional
 from pydantic import BaseModel
 import logging
 from nexus.execution.alpaca import get_client, AlpacaClient
+from nexus.utils.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +125,7 @@ async def get_assets(
     asset_class: str = "us_equity",
     status: str = "active",
     tradable: bool = True,
-    limit: int = 1000,
+    limit: int = Config.MAX_UNIVERSE_ASSETS,
     client: AlpacaClient = Depends(get_alpaca)
 ):
     assets = await client.get_assets(

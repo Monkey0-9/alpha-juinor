@@ -4,6 +4,7 @@ import socket
 import subprocess
 import sys
 import time
+from typing import List, Dict, Any
 
 from nexus.utils.config import Config
 
@@ -17,25 +18,31 @@ logger = logging.getLogger("Orchestrator")
 class NexusOrchestrator:
     """Unified orchestrator for the Nexus Quantitative Platform."""
 
-    def __init__(self):
-        self.processes = []
-        self.restart_attempts = {}
+    def __init__(self) -> None:
+        self.processes: List[Dict[str, Any]] = []
+        self.restart_attempts: Dict[str, int] = {}
         self.root = os.getcwd()
 
-    def find_free_port(self, preferred_port: int) -> int:
+    def find_free_port(
+        self,
+        preferred_port: int,
+        host: str = "127.0.0.1"
+    ) -> int:
         port = preferred_port
         while port <= 65535:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 try:
-                    sock.bind(("0.0.0.0", port))
+                    sock.bind((host, port))
+                    # Port is free, wait a tiny bit after closing
+                    time.sleep(0.1)
                     return port
                 except OSError:
                     port += 1
         raise RuntimeError("Unable to find a free TCP port.")
 
     def start_process(
-        self, name: str, cmd: list[str], cwd: str, env: dict
+        self, name: str, cmd: List[str], cwd: str, env: Dict[str, str]
     ) -> None:
         logger.info("Launching %s...", name)
         # shell=False to avoid command injection and satisfy security linters.
@@ -46,7 +53,7 @@ class NexusOrchestrator:
         )
         self.restart_attempts[name] = 0
 
-    def stop_process(self, process: dict) -> None:
+    def stop_process(self, process: Dict[str, Any]) -> None:
         p = process["proc"]
         if p.poll() is None:
             logger.info("Stopping %s...", process["name"])
@@ -59,7 +66,7 @@ class NexusOrchestrator:
                 )
                 p.kill()
 
-    def restart_process(self, process: dict) -> None:
+    def restart_process(self, process: Dict[str, Any]) -> None:
         name = process["name"]
         self.stop_process(process)
         self.processes.remove(process)
@@ -118,6 +125,9 @@ class NexusOrchestrator:
             common_env,
         )
 
+        common_env["NEXUS_STREAMLIT_PORT"] = str(streamlit_port)
+        common_env["PYTHONIOENCODING"] = "utf-8"
+
         streamlit_cmd = [
             sys.executable,
             "-m",
@@ -128,6 +138,10 @@ class NexusOrchestrator:
             str(streamlit_port),
             "--server.headless",
             "true",
+            "--browser.gatherUsageStats",
+            "false",
+            "--server.address",
+            "127.0.0.1",
         ]
         self.start_process(
             "Terminal-UI",

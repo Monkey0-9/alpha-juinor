@@ -52,9 +52,14 @@ func checkService(service string, url string, wg *sync.WaitGroup, results chan<-
 }
 
 func main() {
+	baseURL := "http://127.0.0.1:8000"
+	if len(os.Args) > 1 {
+		baseURL = os.Args[1]
+	}
+
 	services := map[string]string{
-		"Core API": "http://127.0.0.1:8000/api/alpaca/health",
-		"Engine":   "http://127.0.0.1:8000/api/health",
+		"Core API": baseURL + "/api/alpaca/health",
+		"Engine":   baseURL + "/api/health",
 	}
 
 	var wg sync.WaitGroup

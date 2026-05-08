@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
-from typing import Dict
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class RegimeDetector:
     """
@@ -16,17 +19,33 @@ class RegimeDetector:
         if len(data) < self.window:
             return "SIDEWAYS"
         
-        returns = data['close'].pct_change().dropna()
-        vol = returns.rolling(window=self.window).std().iloc[-1]
-        trend = (data['close'].iloc[-1] / data['close'].iloc[-self.window]) - 1
-        
-        if vol > 0.03:
-            return "TURBULENT"
-        if trend > 0.02:
-            return "BULL"
-        if trend < -0.02:
-            return "BEAR"
+        try:
+            # Robust selection: take the first 'close' column if multiple exist
+            close_col = data['close']
+            if isinstance(close_col, pd.DataFrame):
+                close_col = close_col.iloc[:, 0]
+            
+            returns = close_col.pct_change().dropna()
+            vol_series = returns.rolling(window=self.window).std()
+            if vol_series.empty:
+                return "SIDEWAYS"
+            vol = float(vol_series.iloc[-1])
+            
+            c_last = float(close_col.iloc[-1])
+            c_prev = float(close_col.iloc[-self.window])
+            trend = (c_last / c_prev) - 1
+            
+            if vol > 0.03:
+                return "TURBULENT"
+            if trend > 0.02:
+                return "BULL"
+            if trend < -0.02:
+                return "BEAR"
+        except Exception as e:
+            logger.error(f"Regime detection failed: {e}")
+            return "UNKNOWN"
         return "SIDEWAYS"
+
 
 class HawkesProcess:
     """
@@ -47,6 +66,7 @@ class HawkesProcess:
         t_last = events[-1]
         intensity = self.mu + np.sum(self.alpha * np.exp(-self.beta * (t_last - events[:-1])))
         return float(intensity)
+
 
 def calculate_obi(bid_size: float, ask_size: float) -> float:
     """
