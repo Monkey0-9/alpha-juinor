@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  nexus-platform:
+    build: .
+    container_name: nexus_platform
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "8001:8001"
+      - "8501:8501"
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

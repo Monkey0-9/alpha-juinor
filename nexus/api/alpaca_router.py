@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from typing import Optional
+from typing import Optional, Dict, Any
 from pydantic import BaseModel
 import logging
 from nexus.execution.alpaca import get_client, AlpacaClient
@@ -63,6 +63,18 @@ async def list_orders(
 ):
     orders = await client.get_orders(status=status, limit=limit)
     return {"status": "success", "count": len(orders), "orders": orders}
+
+
+@router.get("/orders/{order_id}")
+async def get_order_status(
+    order_id: str,
+    client: AlpacaClient = Depends(get_alpaca)
+) -> Dict[str, Any]:
+    orders = await client.get_orders(status="all")
+    for order in orders:
+        if order.get("id") == order_id:
+            return order
+    raise HTTPException(status_code=404, detail="Order not found")
 
 
 @router.post("/order")

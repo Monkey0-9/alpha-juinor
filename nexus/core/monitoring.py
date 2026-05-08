@@ -1,48 +1,48 @@
 import logging
+import asyncio
 import time
-from typing import Dict, Optional, Callable
+from typing import Dict, Any, Optional
+from nexus.utils.notifications import notifier
 
 logger = logging.getLogger(__name__)
 
+
 class HealthMonitor:
-    """Tracks system health and triggers graceful pauses or alerts."""
+    """Monitors platform vital signs and broadcasts critical alerts."""
 
-    def __init__(self, service_name: str = "Nexus", max_failures: int = 5):
-        self.service_name = service_name
-        self.max_failures = max_failures
-        self.failure_counts: Dict[str, int] = {}
-        self.last_updated = time.time()
-        self.alert_callbacks: list[Callable[[str, str], None]] = []
+    def __init__(self):
+        self.stats = {
+            "market": {"status": "healthy", "details": "N/A"},
+            "risk": {"status": "healthy", "details": "N/A"},
+            "backend": {"status": "healthy", "details": "N/A"},
+            "market_session": {"status": "healthy", "details": "N/A"},
+        }
+        self.last_heartbeat = 0.0
 
-    def add_alert_callback(self, callback: Callable[[str, str], None]):
-        self.alert_callbacks.append(callback)
-
-    def record(self, component: str, healthy: bool, details: Optional[str] = None) -> None:
-        self.last_updated = time.time()
-        status = "healthy" if healthy else "unhealthy"
-        logger.info(f"HealthMonitor [{component}] status={status} details={details or 'n/a'}")
+    def record(
+        self, component: str, healthy: bool, details: Any = "N/A"
+    ):
+        status = "healthy" if healthy else "failed"
+        self.stats[component] = {"status": status, "details": details}
 
         if not healthy:
-            self.failure_counts[component] = self.failure_counts.get(component, 0) + 1
-            if self.is_critical(component):
-                self.alert(component, details)
+            logger.critical(
+                f"HEALTH ALERT: {component} has failed. "
+                f"Details: {details}"
+            )
+            # Broadcast to Telegram/Discord
+            asyncio.create_task(
+                notifier.notify(
+                    f"CRITICAL HEALTH ALERT: {component} failure. "
+                    f"{details}",
+                    level="CRITICAL",
+                )
+            )
         else:
-            self.failure_counts[component] = 0
+            logger.info(
+                f"HealthMonitor [{component}] status={status} "
+                f"details={details}"
+            )
 
-    def is_critical(self, component: str) -> bool:
-        return self.failure_counts.get(component, 0) >= self.max_failures
-
-    def should_pause(self, component: str) -> bool:
-        return self.is_critical(component)
-
-    def alert(self, component: str, details: Optional[str] = None) -> None:
-        message = f"[ALERT] {self.service_name} component '{component}' failed {self.failure_counts.get(component, 0)} times. {details or ''}"
-        logger.warning(message)
-        for callback in self.alert_callbacks:
-            try:
-                callback(component, message)
-            except Exception as e:
-                logger.error(f"Alert callback failed: {e}")
-
-    def heartbeat(self) -> None:
-        logger.debug(f"HealthMonitor heartbeat at {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(self.last_updated))}")
+    def heartbeat(self):
+        self.last_heartbeat = time.time()

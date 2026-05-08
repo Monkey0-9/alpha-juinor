@@ -1,38 +1,75 @@
 import logging
+from typing import Dict, Any
+
 import numpy as np
-import random
-from collections import deque
 
 logger = logging.getLogger(__name__)
 
-class ExecutionAgent:
-    """
-    Reinforcement Learning based Order Router.
-    Learns optimal execution paths to minimize market impact and slippage.
-    """
-    def __init__(self, state_size: int = 10, action_size: int = 3):
-        self.state_size = state_size
-        self.action_size = action_size # 0: Wait, 1: Small Market, 2: Large Market
-        self.memory = deque(maxlen=2000)
-        self.gamma = 0.95
-        self.epsilon = 1.0
-        self.epsilon_min = 0.01
-        self.epsilon_decay = 0.995
-        
-    def get_action(self, market_state: np.ndarray) -> int:
-        """
-        Determines the execution action based on the current market state.
-        """
-        if np.random.rand() <= self.epsilon:
-            return random.randrange(self.action_size)
-        
-        # In production, this would invoke a trained model prediction
-        return 1 # Default to conservative execution
 
-    def learn(self, reward: float):
+class ExecutionAgent:
+    """Rule-based order execution router.
+
+    Selects execution tactics (wait, small order, large order) based
+    on observable market microstructure features rather than a trained
+    neural network.  This is deliberately simple and transparent —
+    no randomness is involved in production decisions.
+
+    Actions:
+        0 — Wait  (defer execution to next cycle)
+        1 — Small Market Order  (conservative fill)
+        2 — Large Market Order  (aggressive fill)
+    """
+
+    def __init__(self) -> None:
+        self.cumulative_reward: float = 0.0
+        self.decision_count: int = 0
+
+    def get_action(self, market_state: np.ndarray) -> int:
+        """Determine execution tactic from market microstructure.
+
+        Parameters
+        ----------
+        market_state : np.ndarray
+            Feature vector.  When a full feature pipeline is wired,
+            indices should map to:
+                [0] spread_bps, [1] volume_ratio, [2] volatility,
+                [3] momentum, [4..] reserved.
+            If the vector is too short or all zeros, default to
+            conservative execution (action 1).
         """
-        Updates agent parameters based on trade feedback (P&L - Slippage).
+        if market_state is None or len(market_state) < 4:
+            return 1  # Conservative default
+
+        volatility = float(market_state[2])
+        momentum = float(market_state[3])
+
+        # High volatility → wait for calmer conditions
+        if volatility > 0.03:
+            return 0
+
+        # Strong directional momentum → aggressive fill
+        if abs(momentum) > 0.02:
+            return 2
+
+        # Default: conservative small order
+        return 1
+
+    def learn(self, reward: float) -> None:
+        """Record trade outcome for monitoring.
+
+        This does NOT perform gradient updates — it tracks
+        cumulative reward so the operator can evaluate execution
+        quality over time.
         """
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
-        logger.debug(f"Agent training update - Reward: {reward:.4f}, Epsilon: {self.epsilon:.4f}")
+        self.cumulative_reward += reward
+        self.decision_count += 1
+        avg = (
+            self.cumulative_reward / self.decision_count
+            if self.decision_count
+            else 0.0
+        )
+        logger.debug(
+            f"Execution feedback — Reward: {reward:.4f}, "
+            f"Cumulative avg: {avg:.4f}, "
+            f"Decisions: {self.decision_count}"
+        )

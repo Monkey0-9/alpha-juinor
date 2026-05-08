@@ -256,29 +256,33 @@ class HurstExponentStrategy(BaseStrategy):
         return alpha
 
 
+# Module-level singletons — avoids re-creating 14 objects per call
+_ALL_STRATEGIES: list[BaseStrategy] = [
+    MomentumStrategy(),
+    MeanReversionStrategy(),
+    VolatilityArbitrageStrategy(),
+    MacroOverlayStrategy(),
+    RSISetupStrategy(),
+    BreakoutStrategy(),
+    BollingerBandStrategy(),
+    MACDStrategy(),
+    VolumeTrendStrategy(),
+    StochasticStrategy(),
+    EMACrossoverStrategy(),
+    SuperTrendStrategy(),
+    FisherTransformStrategy(),
+    HurstExponentStrategy(),
+]
+
+
 class StrategyFactory:
     @staticmethod
     def all_strategies() -> list[BaseStrategy]:
-        return [
-            MomentumStrategy(),
-            MeanReversionStrategy(),
-            VolatilityArbitrageStrategy(),
-            MacroOverlayStrategy(),
-            RSISetupStrategy(),
-            BreakoutStrategy(),
-            BollingerBandStrategy(),
-            MACDStrategy(),
-            VolumeTrendStrategy(),
-            StochasticStrategy(),
-            EMACrossoverStrategy(),
-            SuperTrendStrategy(),
-            FisherTransformStrategy(),
-            HurstExponentStrategy(),
-        ]
+        return _ALL_STRATEGIES
 
     @staticmethod
     def get_strategy(name: str) -> Optional[BaseStrategy]:
-        for strategy in StrategyFactory.all_strategies():
+        for strategy in _ALL_STRATEGIES:
             if strategy.name == name:
                 return strategy
         return None

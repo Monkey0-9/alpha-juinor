@@ -1,9 +1,10 @@
 import asyncio
 import logging
+import time
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List
+from typing import Dict, List, Optional
 from nexus.math.models import KalmanFilter
 from nexus.math.indicators import HawkesProcess
 from nexus.execution.alpaca import get_client
@@ -13,7 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 class AlphaEngine:
-    """Alpha Generation Engine using multi-timeframe signals."""
+    """Alpha Generation Engine with robust data resilience and caching."""
+
+    _cache: Dict[str, Dict] = {}
+    _CACHE_TTL = 300  # 5 minutes for benchmark data
 
     def __init__(self, backend_url: str = Config.BACKEND_URL):
         self.kf = KalmanFilter()
@@ -25,45 +29,62 @@ class AlphaEngine:
         self,
         symbol: str,
         timeframe: str = "1Min",
-        limit: int = 120
+        limit: int = 250  # Increased default for regime detection
     ) -> pd.DataFrame:
-        """Fetch market bars from Alpaca directly, with yfinance fallback."""
+        """Fetch market bars with caching, retries, and extended lookback."""
+        cache_key = f"{symbol}_{timeframe}"
+        now = time.time()
+        
+        if symbol == "SPY" and cache_key in self._cache:
+            entry = self._cache[cache_key]
+            if now - entry["timestamp"] < self._CACHE_TTL:
+                return entry["data"]
+
+        df = await self._fetch_with_backoff(symbol, timeframe, limit)
+        
+        if not df.empty and symbol == "SPY":
+            self._cache[cache_key] = {"timestamp": now, "data": df}
+            
+        return df
+
+    async def _fetch_with_backoff(self, symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
         bars = []
-        try:
-            if timeframe == "1D":
-                start_date = (
-                    datetime.now(timezone.utc) - timedelta(days=limit)
-                ).strftime("%Y-%m-%d")
+        # Institutional Resilience: Try Alpaca with extended lookback if needed
+        for attempt in range(2):
+            try:
+                # If we need many bars and it's 1Min, we need to specify a start date
+                # to get data even if market was closed recently.
+                days_to_lookback = (limit // 390) + 3 # approx 390 mins in a trading day
+                start_date = (datetime.now(timezone.utc) - timedelta(days=days_to_lookback)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                
                 bars = await self.client.get_bars(
                     symbol,
                     timeframe=timeframe,
                     limit=limit,
                     start=start_date
                 )
-            else:
-                bars = await self.client.get_bars(
-                    symbol,
-                    timeframe=timeframe,
-                    limit=limit
-                )
-        except Exception as e:
-            logger.debug(f"Alpaca data fetch failed for {symbol}: {e}")
+                if len(bars) >= 20: # Enough for regime detection
+                    break
+                if attempt == 0:
+                    await asyncio.sleep(1) # Transient wait
+            except Exception as e:
+                logger.debug(f"Alpaca fetch failed for {symbol} (Attempt {attempt}): {e}")
 
         df = None
-        if bars:
+        if bars and len(bars) >= 5:
             df = pd.DataFrame(bars)
-            mapping = {
-                "o": "open", "h": "high", "l": "low", "c": "close",
-                "v": "volume", "vw": "vwap", "n": "trade_count"
-            }
+            mapping = {"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"}
             df = df.rename(columns={k: v for k, v in mapping.items() if k in df.columns})
         else:
-            logger.debug(f"Falling back to yfinance for {symbol} data...")
+            # yfinance Fallback with robust period
             try:
                 import yfinance as yf
                 interval = "1d" if timeframe == "1D" else "15m" if timeframe == "15Min" else "1m"
-                period = f"{limit}d" if timeframe == "1D" else "5d"
-                df = yf.download(symbol, period=period, interval=interval, progress=False)
+                # Always ask for at least 7 days to ensure we get 20+ bars
+                df = yf.download(symbol, period="7d", interval=interval, progress=False)
+                if df.empty and timeframe == "1Min":
+                    # Try 15m if 1m is unavailable (e.g. too old)
+                    df = yf.download(symbol, period="7d", interval="15m", progress=False)
             except Exception as e:
                 logger.warning(f"yfinance fallback failed for {symbol}: {e}")
                 return pd.DataFrame()
@@ -71,140 +92,70 @@ class AlphaEngine:
         if df is None or df.empty:
             return pd.DataFrame()
 
-        # ROBUST COLUMN NORMALIZATION
-        # 1. Flatten MultiIndex if present
+        return self._normalize_columns(df, limit)
+
+    def _normalize_columns(self, df: pd.DataFrame, limit: int) -> pd.DataFrame:
+        """Standardize column names across different data providers."""
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = [str(c[0]).lower() for c in df.columns]
         else:
             df.columns = [str(c).lower() for c in df.columns]
 
-        # 2. Standardize common names
-        rename_map = {
-            "adj close": "close",
-            "unadjusted close": "close",
-            "volume": "volume",
-        }
+        rename_map = {"adj close": "close", "unadjusted close": "close"}
         for k, v in rename_map.items():
             if k in df.columns and v not in df.columns:
                 df[v] = df[k]
 
-        # 3. Ensure mandatory columns
         for col in ["open", "high", "low", "close", "volume"]:
             if col not in df.columns:
-                if "close" in df.columns:
-                    df[col] = df["close"]
-                elif "c" in df.columns:
-                    df[col] = df["c"]
-                else:
-                    df[col] = 0.0
-
-        # 4. Final Cleanup: Drop duplicates and squeeze to ensure single columns
-        df = df.loc[:, ~df.columns.duplicated()]
-        # Ensure all core columns are Series, not DataFrames
-        for col in ["open", "high", "low", "close", "volume"]:
+                df[col] = df["close"] if "close" in df.columns else 0.0
             if isinstance(df[col], pd.DataFrame):
                 df[col] = df[col].iloc[:, 0]
 
-        return df.tail(limit)
+        return df.loc[:, ~df.columns.duplicated()].tail(limit)
 
     def generate_signal(self, data: pd.DataFrame) -> float:
         """Generate alpha signal from market data."""
         if data.empty or "close" not in data.columns:
             return 0.0
 
-        # Squeeze to ensure 1D if it was somehow 2D
-        prices = data["close"].astype(float).to_numpy()
-        if prices.ndim > 1:
-            prices = prices.flatten()
+        prices = data["close"].astype(float).to_numpy().flatten()
         denoised_prices = self.kf.batch_filter(prices)
 
         returns = pd.Series(denoised_prices).pct_change().dropna()
-        if returns.empty:
-            return 0.0
+        if returns.empty: return 0.0
             
-        burst_threshold = returns.std() * 1.5
-        mask = abs(returns) > burst_threshold
-        burst_events = np.array(returns[mask].index, dtype=float)
-
-        intensity = 0.1
-        if len(burst_events) > 0:
-            intensity = self.hawkes.calculate_intensity(burst_events)
-
+        intensity = self.hawkes.calculate_intensity(np.array(returns[abs(returns) > returns.std() * 1.5].index, dtype=float))
+        
         recent_trend = 0.0
         if len(denoised_prices) >= 5:
-            # Ensure scalars
-            p_last = float(denoised_prices[-1])
-            p_prev = float(denoised_prices[-5])
-            recent_trend = (p_last / p_prev) - 1
+            recent_trend = (float(denoised_prices[-1]) / float(denoised_prices[-5])) - 1
 
-        vol_scaler = 1.0 / (1.0 + intensity)
-        signal = np.tanh(recent_trend * 40) * vol_scaler
+        signal = np.tanh(recent_trend * 40) * (1.0 / (1.0 + intensity))
         return float(signal)
 
-    def monte_carlo_simulation(
-        self,
-        prices: np.ndarray,
-        num_paths: int = 100,
-        horizon: int = 20
-    ) -> float:
-        """Perform Monte Carlo simulation for price path forecasting."""
-        # Ensure 1D
-        if prices.ndim > 1:
-            prices = prices.flatten()
-        if len(prices) < 2:
-            return 0.5
+    def monte_carlo_simulation(self, prices: np.ndarray, num_paths: int = 100, horizon: int = 20) -> float:
+        prices = prices.flatten()
+        if len(prices) < 2: return 0.5
         returns = np.diff(np.log(prices))
-        mu = np.mean(returns)
-        sigma = np.std(returns)
-
+        mu, sigma = np.mean(returns), np.std(returns)
         last_price = float(prices[-1])
-        sim_results = []
+        sim_ends = [last_price * np.exp(np.sum(mu + sigma * np.random.normal(size=horizon))) for _ in range(num_paths)]
+        return float(sum(1 for p in sim_ends if p > last_price) / num_paths)
 
-        for _ in range(num_paths):
-            path_last = last_price
-            for _ in range(horizon):
-                path_last = path_last * np.exp(mu + sigma * np.random.normal())
-            sim_results.append(path_last)
-
-        prob_up = sum(1 for p in sim_results if p > last_price) / num_paths
-        return float(prob_up)
-
-    async def get_batch_signals(
-        self,
-        symbols: List[str],
-        timeframe: str = "15Min"
-    ) -> Dict[str, float]:
-        """Generate signals for a batch of symbols with concurrency control."""
+    async def get_batch_signals(self, symbols: List[str], timeframe: str = "15Min") -> Dict[str, float]:
         signals: Dict[str, float] = {}
-        # Institutional Concurrency Control
-        semaphore = asyncio.Semaphore(50)
+        semaphore = asyncio.Semaphore(10) # Reduced to prevent rate limits
 
         async def symbol_signal(symbol: str) -> tuple:
             async with semaphore:
-                await asyncio.sleep(0.1) # Rate limit protection
-                data = await self.fetch_market_data(
-                    symbol,
-                    timeframe=timeframe,
-                    limit=120
-                )
+                data = await self.fetch_market_data(symbol, timeframe=timeframe)
                 alpha = self.generate_signal(data)
-
-                # Quant Computer Layer: Path Simulation
                 if not data.empty:
-                    prices = data["close"].astype(float).to_numpy()
-                    mc_prob = self.monte_carlo_simulation(prices)
-                    alpha = alpha * 0.7 + (mc_prob - 0.5) * 0.6
-
+                    alpha = alpha * 0.7 + (self.monte_carlo_simulation(data["close"].astype(float).to_numpy()) - 0.5) * 0.6
                 return symbol, alpha
 
-        tasks = [symbol_signal(symbol) for symbol in symbols]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        for result in results:
-            if isinstance(result, tuple):
-                symbol, alpha = result
-                signals[symbol] = alpha
-            elif isinstance(result, BaseException):
-                logger.debug(f"Batch signal exception: {result}")
-
+        results = await asyncio.gather(*[symbol_signal(s) for s in symbols], return_exceptions=True)
+        for r in results:
+            if isinstance(r, tuple): signals[r[0]] = r[1]
         return signals

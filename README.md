@@ -1,16 +1,17 @@
-# Nexus Institutional Quantitative Platform
+# Nexus Hardened Institutional Quantitative Platform (v2.0)
 
-Nexus is an institutional-grade quantitative trading and intelligence platform designed for high-fidelity market analysis and execution. Built for professional researchers and traders who prioritize technical excellence and empirical rigor over marketing aesthetics.
+Nexus is a production-grade, 24/7 autonomous trading intelligence platform. Version 2.0 introduces industrial-grade security, persistent audit trails, and deterministic quantitative modeling.
 
 ## 🏛 Architecture
 
-Nexus follows a high-performance, polyglot architecture utilizing specialized runtimes for critical tasks.
+Nexus utilizes a high-performance polyglot architecture (Python, Rust, Go, Zig) with a hardened FastAPI backend and a glassmorphic Streamlit matrix.
 
 ```mermaid
 graph TD
-    UI[Nexus Terminal - Streamlit] --> API[Nexus API - FastAPI]
-    API --> EXEC[Execution Engine - Alpaca]
-    ENG[Nexus Core Engine] --> API
+    UI[Nexus Matrix - Streamlit] -- X-API-Key --> API[Nexus API - FastAPI]
+    API -- REST/WebSocket --> EXEC[Alpaca Execution]
+    ENG[Nexus Core Engine] -- X-API-Key --> API
+    ENG --> DB[(SQLite Audit Log)]
     ENG --> BRIDGE[Polyglot Bridge]
     
     subgraph "Satellite Engines"
@@ -18,93 +19,56 @@ graph TD
     BRIDGE --> GO[Audit Sentinel - Go]
     BRIDGE --> ZIG[Order Validator - Zig]
     end
-
-    subgraph "Core Intelligence"
-    ENG --> MATH[Nexus Math - Quant Modules]
-    MATH --> SIG[Alpha Signals]
-    MATH --> REG[Regime Detection]
-    end
 ```
 
-## 🧩 Core Modules
+## 🛡️ Hardening Features (v2.0)
 
-### Nexus Math
-
-A suite of advanced mathematical modules implementing institutional quantitative techniques:
-
-- **State-Space Denoising**: Kalman Filtering for signal extraction.
-- **Intensity Modeling**: Hawkes Processes for volatility clustering.
-- **Topological Analysis**: Mapper-based market shape detection (TDA).
-
-### Polyglot Satellites
-
-High-speed satellite services for critical-path operations:
-
-- **Rust Risk Engine**: Sub-millisecond Value-at-Risk (VaR) calculations.
-- **Go Audit Sentinel**: Parallel health and integrity monitoring of all services.
-- **Zig Order Validator**: Hardware-level order verification and compliance checks.
-
-### Nexus 24/7 Autonomous Manager
-
-The platform is designed for continuous, unattended institutional operation:
-
-- **Auto-Recovery**: Automatic restart of services on failure.
-- **Sentinel Monitoring**: Heartbeat monitoring and process health tracking.
-- **24/7 Mode**: Override for market sessions to allow continuous signal monitoring.
+- **API Security**: Authentication middleware on all mutation endpoints using `X-API-Key`.
+- **CORS Lock**: Restricted browser access to the Streamlit origin only.
+- **Persistence**: All governance audits and trade history are persisted to `data/nexus_audit.db`.
+- **Deterministic AI**: Removed random confidence stubs; replaced with Ensemble Strategy Agreement.
+- **Real Monte Carlo**: Active path simulation for survival analysis and ruin probability.
+- **Cross-Platform**: Full support for Windows, Linux, and macOS (Polyglot portability fixed).
 
 ## 🚀 Deployment
 
 ### Prerequisites
-
 - Python 3.11+
-- Alpaca API Credentials (Paper or Live)
-- Go (for Audit Sentinel recompilation)
-- Rust & Zig (optional, for satellite modification)
+- Alpaca API Credentials
+- Docker & Docker Compose (Optional, for containerized run)
 
-### Setup
-
+### Standard Setup
 ```bash
-# Clone and install dependencies
+# 1. Install dependencies
 pip install -r requirements.txt
 
-# Configure environment
-cp .env.example .env # Ensure credentials are set
+# 2. Configure credentials
+cp .env.example .env
+# Set ALPACA_API_KEY, ALPACA_API_SECRET, and NEXUS_API_KEY
+
+# 3. Verify Hardening
+python verify_production_ready.py
 ```
 
-### Execution
-
-### Execution Modes
-
-#### Option 1: Standard Orchestrator
-
+### Docker Deployment
 ```bash
-python nexus_orchestrator.py
+docker-compose up --build -d
 ```
 
-#### Option 2: 24/7 Autonomous Mode (Recommended)
-
-```bash
-python nexus_24_7.py
-```
-
-#### Option 3: Quick Start Menu
-
-```bash
-python nexus_24_7_menu.py
-```
+## 📊 Dashboard
+The Streamlit matrix provides real-time visibility into:
+- **Market Intelligence**: Regime detection, Ensemble agreement, and Quantitative sentiment.
+- **Institutional Holdings**: Live P&L tracking from Alpaca.
+- **Audit Log**: Real-time compliance monitoring from the GovernanceEngine.
 
 ## 🛡 Verification & Quality
-
-Nexus maintains strict institutional quality standards:
-
-- **Production Readiness**: `verify_production_ready.py` runs a 27-point comprehensive audit.
-- **Unit Testing**: `pytest tests/` for core and institutional logic validation.
-- **Linting**: Ruff and MyPy enforcement for codebase professionalization.
-
 ```bash
-# Run verification suite
+# Run the 27-point comprehensive audit
+python verify_production_ready.py
+
+# Run the test suite
 pytest tests/
 ```
 
 ---
-**Status:** `STABLE` | **Version:** `1.0.0` | **License:** Institutional
+**Status:** `PRODUCTION_READY` | **Version:** `2.0.0` | **Security:** `HARDENED`

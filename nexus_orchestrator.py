@@ -102,7 +102,7 @@ class NexusOrchestrator:
         api_port = self.find_free_port(Config.API_PORT)
 
         streamlit_port = self.find_free_port(Config.STREAMLIT_PORT)
-        backend_url = f"http://localhost:{api_port}"
+        backend_url = f"http://127.0.0.1:{api_port}"
 
         common_env = os.environ.copy()
         common_env["PYTHONPATH"] = self.root
