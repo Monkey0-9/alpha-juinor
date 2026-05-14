@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+from typing import Dict
 import logging
 import os
 from nexus.api.alpaca_router import router as alpaca_router
@@ -100,6 +101,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/api/health")
+async def health() -> Dict[str, str]:
+    return {
+        "status": "healthy",
+        "service": "Nexus API",
+        "version": "2.0.0"
+    }
 
 app.include_router(alpaca_router)
 app.include_router(monitor_router)

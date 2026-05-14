@@ -1,4 +1,6 @@
+import asyncio
 import os
+import uuid
 import logging
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
@@ -60,6 +62,11 @@ class AlpacaClient:
 
         self.base_url = ALPACA_PAPER_BASE_URL if self.credentials and self.credentials.paper_trading else ALPACA_API_BASE_URL
         self.data_url = ALPACA_DATA_BASE_URL
+        if self.credentials:
+            logger.info(
+                "Alpaca execution initialized in %s mode.",
+                "PAPER" if self.credentials.paper_trading else "LIVE"
+            )
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self.session is None or self.session.closed:
@@ -149,6 +156,9 @@ class AlpacaClient:
         time_in_force: str = "day",
         limit_price: Optional[float] = None,
         stop_price: Optional[float] = None,
+        trail_price: Optional[float] = None,
+        trail_percent: Optional[float] = None,
+        client_order_id: Optional[str] = None,
         strategy: Optional[str] = None,
         extended_hours: bool = False
     ) -> Dict[str, Any]:
@@ -158,8 +168,21 @@ class AlpacaClient:
             current_price = float(bars[-1]["close"]) if bars else 100.0
             if order_type == "limit" and limit_price is not None:
                 result = self.simulator.execute_limit_order(symbol, qty, limit_price, side)
-            else:
+            elif order_type == "market":
                 result = self.simulator.execute_market_order(symbol, qty, current_price, side)
+            else:
+                # Simulated engine supports basic order acceptance for advanced order types.
+                result = {
+                    "symbol": symbol,
+                    "qty": abs(qty),
+                    "side": side,
+                    "price": current_price,
+                    "type": order_type,
+                    "status": "pending",
+                    "fee": 0.0,
+                    "cash": self.simulator.cash,
+                }
+                self.simulator.order_history.append(result)
             return {
                 **result,
                 "success": True,
@@ -185,12 +208,26 @@ class AlpacaClient:
                 "time_in_force": time_in_force,
                 "extended_hours": extended_hours
             }
+            def round_price(p: float) -> str:
+                if p >= 1.0:
+                    return str(round(p, 2))
+                return str(round(p, 4))
+
             if limit_price is not None:
-                order_data["limit_price"] = str(round(limit_price, 4))
+                order_data["limit_price"] = round_price(limit_price)
             if stop_price is not None:
-                order_data["stop_price"] = str(round(stop_price, 4))
-            if strategy:
-                order_data["client_order_id"] = strategy[:32]
+                order_data["stop_price"] = round_price(stop_price)
+            if trail_price is not None:
+                order_data["trail_price"] = round_price(trail_price)
+            if trail_percent is not None:
+                order_data["trail_percent"] = str(round(trail_percent, 6))
+            if client_order_id:
+                order_data["client_order_id"] = client_order_id[:32]
+            else:
+                unique_suffix = uuid.uuid4().hex[:8]
+                fallback_prefix = (strategy or "order").replace(" ", "_")
+                base_order_id = f"{symbol}-{side}-{fallback_prefix}-{unique_suffix}"
+                order_data["client_order_id"] = base_order_id[:32]
 
             async with session.post(
                 f"{self.base_url}/v2/orders",
@@ -199,9 +236,16 @@ class AlpacaClient:
             ) as response:
                 data = await response.json()
                 if response.status in {200, 201}:
-                    return {"success": True, "order_id": data.get("id"), "status": data.get("status"), "asset_class": asset_class}
+                    return {
+                        "success": True,
+                        "id": data.get("id"),
+                        "order_id": data.get("id"),
+                        "status": data.get("status"),
+                        "asset_class": asset_class,
+                        "raw": data
+                    }
                 logger.error(f"Alpaca order rejected: {response.status} {data}")
-                return {"success": False, "error": data.get("message", data), "asset_class": asset_class}
+                return {"success": False, "error": data.get("message", data), "asset_class": asset_class, "raw": data}
         except Exception as e:
             logger.error(f"Order submit failed: {e}")
             return {"success": False, "error": str(e), "asset_class": asset_class}
@@ -323,32 +367,43 @@ class AlpacaClient:
                 params = {"timeframe": timeframe, "limit": limit, "feed": feed_candidate}
                 if start:
                     params["start"] = start
-                async with session.get(
-                    f"{self.data_url}/v2/stocks/{symbol}/bars",
-                    headers=self.credentials.get_headers(),
-                    params=params
-                ) as response:
-                    if response.status in {200, 201}:
-                        data = await response.json()
-                        bars = data.get("bars") or []
-                        if bars:
-                            return bars
-                        break
-                    if response.status in {403, 422}:
+                retries = 0
+                while retries < 3:
+                    async with session.get(
+                        f"{self.data_url}/v2/stocks/{symbol}/bars",
+                        headers=self.credentials.get_headers(),
+                        params=params
+                    ) as response:
+                        if response.status in {200, 201}:
+                            data = await response.json()
+                            bars = data.get("bars") or []
+                            if bars:
+                                return bars
+                            break
+                        if response.status == 429:
+                            retries += 1
+                            backoff = 1.5 * retries
+                            logger.warning(
+                                f"Alpaca bars request for {symbol} was rate limited (429). Retry {retries}/3 after {backoff}s."
+                            )
+                            await asyncio.sleep(backoff)
+                            continue
+                        if response.status in {403, 422}:
+                            logger.warning(
+                                f"Alpaca bars request for {symbol} failed with feed={feed_candidate}: {response.status}. Trying alternate feed."
+                            )
+                            break
+                        if response.status == 401:
+                            logger.warning("Alpaca API Keys invalid (401). Falling back to full simulation mode.")
+                            self.simulated = True
+                            return await self.get_bars(symbol, timeframe, limit, start, feed)
                         logger.warning(
-                            f"Alpaca bars request for {symbol} failed with feed={feed_candidate}: {response.status}. Trying alternate feed."
+                            f"Alpaca bars request for {symbol} returned HTTP {response.status}: {await response.text()}"
                         )
-                        continue
-                    if response.status == 401:
-                        logger.warning("Alpaca API Keys invalid (401). Falling back to full simulation mode.")
-                        self.simulated = True
-                        return await self.get_bars(symbol, timeframe, limit, start, feed)
-                    logger.warning(
-                        f"Alpaca bars request for {symbol} returned HTTP {response.status}: {await response.text()}"
-                    )
-                    break
-            
-            # Final fallback: retry once after a short sleep if it's a transient network error
+                        break
+                    if retries == 0 or response.status != 429:
+                        break
+                # Try the next feed candidate if this feed failed
             return []
         except aiohttp.ClientConnectorError as e:
             logger.error(f"DNS or Connection Error for {symbol}: {e}. Retrying with alternate DNS logic if possible.")

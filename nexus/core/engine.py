@@ -52,6 +52,7 @@ class NexusEngine:
         self.portfolio_value = Config.FALLBACK_EQUITY
         self.max_positions = Config.MAX_OPEN_POSITIONS
         self.last_universe_refresh = 0.0
+        self.position_ages: Dict[str, int] = {}
         
         # PERF FIX: Persistent client for connection pooling
         self._client: Optional[httpx.AsyncClient] = None
@@ -69,9 +70,14 @@ class NexusEngine:
         return self._client
 
     async def close(self):
-        """Cleanup connection pool."""
+        """Cleanup connection pool and subsystems."""
         if self._client and not self._client.is_closed:
             await self._client.aclose()
+        if hasattr(self.alpha_engine, "close"):
+            try:
+                await self.alpha_engine.close()
+            except Exception as exc:
+                logger.warning(f"Failed to close alpha engine client: {exc}")
         logger.info("Nexus engine resources released.")
 
     async def initialize(self) -> bool:
@@ -121,18 +127,55 @@ class NexusEngine:
                 params=params
             )
             if response.status_code == 200:
-                symbols = response.json().get("symbols", [])
-                if symbols:
-                    self.symbols = symbols[: Config.CANDIDATE_POOL_SIZE]
+                asset_data = response.json()
+                assets = asset_data.get("assets", [])
+                candidate_assets = []
+                for asset in assets:
+                    symbol = asset.get("symbol")
+                    exchange = str(asset.get("exchange", "")).upper()
+                    if not asset.get("tradable", False):
+                        continue
+                    if not symbol or not self._is_valid_symbol(symbol):
+                        continue
+                    if not self._is_preferred_exchange(exchange):
+                        continue
+                    candidate_assets.append(symbol)
+
+                if Config.TRADE_ALL_ASSETS:
+                    self.symbols = candidate_assets[: Config.MAX_UNIVERSE_ASSETS]
                 else:
+                    max_symbols = min(Config.CANDIDATE_POOL_SIZE, 30)
+                    if Config.CANDIDATE_POOL_SIZE > 30:
+                        logger.warning(
+                            "Candidate pool size %s is too large for Alpaca data limits; reducing to %s for execution.",
+                            Config.CANDIDATE_POOL_SIZE,
+                            max_symbols,
+                        )
+                    self.symbols = candidate_assets[:max_symbols]
+
+                if not self.symbols:
                     self.symbols = ["AAPL", "MSFT", "QQQ", "SPY", "NVDA"]
-                logger.info(f"Loaded universe with {len(self.symbols)} symbols.")
+                logger.info(
+                    f"Loaded universe with {len(self.symbols)} symbols "
+                    f"from {len(candidate_assets)} tradable Alpaca assets."
+                )
                 self.last_universe_refresh = time.time()
             else:
                 raise ValueError(f"Asset scan returned {response.status_code}")
         except Exception as exc:
             logger.warning(f"Asset universe fallback: {exc}")
             self.symbols = ["AAPL", "MSFT", "QQQ", "SPY", "NVDA", "IWM", "AMZN", "GOOG"]
+
+    def _is_preferred_exchange(self, exchange: str) -> bool:
+        preferred = {"NASDAQ", "NYSE", "ARCA", "AMEX", "NYSEARCA", "NYSEAMEX"}
+        return exchange in preferred
+
+    def _is_valid_symbol(self, symbol: str) -> bool:
+        if "." in symbol or "-" in symbol or "$" in symbol:
+            return False
+        if len(symbol) < 1 or len(symbol) > 4:
+            return False
+        return symbol.isalnum()
 
     async def get_account_state(self) -> Dict[str, Any]:
         client = await self._get_client()
@@ -155,7 +198,15 @@ class NexusEngine:
         return []
 
     async def fetch_universe_history(self, symbols: List[str], timeframe: str = "1D", limit: int = 80) -> Dict[str, pd.DataFrame]:
-        tasks = [self.alpha_engine.fetch_market_data(symbol, timeframe=timeframe, limit=limit) for symbol in symbols]
+        semaphore = asyncio.Semaphore(2)
+
+        async def fetch_symbol(symbol: str):
+            async with semaphore:
+                result = await self.alpha_engine.fetch_market_data(symbol, timeframe=timeframe, limit=limit)
+                await asyncio.sleep(0.12)
+                return result
+
+        tasks = [fetch_symbol(symbol) for symbol in symbols]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         history: Dict[str, pd.DataFrame] = {}
         for symbol, result in zip(symbols, results):
@@ -219,9 +270,26 @@ class NexusEngine:
         current_positions = await self.get_positions()
         holdings = {p["symbol"]: p for p in current_positions}
 
-        symbols = self.symbols[: Config.CANDIDATE_POOL_SIZE]
+        for symbol in list(self.position_ages):
+            if symbol not in holdings:
+                del self.position_ages[symbol]
+        for symbol in holdings:
+            self.position_ages[symbol] = self.position_ages.get(symbol, 0) + 1
+
+        if Config.TRADE_ALL_ASSETS:
+            symbols = self.symbols
+        else:
+            max_candidates = min(Config.CANDIDATE_POOL_SIZE, 20)
+            symbols = self.symbols[:max_candidates]
+
+        if not symbols:
+            logger.warning("No trading symbols were loaded, skipping cycle.")
+            return
         raw_signals = await self.alpha_engine.get_batch_signals(symbols, timeframe="15Min")
         history = await self.fetch_universe_history(symbols, timeframe="1D", limit=100)
+        logger.info("History loaded for %s symbols out of %s selected symbols.", len(history), len(symbols))
+        if not history:
+            logger.warning("No history data could be loaded for the current symbol universe. This will prevent any orders from being submitted.")
         benchmark_data = await self.alpha_engine.fetch_market_data("SPY", timeframe="1D", limit=120)
 
         market_insight = self.market_brain.analyze_market(benchmark_data, current_positions)
@@ -250,9 +318,21 @@ class NexusEngine:
         current_symbols = set(holdings.keys())
         target_symbols = set(weights.keys())
         
-        # Close tasks
-        close_tasks = [self._close_position(s) for s in (current_symbols - target_symbols)]
-        if close_tasks: await asyncio.gather(*close_tasks)
+        # Close tasks: preserve positions for a minimum number of cycles after entry.
+        close_candidates = []
+        for symbol in current_symbols - target_symbols:
+            if self.position_ages.get(symbol, 0) >= Config.MIN_HOLD_CYCLES:
+                close_candidates.append(symbol)
+            else:
+                logger.info(
+                    "Deferring close for %s: held %s/%s cycles.",
+                    symbol,
+                    self.position_ages.get(symbol, 0),
+                    Config.MIN_HOLD_CYCLES,
+                )
+
+        if close_candidates:
+            await asyncio.gather(*[self._close_position(s) for s in close_candidates])
             
         # Trade tasks
         trade_tasks = []
@@ -304,11 +384,20 @@ class NexusEngine:
         client = await self._get_client()
         try:
             response = await client.post(f"{self.backend_url}/api/alpaca/order", json=payload)
-            if response.status_code == 200:
+            if response.status_code in {200, 201}:
                 order_data = response.json()
-                if "id" in order_data:
-                    self._active_orders[symbol] = order_data["id"]
-                    logger.info(f"Order submitted for {symbol}: {order_data['id']}")
+                order_id = order_data.get("id") or order_data.get("order_id")
+                if order_id:
+                    self._active_orders[symbol] = order_id
+                    logger.info(f"Order submitted for {symbol}: {order_id}")
+                else:
+                    logger.warning(
+                        f"Order response missing id for {symbol}: {order_data}"
+                    )
+            else:
+                logger.error(
+                    f"Order submission failed for {symbol}: HTTP {response.status_code} {response.text}"
+                )
         except Exception as exc:
             logger.error(f"Order submission error for {symbol}: {exc}")
 

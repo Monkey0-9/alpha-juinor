@@ -20,6 +20,10 @@ class OrderRequest(BaseModel):
     time_in_force: str = "day"
     limit_price: Optional[float] = None
     stop_price: Optional[float] = None
+    trail_price: Optional[float] = None
+    trail_percent: Optional[float] = None
+    client_order_id: Optional[str] = None
+    extended_hours: bool = False
 
 
 async def get_alpaca() -> AlpacaClient:
@@ -91,6 +95,10 @@ async def submit_order(
         time_in_force=order.time_in_force,
         limit_price=order.limit_price,
         stop_price=order.stop_price,
+        trail_price=order.trail_price,
+        trail_percent=order.trail_percent,
+        client_order_id=order.client_order_id,
+        extended_hours=order.extended_hours,
         strategy=order.strategy
     )
 

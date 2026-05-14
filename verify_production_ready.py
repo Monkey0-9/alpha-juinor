@@ -11,6 +11,7 @@ import os
 from typing import Dict, List, Tuple
 import importlib
 from pathlib import Path
+import httpx
 
 logging.basicConfig(
     level=logging.INFO,
@@ -84,7 +85,7 @@ class ProductionVerifier:
             self.results["persistence_init"] = False
             return False
 
-    def test_security_hardening(self) -> bool:
+    async def test_security_hardening(self) -> bool:
         """Verify API authentication and CORS policies."""
         logger.info("\n" + "=" * 60)
         logger.info("3. TESTING SECURITY HARDENING")
@@ -92,34 +93,35 @@ class ProductionVerifier:
 
         try:
             from nexus.api.main import app
-            from fastapi.testclient import TestClient
             from nexus.utils.config import Config
 
-            client = TestClient(app)
-            
-            # 1. Test Public GET (Brain snapshot)
-            resp = client.get("/api/monitor/brain")
-            if resp.status_code in {200, 502}: # 502 OK if market closed
-                logger.info("  [OK] Public read endpoint is accessible")
-            else:
-                logger.error(f"  [FAIL] Public read endpoint returned {resp.status_code}")
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                # 1. Test Public GET (Brain snapshot)
+                resp = await client.get("/api/monitor/brain")
+                if resp.status_code in {200, 502}:  # 502 OK if market closed
+                    logger.info("  [OK] Public read endpoint is accessible")
+                else:
+                    logger.error(f"  [FAIL] Public read endpoint returned {resp.status_code}")
 
-            # 2. Test Protected POST (Mutation)
-            # Should fail without API key if configured
-            if Config.API_KEY:
-                resp = client.post("/api/alpaca/order", json={})
-                if resp.status_code == 401:
-                    logger.info("  [OK] Mutation endpoint is PROTECTED (401 Unauthorized)")
-                else:
-                    logger.warning(f"  ⚠ Mutation endpoint returned {resp.status_code} (expected 401)")
-            # 3. Test Authorized POST with key
-            if Config.API_KEY:
-                resp = client.post("/api/alpaca/order", json={}, headers={"X-API-Key": Config.API_KEY})
-                # Should fail with 422 (validation error) because we passed empty json, but NOT 401
-                if resp.status_code == 422:
-                    logger.info("  [OK] Mutation endpoint is ACCESSIBLE with valid API Key")
-                else:
-                    logger.warning(f"  ⚠ Mutation endpoint with key returned {resp.status_code} (expected 422)")
+                # 2. Test Protected POST (Mutation)
+                if Config.API_KEY:
+                    resp = await client.post("/api/alpaca/order", json={})
+                    if resp.status_code == 401:
+                        logger.info("  [OK] Mutation endpoint is PROTECTED (401 Unauthorized)")
+                    else:
+                        logger.warning(f"  ⚠ Mutation endpoint returned {resp.status_code} (expected 401)")
+
+                    # 3. Test Authorized POST with key
+                    resp = await client.post(
+                        "/api/alpaca/order",
+                        json={},
+                        headers={"X-API-Key": Config.API_KEY},
+                    )
+                    if resp.status_code == 422:
+                        logger.info("  [OK] Mutation endpoint is ACCESSIBLE with valid API Key")
+                    else:
+                        logger.warning(f"  ⚠ Mutation endpoint with key returned {resp.status_code} (expected 422)")
 
             self.results["security_hardening"] = True
             return True

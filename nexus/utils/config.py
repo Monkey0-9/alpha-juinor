@@ -52,6 +52,10 @@ class Config:
     CANDIDATE_POOL_SIZE = int(
         os.getenv("NEXUS_CANDIDATE_POOL_SIZE", "100")
     )
+    TRADE_ALL_ASSETS = os.getenv("NEXUS_TRADE_ALL", "false").lower() == "true"
+    MIN_HOLD_CYCLES = int(
+        os.getenv("NEXUS_MIN_HOLD_CYCLES", "3")
+    )
     HEARTBEAT_INTERVAL = int(
         os.getenv("NEXUS_HEARTBEAT_INTERVAL", "60")
     )

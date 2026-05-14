@@ -79,6 +79,9 @@ class AlphaEngine:
             # yfinance Fallback with robust period
             try:
                 import yfinance as yf
+                yf_logger = logging.getLogger("yfinance")
+                old_yf_level = yf_logger.level
+                yf_logger.setLevel(logging.CRITICAL)
                 interval = "1d" if timeframe == "1D" else "15m" if timeframe == "15Min" else "1m"
                 # Always ask for at least 7 days to ensure we get 20+ bars
                 df = yf.download(symbol, period="7d", interval=interval, progress=False)
@@ -86,8 +89,13 @@ class AlphaEngine:
                     # Try 15m if 1m is unavailable (e.g. too old)
                     df = yf.download(symbol, period="7d", interval="15m", progress=False)
             except Exception as e:
-                logger.warning(f"yfinance fallback failed for {symbol}: {e}")
+                logger.debug(f"yfinance fallback failed for {symbol}: {e}")
                 return pd.DataFrame()
+            finally:
+                try:
+                    yf_logger.setLevel(old_yf_level)
+                except Exception:
+                    pass
 
         if df is None or df.empty:
             return pd.DataFrame()
@@ -145,7 +153,7 @@ class AlphaEngine:
 
     async def get_batch_signals(self, symbols: List[str], timeframe: str = "15Min") -> Dict[str, float]:
         signals: Dict[str, float] = {}
-        semaphore = asyncio.Semaphore(10) # Reduced to prevent rate limits
+        semaphore = asyncio.Semaphore(2)  # lower concurrency to avoid Alpaca data throttling
 
         async def symbol_signal(symbol: str) -> tuple:
             async with semaphore:
@@ -157,5 +165,13 @@ class AlphaEngine:
 
         results = await asyncio.gather(*[symbol_signal(s) for s in symbols], return_exceptions=True)
         for r in results:
-            if isinstance(r, tuple): signals[r[0]] = r[1]
+            if isinstance(r, tuple):
+                signals[r[0]] = r[1]
         return signals
+
+    async def close(self):
+        if hasattr(self.client, "close"):
+            try:
+                await self.client.close()
+            except Exception as exc:
+                logger.warning(f"Failed to close AlphaEngine client: {exc}")

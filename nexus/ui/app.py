@@ -141,11 +141,21 @@ def main():
         st.markdown("</div>", unsafe_allow_html=True)
     with i3:
         sentiment = analysis.get("market_sentiment", 0.5)
+        sentiment_label = analysis.get("market_sentiment_label")
+        if sentiment_label is None:
+            if sentiment > 0.5:
+                sentiment_label = "Bullish Bias"
+            elif sentiment < 0.5:
+                sentiment_label = "Bearish Bias"
+            else:
+                sentiment_label = "Neutral"
+
+        sentiment_color = "#00ff87" if sentiment > 0.5 else "#ff4b4b" if sentiment < 0.5 else "#ffd60a"
+
         st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
         st.write("**QUANTITATIVE SENTIMENT**")
         st.subheader(f"{sentiment:.2f}")
-        sentiment_color = "#00ff87" if sentiment > 0.5 else "#ff4b4b"
-        st.markdown(f"<p style='color:{sentiment_color}'>{'Bullish Bias' if sentiment > 0.5 else 'Bearish Bias'}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color:{sentiment_color}'>{sentiment_label}</p>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     # --- Holdings Table ---

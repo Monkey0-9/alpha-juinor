@@ -41,11 +41,15 @@ class MarketBrain:
             benchmark_data, regime
         )
 
-        market_forecast = (
-            "BULLISH_CONTINUATION"
-            if sentiment > 0.5
-            else "BEARISH_REVERSION"
-        )
+        if sentiment > 0.5:
+            market_forecast = "BULLISH_CONTINUATION"
+            sentiment_label = "Bullish Bias"
+        elif sentiment < 0.5:
+            market_forecast = "BEARISH_REVERSION"
+            sentiment_label = "Bearish Bias"
+        else:
+            market_forecast = "NEUTRAL"
+            sentiment_label = "Neutral"
 
         logger.info(
             f"Regime: {regime} | Strategy: {strategy} | "
@@ -56,6 +60,7 @@ class MarketBrain:
             "regime": regime,
             "selected_strategy": strategy,
             "market_sentiment": sentiment,
+            "market_sentiment_label": sentiment_label,
             "macro_profile": macro_profile,
             "event_profile": event_profile,
             "strategy_agreement": agreement,
