@@ -1,19 +1,18 @@
 import logging
 import os
 import httpx
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 class NotificationSystem:
     """Institutional alerting system for platform health and trade events."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.telegram_token = os.getenv("NEXUS_TELEGRAM_TOKEN")
         self.telegram_chat_id = os.getenv("NEXUS_TELEGRAM_CHAT_ID")
         self.discord_webhook = os.getenv("NEXUS_DISCORD_WEBHOOK")
 
-    async def notify(self, message: str, level: str = "INFO"):
+    async def notify(self, message: str, level: str = "INFO") -> None:
         """Broadcast alert to configured channels."""
         prefix = f"[{level}] NEXUS: "
         full_message = prefix + message

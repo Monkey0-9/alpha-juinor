@@ -37,12 +37,12 @@ async def get_alpaca() -> AlpacaClient:
 
 
 @router.get("/account")
-async def get_account(client: AlpacaClient = Depends(get_alpaca)):
+async def get_account(client: AlpacaClient = Depends(get_alpaca)) -> Dict[str, Any]:
     return await client.get_account()
 
 
 @router.get("/positions")
-async def get_positions(client: AlpacaClient = Depends(get_alpaca)):
+async def get_positions(client: AlpacaClient = Depends(get_alpaca)) -> Dict[str, Any]:
     positions = await client.get_positions()
     return {
         "status": "success",
@@ -55,7 +55,7 @@ async def get_positions(client: AlpacaClient = Depends(get_alpaca)):
 async def close_position(
     symbol: str,
     client: AlpacaClient = Depends(get_alpaca)
-):
+) -> Dict[str, Any]:
     return await client.close_position(symbol)
 
 
@@ -64,7 +64,7 @@ async def list_orders(
     status: str = "all",
     limit: int = 50,
     client: AlpacaClient = Depends(get_alpaca)
-):
+) -> Dict[str, Any]:
     orders = await client.get_orders(status=status, limit=limit)
     return {"status": "success", "count": len(orders), "orders": orders}
 
@@ -85,7 +85,7 @@ async def get_order_status(
 async def submit_order(
     order: OrderRequest,
     client: AlpacaClient = Depends(get_alpaca)
-):
+) -> Dict[str, Any]:
     return await client.submit_order(
         order.symbol,
         order.qty,
@@ -107,7 +107,7 @@ async def submit_order(
 async def cancel_order(
     order_id: str,
     client: AlpacaClient = Depends(get_alpaca)
-):
+) -> Dict[str, Any]:
     return await client.cancel_order(order_id)
 
 
@@ -116,7 +116,7 @@ async def buy_stock(
     symbol: str,
     qty: float,
     client: AlpacaClient = Depends(get_alpaca)
-):
+) -> Dict[str, Any]:
     return await client.submit_order(symbol, qty, "buy")
 
 
@@ -125,7 +125,7 @@ async def sell_stock(
     symbol: str,
     qty: float,
     client: AlpacaClient = Depends(get_alpaca)
-):
+) -> Dict[str, Any]:
     return await client.submit_order(symbol, qty, "sell")
 
 
@@ -135,7 +135,7 @@ async def get_bars(
     timeframe: str = "1Min",
     limit: int = 100,
     client: AlpacaClient = Depends(get_alpaca)
-):
+) -> Dict[str, Any]:
     bars = await client.get_bars(symbol, timeframe=timeframe, limit=limit)
     return {"status": "success", "symbol": symbol, "bars": bars}
 
@@ -147,7 +147,7 @@ async def get_assets(
     tradable: bool = True,
     limit: int = Config.MAX_UNIVERSE_ASSETS,
     client: AlpacaClient = Depends(get_alpaca)
-):
+) -> Dict[str, Any]:
     assets = await client.get_assets(
         asset_class=asset_class,
         status=status,
@@ -170,7 +170,7 @@ async def get_universe(
     tradable: bool = True,
     limit: int = 1000,
     client: AlpacaClient = Depends(get_alpaca)
-):
+) -> Dict[str, Any]:
     assets = await client.get_assets(
         asset_class=asset_class,
         status=status,
@@ -182,11 +182,11 @@ async def get_universe(
 
 
 @router.get("/clock")
-async def get_clock(client: AlpacaClient = Depends(get_alpaca)):
+async def get_clock(client: AlpacaClient = Depends(get_alpaca)) -> Dict[str, Any]:
     clock = await client.get_clock()
     return {"status": "success", "clock": clock}
 
 
 @router.get("/health")
-async def health():
+async def health() -> Dict[str, str]:
     return {"status": "healthy"}

@@ -1,7 +1,7 @@
 import logging
 import asyncio
 import time
-from typing import Dict, Any, Optional
+from typing import Any
 from nexus.utils.notifications import notifier
 
 logger = logging.getLogger(__name__)
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class HealthMonitor:
     """Monitors platform vital signs and broadcasts critical alerts."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.stats = {
             "market": {"status": "healthy", "details": "N/A"},
             "risk": {"status": "healthy", "details": "N/A"},
@@ -21,7 +21,7 @@ class HealthMonitor:
 
     def record(
         self, component: str, healthy: bool, details: Any = "N/A"
-    ):
+    ) -> None:
         status = "healthy" if healthy else "failed"
         self.stats[component] = {"status": status, "details": details}
 
@@ -44,5 +44,5 @@ class HealthMonitor:
                 f"details={details}"
             )
 
-    def heartbeat(self):
+    def heartbeat(self) -> None:
         self.last_heartbeat = time.time()

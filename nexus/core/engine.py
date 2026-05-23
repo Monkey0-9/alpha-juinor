@@ -4,7 +4,7 @@ import time
 import httpx
 import numpy as np
 import pandas as pd
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, cast
 
 from nexus.core.governance import GovernanceEngine
 from nexus.core.alpha import AlphaEngine
@@ -69,7 +69,7 @@ class NexusEngine:
             self._client = httpx.AsyncClient(timeout=30, headers=headers)
         return self._client
 
-    async def close(self):
+    async def close(self) -> None:
         """Cleanup connection pool and subsystems."""
         if self._client and not self._client.is_closed:
             await self._client.aclose()
@@ -111,12 +111,12 @@ class NexusEngine:
         await self.refresh_universe()
         return True
 
-    async def refresh_universe(self):
+    async def refresh_universe(self) -> None:
         """Dynamic universe re-scanner."""
         logger.info("Refreshing tradable universe assets...")
         client = await self._get_client()
         try:
-            params = {
+            params: Dict[str, Any] = {
                 "asset_class": "us_equity", 
                 "status": "active", 
                 "tradable": True, 
@@ -182,7 +182,7 @@ class NexusEngine:
         try:
             response = await client.get(f"{self.backend_url}/api/alpaca/account")
             if response.status_code == 200:
-                return response.json()
+                return cast(Dict[str, Any], response.json())
         except Exception as exc:
             logger.warning(f"Account fetch failure: {exc}")
         return {"equity": self.portfolio_value, "last_equity": self.portfolio_value}
@@ -192,7 +192,7 @@ class NexusEngine:
         try:
             response = await client.get(f"{self.backend_url}/api/alpaca/positions")
             if response.status_code == 200:
-                return response.json().get("positions", [])
+                return cast(List[Dict[str, Any]], response.json().get("positions", []))
         except Exception as exc:
             logger.warning(f"Position fetch failure: {exc}")
         return []
@@ -200,7 +200,7 @@ class NexusEngine:
     async def fetch_universe_history(self, symbols: List[str], timeframe: str = "1D", limit: int = 80) -> Dict[str, pd.DataFrame]:
         semaphore = asyncio.Semaphore(2)
 
-        async def fetch_symbol(symbol: str):
+        async def fetch_symbol(symbol: str) -> pd.DataFrame:
             async with semaphore:
                 result = await self.alpha_engine.fetch_market_data(symbol, timeframe=timeframe, limit=limit)
                 await asyncio.sleep(0.12)
@@ -219,38 +219,43 @@ class NexusEngine:
     def build_portfolio_state(self, account: Dict[str, Any], positions: List[Dict[str, Any]]) -> Dict[str, Any]:
         total_value = float(account.get("equity", self.portfolio_value))
         last_equity = float(account.get("last_equity", total_value))
-        if np.isnan(total_value) or total_value <= 0: total_value = self.portfolio_value
+        if np.isnan(total_value) or total_value <= 0:
+            total_value = self.portfolio_value
         drawdown = max(0.0, (last_equity - total_value) / max(total_value, 1.0))
         return {"total_value": total_value, "drawdown": drawdown, "positions": positions}
 
-    async def _verify_order_fills(self):
+    async def _verify_order_fills(self) -> None:
         """Check status of active orders and clear them once filled/cancelled."""
         if not self._active_orders:
             return
 
         client = await self._get_client()
         to_remove = []
-        for symbol, order_id in self._active_orders.items():
+        for symbol, order_id in list(self._active_orders.items()):
             try:
                 response = await client.get(
                     f"{self.backend_url}/api/alpaca/orders/{order_id}"
                 )
                 if response.status_code == 200:
                     order_info = response.json()
-                    status = order_info.get("status")
+                    status = order_info.get("status") or order_info.get("order_status")
                     if status in {"filled", "canceled", "expired", "rejected"}:
                         logger.info(f"Order {order_id} for {symbol} finalized: {status}")
                         to_remove.append(symbol)
                 elif response.status_code == 404:
                     logger.warning(f"Order {order_id} not found on backend.")
                     to_remove.append(symbol)
+                else:
+                    logger.debug(
+                        f"Order {order_id} for {symbol} status check returned {response.status_code}."
+                    )
             except Exception as exc:
                 logger.debug(f"Error verifying order {order_id}: {exc}")
 
         for s in to_remove:
-            del self._active_orders[s]
+            self._active_orders.pop(s, None)
 
-    async def run_cycle(self):
+    async def run_cycle(self) -> None:
         logger.info("Starting new trading cycle.")
         if time.time() - self.last_universe_refresh > Config.UNIVERSE_RESCAN_INTERVAL:
             await self.refresh_universe()
@@ -301,11 +306,17 @@ class NexusEngine:
         top_targets = dict(list(ranked.items())[: self.max_positions])
         weights = self.optimizer.optimize_weights(list(top_targets.keys()), [top_targets[s] for s in top_targets])
 
-        returns_list = benchmark_data["close"].pct_change().dropna().tolist() if not benchmark_data.empty else []
-        risk_metrics = {"var": 0.0}
-        if returns_list:
-            rust_risk = PolyglotBridge.calculate_risk_rust(returns_list)
-            risk_metrics["var"] = float(rust_risk.get("var", 0.0))
+        returns_list = benchmark_data["close"].pct_change().dropna().to_numpy() if not benchmark_data.empty else np.array([])
+        risk_metrics = {
+            "var": 0.0,
+            "cvar": 0.0,
+            "volatility": 0.0,
+            "sharpe": 0.0,
+        }
+        if returns_list.size > 0:
+            rust_risk = PolyglotBridge.calculate_risk_rust(returns_list.tolist())
+            risk_metrics = self.risk_engine.assess_risk(returns_list)
+            risk_metrics["rust_var"] = float(rust_risk.get("var", 0.0))
 
         multiplier = self.determine_risk_scale(market_insight, risk_metrics)
         weights = {s: w * multiplier for s, w in weights.items()}
@@ -347,23 +358,25 @@ class NexusEngine:
                 symbol, weight, current_qty, top_targets, history, portfolio_state,
                 raw_signals, market_insight, selected_strategy, is_open=clock_data.get("is_open", False)
             ))
-        if trade_tasks: await asyncio.gather(*trade_tasks)
+        if trade_tasks:
+            await asyncio.gather(*trade_tasks)
 
         self.execution_agent.learn(reward=float(np.mean(list(portfolio_scores.values()) or [0.0])))
 
     async def _submit_trade(self, symbol: str, weight: float, current_qty: float, top_targets: Dict[str, float],
                             history: Dict[str, pd.DataFrame], portfolio_state: Dict[str, Any],
                             raw_signals: Dict[str, float], market_insight: Dict[str, Any],
-                            selected_strategy: str, is_open: bool):
-        if abs(weight) < 0.0001 or symbol not in history or history[symbol].empty: return
+                            selected_strategy: str, is_open: bool) -> None:
+        if abs(weight) < 0.0001 or symbol not in history or history[symbol].empty:
+            return
         current_price = float(history[symbol]["close"].iloc[-1])
-        score = top_targets.get(symbol, 0.0)
         
         total_value = portfolio_state.get("total_value", self.portfolio_value)
         target_qty = int((total_value * abs(weight)) / max(current_price, 1.0))
         qty_diff = target_qty - abs(current_qty)
         
-        if abs(qty_diff) < 1 or (abs(qty_diff) * current_price < 100): return
+        if abs(qty_diff) < 1 or (abs(qty_diff) * current_price < 100):
+            return
 
         side = "buy" if qty_diff > 0 else "sell"
         qty = abs(qty_diff)
@@ -373,13 +386,17 @@ class NexusEngine:
             order_type, limit_price = ("limit", current_price * (1.001 if side == "buy" else 0.999))
 
         trade_request = {"symbol": symbol, "qty": qty, "side": side, "price": current_price, "order_type": order_type, "strategy": selected_strategy}
-        if not PolyglotBridge.validate_order_zig(trade_request).get("valid"): return
+        if not PolyglotBridge.validate_order_zig(trade_request).get("valid"):
+            return
         approved, _ = self.governance.check_compliance(trade_request, portfolio_state, current_qty=current_qty)
-        if not approved: return
+        if not approved:
+            return
 
         payload = {"symbol": symbol, "qty": qty, "side": side, "order_type": order_type, "strategy": selected_strategy}
-        if limit_price: payload["limit_price"] = round(limit_price, 4)
-        if not is_open: payload["extended_hours"] = True
+        if limit_price:
+            payload["limit_price"] = round(limit_price, 4)
+        if not is_open:
+            payload["extended_hours"] = True
 
         client = await self._get_client()
         try:
@@ -390,6 +407,17 @@ class NexusEngine:
                 if order_id:
                     self._active_orders[symbol] = order_id
                     logger.info(f"Order submitted for {symbol}: {order_id}")
+                    self.governance.record_trade(
+                        {
+                            "symbol": symbol,
+                            "side": side,
+                            "qty": qty,
+                            "price": current_price,
+                            "order_type": order_type,
+                            "strategy": selected_strategy,
+                            "status": order_data.get("status", "PENDING"),
+                        }
+                    )
                 else:
                     logger.warning(
                         f"Order response missing id for {symbol}: {order_data}"
@@ -401,27 +429,36 @@ class NexusEngine:
         except Exception as exc:
             logger.error(f"Order submission error for {symbol}: {exc}")
 
-    async def _close_position(self, symbol: str):
+    async def _close_position(self, symbol: str) -> None:
         client = await self._get_client()
         try:
             await client.delete(f"{self.backend_url}/api/alpaca/positions/{symbol}")
         except Exception as exc:
             logger.error(f"Error closing position for {symbol}: {exc}")
 
-    async def manage_positions(self):
+    async def manage_positions(self) -> None:
         positions = await self.get_positions()
-        if not positions: return
+        if not positions:
+            return
+
         client = await self._get_client()
         for pos in positions:
             symbol = pos.get("symbol")
-            if not symbol: continue
+            if not symbol:
+                continue
             try:
-                pnl = float(pos.get("unrealized_plpc", 0.0))
-                if pnl >= Config.TAKE_PROFIT_THRESHOLD * 100 or pnl <= Config.STOP_LOSS_THRESHOLD * 100:
+                pnl_pct = float(pos.get("unrealized_plpc", 0.0))
+                if pnl_pct >= Config.TAKE_PROFIT_THRESHOLD or pnl_pct <= Config.STOP_LOSS_THRESHOLD:
+                    logger.info(
+                        "Closing %s because pnl_pct=%s reached TP/SL thresholds.",
+                        symbol,
+                        pnl_pct,
+                    )
                     await client.delete(f"{self.backend_url}/api/alpaca/positions/{symbol}")
-            except Exception: pass
+            except Exception as exc:
+                logger.warning(f"Failed to evaluate close for {symbol}: {exc}")
 
-    async def main_loop(self):
+    async def main_loop(self) -> None:
         while True:
             if not await self.initialize():
                 await asyncio.sleep(10)
@@ -436,8 +473,23 @@ class NexusEngine:
     def determine_risk_scale(self, market_insight: Dict[str, Any], risk_metrics: Dict[str, float]) -> float:
         scale = 1.0
         regime = market_insight.get("regime")
-        if regime == "TURBULENT": scale *= 0.35
-        elif regime == "BEAR": scale *= 0.55
+        if regime == "TURBULENT":
+            scale *= 0.35
+        elif regime == "BEAR":
+            scale *= 0.55
+
+        volatility = risk_metrics.get("volatility", 0.0)
+        if volatility > 0.03:
+            scale *= 0.75
+        elif volatility < 0.01:
+            scale *= 1.05
+
+        var = float(risk_metrics.get("var", 0.0))
+        if var < -0.05:
+            scale *= 0.65
+        elif var > -0.02:
+            scale *= 1.0
+
         return max(0.2, min(scale, 1.0))
 
 if __name__ == "__main__":

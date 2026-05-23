@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class MarketBrain:
     """Adaptive market intelligence engine for Nexus."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.regime_detector = RegimeDetector()
         self.strategy_switcher = StrategySwitcher()
         self.signal_voter = LatticeVoter()

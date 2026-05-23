@@ -4,7 +4,7 @@ import logging
 import os
 import sqlite3
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any, Set
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class GovernanceEngine:
     ):
         self.single_position_limit = single_position_limit
         self.max_drawdown_limit = max_drawdown_limit
-        self.audit_log: List[Dict] = []
+        self.audit_log: List[Dict[str, Any]] = []
 
         # Configurable blacklist from env or file
         self._blacklist = self._load_blacklist()
@@ -72,7 +72,7 @@ class GovernanceEngine:
         self._db = _get_db()
 
     @staticmethod
-    def _load_blacklist() -> set:
+    def _load_blacklist() -> Set[str]:
         """Load blacklist from NEXUS_BLACKLIST env var or file."""
         # 1. Check env var (comma-separated symbols)
         env_val = os.getenv("NEXUS_BLACKLIST", "")
@@ -97,8 +97,8 @@ class GovernanceEngine:
 
     def check_compliance(
         self,
-        trade_request: Dict,
-        portfolio_state: Dict,
+        trade_request: Dict[str, Any],
+        portfolio_state: Dict[str, Any],
         current_qty: float = 0.0,
     ) -> Tuple[bool, List[str]]:
         """Perform compliance checks against risk limits."""
@@ -149,7 +149,7 @@ class GovernanceEngine:
 
     def _log_audit(
         self,
-        request: Dict,
+        request: Dict[str, Any],
         status: str,
         details: Optional[List[str]] = None,
     ) -> None:
@@ -188,7 +188,7 @@ class GovernanceEngine:
         )
         logger.info(msg)
 
-    def record_trade(self, trade: Dict) -> None:
+    def record_trade(self, trade: Dict[str, Any]) -> None:
         """Persist a completed trade to the history table."""
         try:
             self._db.execute(

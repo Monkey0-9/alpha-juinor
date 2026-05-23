@@ -40,7 +40,9 @@ graph TD
 ### Standard Setup
 ```bash
 # 1. Install dependencies
-pip install -r requirements.txt
+pip install -r requirements.lock.txt
+# or use requirements.txt for a looser install constraint
+# pip install -r requirements.txt
 
 # 2. Configure credentials
 cp .env.example .env
@@ -71,4 +73,6 @@ pytest tests/
 ```
 
 ---
-**Status:** `PRODUCTION_READY` | **Version:** `2.0.0` | **Security:** `HARDENED`
+> Performance claims should be validated with audited historical and live track records. This platform targets superior risk-adjusted returns but does not promise any specific annualized performance.
+
+**Status:** `PRODUCTION_PREPARED` | **Version:** `2.0.0` | **Security:** `HARDENED`

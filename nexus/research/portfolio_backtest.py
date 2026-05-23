@@ -1,7 +1,7 @@
 import logging
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional
+from typing import Any, Dict
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -86,3 +86,53 @@ class PortfolioBacktester:
             max_drawdown=float(max_dd),
             win_rate=float(win_rate)
         )
+
+    def run_walkforward(
+        self,
+        price_data: Dict[str, pd.Series],
+        signal_data: Dict[str, pd.Series],
+        train_window: int = 63,
+        test_window: int = 21,
+        step: int = 21,
+        max_positions: int = 12,
+    ) -> Dict[str, Any]:
+        """Execute walk-forward backtesting using a rolling train/test split."""
+        prices = pd.DataFrame(price_data).dropna()
+        signals = pd.DataFrame(signal_data).reindex(prices.index).fillna(0)
+
+        if prices.empty or signals.empty:
+            raise ValueError("Price and signal data must not be empty for walk-forward validation.")
+
+        fold_results = []
+        start = 0
+        while start + train_window + test_window <= len(prices):
+            test_index = prices.index[start + train_window : start + train_window + test_window]
+
+            test_prices = prices.loc[test_index]
+            test_signals = signals.loc[test_index]
+
+            # Use the same ordering logic on the test segment.
+            result = self.run(
+                {c: test_prices[c] for c in test_prices.columns},
+                {c: test_signals[c] for c in test_signals.columns},
+                max_positions=max_positions,
+            )
+
+            fold_results.append(result)
+            start += step
+
+        if not fold_results:
+            raise ValueError("Not enough data for walk-forward validation.")
+
+        all_equity = pd.concat([fold.equity_curve for fold in fold_results])
+        total_return = (all_equity.iloc[-1] / self.initial_capital) - 1
+        avg_sharpe = float(np.mean([fold.sharpe_ratio for fold in fold_results]))
+        avg_max_dd = float(np.mean([fold.max_drawdown for fold in fold_results]))
+
+        return {
+            "num_folds": len(fold_results),
+            "total_return": total_return,
+            "average_sharpe": avg_sharpe,
+            "average_max_drawdown": avg_max_dd,
+            "fold_results": fold_results,
+        }

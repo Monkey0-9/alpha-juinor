@@ -1,6 +1,6 @@
 import logging
+from typing import Any
 import numpy as np
-from typing import List, Optional, Union
 from numba import jit
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ class KalmanFilter:
 
         return float(self.post_estimate)
 
-    def batch_filter(self, data: np.ndarray) -> np.ndarray:
+    def batch_filter(self, data: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
         """Apply the filter to an entire data series."""
         if len(data) == 0:
             return np.array([])
@@ -75,7 +75,7 @@ class TrendAccelerationModel:
     to estimate the instantaneous drift of the price path.
     """
 
-    def predict_trajectory(self, prices: np.ndarray) -> float:
+    def predict_trajectory(self, prices: np.ndarray[Any, Any]) -> float:
         if len(prices) < 10:
             return 0.0
 
@@ -88,7 +88,7 @@ class TrendAccelerationModel:
         )
         return float(flow_force)
 
-    def get_drift_velocity(self, prices: np.ndarray) -> float:
+    def get_drift_velocity(self, prices: np.ndarray[Any, Any]) -> float:
         if len(prices) < 2:
             return 0.0
         return float(np.mean(np.diff(prices[-10:])))
@@ -112,7 +112,7 @@ class VolatilityTopologyHeuristic:
     It uses simple statistical proxies for topological complexity.
     """
 
-    def map_market_topology(self, data_points: np.ndarray) -> str:
+    def map_market_topology(self, data_points: np.ndarray[Any, Any]) -> str:
         if len(data_points) < 50:
             return "FLAT"
 
@@ -153,8 +153,8 @@ class FractalEngine:
     """
 
     @staticmethod
-    @jit(nopython=True)
-    def _fast_fd(prices: np.ndarray) -> float:
+    @jit(nopython=True)  # type: ignore[untyped-decorator]
+    def _fast_fd(prices: np.ndarray[Any, Any]) -> float:
         n = len(prices)
         if n < 30:
             return 1.5
@@ -167,10 +167,10 @@ class FractalEngine:
             return 1.0
 
         fd = 1.0 + (np.log(variation) / np.log(float(n)))
-        return min(2.0, max(1.0, fd))
+        return float(min(2.0, max(1.0, fd)))
 
-    def calculate_dimension(self, prices: np.ndarray) -> float:
-        return self._fast_fd(prices)
+    def calculate_dimension(self, prices: np.ndarray[Any, Any]) -> float:
+        return float(self._fast_fd(prices))
 
     def analyze_structure(self, fd: float) -> str:
         if fd > 1.7:

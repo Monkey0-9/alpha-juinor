@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from typing import Dict
+from typing import Dict, Any
 
 
 class PortfolioOptimizer:
@@ -65,7 +65,7 @@ class MonteCarloSimulator:
     def run_survival_analysis(
         self,
         initial_capital: float,
-        daily_returns: np.ndarray,
+        daily_returns: np.ndarray[Any, Any],
         days: int = 252,
         n_simulations: int = 1000,
         ruin_threshold: float = 0.5,

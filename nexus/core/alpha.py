@@ -4,7 +4,7 @@ import time
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Any, Tuple
 from nexus.math.models import KalmanFilter
 from nexus.math.indicators import HawkesProcess
 from nexus.execution.alpaca import get_client
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class AlphaEngine:
     """Alpha Generation Engine with robust data resilience and caching."""
 
-    _cache: Dict[str, Dict] = {}
+    _cache: Dict[str, Dict[str, Any]] = {}
     _CACHE_TTL = 300  # 5 minutes for benchmark data
 
     def __init__(self, backend_url: str = Config.BACKEND_URL):
@@ -130,32 +130,51 @@ class AlphaEngine:
         prices = data["close"].astype(float).to_numpy().flatten()
         denoised_prices = self.kf.batch_filter(prices)
 
-        returns = pd.Series(denoised_prices).pct_change().dropna()
-        if returns.empty: return 0.0
-            
-        intensity = self.hawkes.calculate_intensity(np.array(returns[abs(returns) > returns.std() * 1.5].index, dtype=float))
-        
-        recent_trend = 0.0
-        if len(denoised_prices) >= 5:
-            recent_trend = (float(denoised_prices[-1]) / float(denoised_prices[-5])) - 1
+        if len(denoised_prices) < 5:
+            return 0.0
 
-        signal = np.tanh(recent_trend * 40) * (1.0 / (1.0 + intensity))
-        return float(signal)
+        pct_changes = pd.Series(denoised_prices).pct_change().dropna()
+        if pct_changes.empty:
+            return 0.0
 
-    def monte_carlo_simulation(self, prices: np.ndarray, num_paths: int = 100, horizon: int = 20) -> float:
+        momentum = float(pct_changes.tail(5).mean())
+        volatility = float(pct_changes.tail(20).std()) if len(pct_changes) >= 20 else float(pct_changes.std())
+        trend = float(denoised_prices[-1] / denoised_prices[-10] - 1) if len(denoised_prices) >= 10 else momentum
+
+        intensity = self.hawkes.calculate_intensity(
+            np.array(pct_changes[abs(pct_changes) > pct_changes.std() * 1.5].index, dtype=float)
+        )
+
+        trend_score = np.tanh(trend * 20)
+        momentum_score = np.tanh(momentum * 10)
+        volatility_penalty = 1.0 / (1.0 + volatility * 8.0)
+        hawkes_adjustment = 1.0 / (1.0 + intensity)
+
+        signal = (0.45 * trend_score + 0.35 * momentum_score) * volatility_penalty * hawkes_adjustment
+        return float(np.clip(signal, -1.0, 1.0))
+
+    def monte_carlo_simulation(self, prices: np.ndarray[Any, Any], num_paths: int = 200, horizon: int = 20) -> float:
         prices = prices.flatten()
-        if len(prices) < 2: return 0.5
+        if len(prices) < 5:
+            return 0.5
         returns = np.diff(np.log(prices))
-        mu, sigma = np.mean(returns), np.std(returns)
+        empirical = returns.astype(float)
+        success_count = 0
         last_price = float(prices[-1])
-        sim_ends = [last_price * np.exp(np.sum(mu + sigma * np.random.normal(size=horizon))) for _ in range(num_paths)]
-        return float(sum(1 for p in sim_ends if p > last_price) / num_paths)
+
+        for _ in range(num_paths):
+            sampled = np.random.choice(empirical, size=horizon, replace=True)
+            final_price = last_price * np.exp(np.sum(sampled))
+            if final_price > last_price:
+                success_count += 1
+
+        return float(success_count / num_paths)
 
     async def get_batch_signals(self, symbols: List[str], timeframe: str = "15Min") -> Dict[str, float]:
         signals: Dict[str, float] = {}
         semaphore = asyncio.Semaphore(2)  # lower concurrency to avoid Alpaca data throttling
 
-        async def symbol_signal(symbol: str) -> tuple:
+        async def symbol_signal(symbol: str) -> Tuple[str, float]:
             async with semaphore:
                 data = await self.fetch_market_data(symbol, timeframe=timeframe)
                 alpha = self.generate_signal(data)
@@ -169,7 +188,7 @@ class AlphaEngine:
                 signals[r[0]] = r[1]
         return signals
 
-    async def close(self):
+    async def close(self) -> None:
         if hasattr(self.client, "close"):
             try:
                 await self.client.close()

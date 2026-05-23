@@ -4,7 +4,7 @@ import platform
 import shutil
 import subprocess
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, cast
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class PolyglotBridge:
                 text=True,
                 check=True,
             )
-            return json.loads(result.stdout)
+            return cast(Dict[str, Any], json.loads(result.stdout))
         except Exception as exc:
             logger.debug(f"Rust Risk Engine fallback: {exc}")
             return {
@@ -80,7 +80,7 @@ class PolyglotBridge:
                 text=True,
                 check=True,
             )
-            return json.loads(result.stdout)
+            return cast(Dict[str, Any], json.loads(result.stdout))
         except Exception as exc:
             logger.error(f"Go Auditor failure: {exc}")
             return {"overall_health": "UNKNOWN", "results": []}
@@ -109,7 +109,7 @@ class PolyglotBridge:
                 text=True,
                 check=True,
             )
-            return json.loads(result.stdout)
+            return cast(Dict[str, Any], json.loads(result.stdout))
         except Exception as exc:
             logger.debug(f"Zig Validator fallback: {exc}")
             return {

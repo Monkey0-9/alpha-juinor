@@ -1,9 +1,6 @@
 import subprocess
-import os
-import sys
-import shutil
 
-def build_rust():
+def build_rust() -> None:
     print("Building Rust Risk Engine...")
     try:
         subprocess.run(["cargo", "build", "--release", "--manifest-path", "nexus/polyglot/rust_risk_engine/Cargo.toml"], check=True)
@@ -11,7 +8,7 @@ def build_rust():
     except Exception as e:
         print(f"[FAIL] Rust build failed: {e}")
 
-def build_go():
+def build_go() -> None:
     print("Building Go Auditor...")
     try:
         # In a real environment, we'd use go build -o ...
@@ -21,7 +18,7 @@ def build_go():
     except Exception as e:
         print(f"[FAIL] Go check failed: {e}")
 
-def build_zig():
+def build_zig() -> None:
     print("Building Zig Validator...")
     try:
         subprocess.run(["zig", "version"], check=True)

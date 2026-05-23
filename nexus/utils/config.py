@@ -13,6 +13,9 @@ class Config:
     ALPACA_PAPER = (
         os.getenv("ALPACA_PAPER_TRADING", "true").lower() == "true"
     )
+    ALLOW_SIMULATION_FALLBACK = (
+        os.getenv("NEXUS_ALLOW_SIMULATION_FALLBACK", "false").lower() == "true"
+    )
 
     UNIVERSE_RESCAN_INTERVAL = int(
         os.getenv("NEXUS_RESCAN_INTERVAL", "14400")
@@ -73,7 +76,7 @@ class Config:
     )
 
     @classmethod
-    def validate(cls):
+    def validate(cls) -> tuple[bool, list[str]]:
         """Validate that essential configuration is present."""
         missing = []
         if not cls.ALPACA_API_KEY:
@@ -83,7 +86,7 @@ class Config:
         return len(missing) == 0, missing
 
     @classmethod
-    def ensure_ready(cls):
+    def ensure_ready(cls) -> None:
         valid, missing = cls.validate()
         if not valid:
             raise RuntimeError(

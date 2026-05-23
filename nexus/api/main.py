@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
-from typing import Dict
+from typing import Dict, AsyncGenerator, Callable, Awaitable, Any
 import logging
 import os
 from nexus.api.alpaca_router import router as alpaca_router
@@ -17,7 +17,7 @@ _API_KEY = os.getenv("NEXUS_API_KEY", "")
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Initializing Nexus API Backend...")
     valid, missing = Config.validate()
     if not valid:
@@ -63,7 +63,7 @@ app = FastAPI(
 
 # --- API Key Authentication Middleware ---
 @app.middleware("http")
-async def api_key_auth(request: Request, call_next):
+async def api_key_auth(request: Request, call_next: Callable[[Request], Awaitable[Any]]) -> Any:
     """Verify X-API-Key header on mutation endpoints."""
     # Skip auth for health checks and GET-only read endpoints
     logger.info(f"API Request: {request.method} {request.url.path}")

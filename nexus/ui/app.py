@@ -4,6 +4,7 @@ import httpx
 import time
 from datetime import datetime
 import os
+from typing import Optional, Any
 
 # --- Configuration ---
 st.set_page_config(
@@ -76,7 +77,7 @@ st.markdown("""
 BACKEND_URL = os.getenv("NEXUS_BACKEND_URL", "http://localhost:8001")
 API_KEY = os.getenv("NEXUS_API_KEY", "")
 
-def fetch_data(endpoint: str):
+def fetch_data(endpoint: str) -> Optional[Any]:
     """Synchronous HTTP fetch with API Key authentication."""
     try:
         headers = {"X-API-Key": API_KEY} if API_KEY else {}
@@ -86,7 +87,7 @@ def fetch_data(endpoint: str):
     except Exception:
         return None
 
-def main():
+def main() -> None:
     # --- Header ---
     col_h1, col_h2 = st.columns([2, 1])
     with col_h1:
@@ -167,7 +168,8 @@ def main():
         pos_df = pd.DataFrame(pos_list)
         cols = ["symbol", "qty", "avg_price", "current_price", "market_value", "unrealized_plpc", "side"]
         for col in cols:
-            if col not in pos_df.columns: pos_df[col] = 0.0
+            if col not in pos_df.columns:
+                pos_df[col] = 0.0
 
         display = pos_df[cols].copy()
         display.columns = ["Symbol", "Shares", "Avg Price", "Market Price", "Value", "P&L %", "Side"]
@@ -191,7 +193,8 @@ def main():
     with fc1:
         st.caption(f"Last refresh: {datetime.now().strftime('%H:%M:%S')}")
     with fc2:
-        if st.button("Force Refresh"): st.rerun()
+        if st.button("Force Refresh"):
+            st.rerun()
 
     time.sleep(30)
     st.rerun()

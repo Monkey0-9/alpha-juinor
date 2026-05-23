@@ -1,7 +1,7 @@
 import logging
 import numpy as np
 import pandas as pd
-from typing import Callable, Dict, Optional
+from typing import Dict
 
 logger = logging.getLogger(__name__)
 
@@ -72,10 +72,14 @@ class BacktestEngine:
             equity_curve.append(equity + market_value)
 
         equity_series = pd.Series(equity_curve, index=prices_df.index)
+        returns = equity_series.pct_change().dropna()
         metrics = {
             "return": float(equity_series.iloc[-1] / self.initial_capital - 1),
-            "sharpe": float(self._sharpe_ratio(equity_series.pct_change().dropna())),
+            "annualized_return": float(((equity_series.iloc[-1] / self.initial_capital) ** (252 / len(returns))) - 1) if len(returns) > 0 else 0.0,
+            "sharpe": float(self._sharpe_ratio(returns)),
+            "sortino": float(self._sortino_ratio(returns)),
             "max_drawdown": float(self._max_drawdown(equity_series)),
+            "calmar": float(self._calmar_ratio(equity_series)),
         }
         return BacktestResult(equity_series, pd.DataFrame(trades), metrics)
 
@@ -87,6 +91,22 @@ class BacktestEngine:
         if returns.empty:
             return 0.0
         return float(returns.mean() / (returns.std() + 1e-9) * np.sqrt(252))
+
+    def _sortino_ratio(self, returns: pd.Series) -> float:
+        if returns.empty:
+            return 0.0
+        downside = returns[returns < 0]
+        downside_std = downside.std(ddof=1)
+        if downside_std <= 0:
+            return 0.0
+        return float(returns.mean() / downside_std * np.sqrt(252))
+
+    def _calmar_ratio(self, equity: pd.Series) -> float:
+        max_dd = abs(self._max_drawdown(equity))
+        if max_dd <= 0:
+            return 0.0
+        total_return = equity.iloc[-1] / self.initial_capital - 1
+        return float(total_return / max_dd)
 
     def _max_drawdown(self, equity: pd.Series) -> float:
         if equity.empty:

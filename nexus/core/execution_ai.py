@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any
+from typing import Any
 
 import numpy as np
 
@@ -24,7 +24,7 @@ class ExecutionAgent:
         self.cumulative_reward: float = 0.0
         self.decision_count: int = 0
 
-    def get_action(self, market_state: np.ndarray) -> int:
+    def get_action(self, market_state: np.ndarray[Any, Any]) -> int:
         """Determine execution tactic from market microstructure.
 
         Parameters

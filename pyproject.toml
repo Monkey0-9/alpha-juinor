@@ -19,14 +19,14 @@ dependencies = [
     "pydantic",
     "requests"
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py311"
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.11"
 strict = true
 ignore_missing_imports = true
 
@@ -43,3 +43,7 @@ executionEnvironments = [
 [tool.setuptools]
 package-dir = {"" = "."}
 packages = ["nexus"]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"

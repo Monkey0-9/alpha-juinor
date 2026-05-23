@@ -1,3 +1,4 @@
+from typing import Any
 import numpy as np
 import pandas as pd
 import logging
@@ -56,7 +57,7 @@ class HawkesProcess:
         self.alpha = alpha
         self.beta = beta
 
-    def calculate_intensity(self, events: np.ndarray) -> float:
+    def calculate_intensity(self, events: np.ndarray[Any, Any]) -> float:
         """
         Calculates intensity at the last event time.
         """

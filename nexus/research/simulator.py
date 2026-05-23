@@ -1,7 +1,5 @@
 import logging
-import numpy as np
-import pandas as pd
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Any
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +11,7 @@ class TradeSimulator:
         self.positions: Dict[str, Dict[str, float]] = {}
         self.order_history: List[Dict[str, Any]] = []
 
-    def execute_market_order(self, symbol: str, qty: float, price: float, side: str, commission: float = 0.0005) -> Dict[str, float]:
+    def execute_market_order(self, symbol: str, qty: float, price: float, side: str, commission: float = 0.0005) -> Dict[str, Any]:
         filled_qty = abs(qty)
         notional = filled_qty * price
         fee = notional * commission
@@ -43,7 +41,7 @@ class TradeSimulator:
         limit_price: float,
         side: str,
         commission: float = 0.0005
-    ) -> Dict[str, float]:
+    ) -> Dict[str, Any]:
         # Simulated limit orders are immediately filled if the limit is at or better than the current price.
         current_price = self._get_simulated_price(symbol)
         if (side == "buy" and limit_price >= current_price) or (side == "sell" and limit_price <= current_price):
@@ -81,7 +79,7 @@ class TradeSimulator:
 
         self.positions[symbol] = current
 
-    def close_position(self, symbol: str, price: float) -> Dict[str, float]:
+    def close_position(self, symbol: str, price: float) -> Dict[str, Any]:
         position = self.positions.pop(symbol, {"qty": 0.0, "avg_price": 0.0})
         qty = position.get("qty", 0.0)
         if qty == 0:

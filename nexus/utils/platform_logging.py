@@ -9,7 +9,7 @@ LOG_JSON = os.getenv("NEXUS_LOG_JSON", "false").lower() == "true"
 
 class JsonFormatter(logging.Formatter):
     """Custom JSON formatter for institutional observability."""
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         log_entry = {
             "timestamp": datetime.fromtimestamp(record.created).isoformat(),
             "level": record.levelname,
@@ -27,6 +27,7 @@ def setup_logging(level: int = logging.INFO, log_file: str = DEFAULT_LOG_FILE) -
     root = logging.getLogger()
     root.handlers.clear()
     
+    formatter: logging.Formatter
     if LOG_JSON:
         formatter = JsonFormatter()
     else:

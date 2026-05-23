@@ -2,7 +2,7 @@ import asyncio
 import os
 import uuid
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, cast
 from dataclasses import dataclass
 import aiohttp
 import numpy as np
@@ -10,6 +10,7 @@ import pandas as pd
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from nexus.research.simulator import TradeSimulator
+from nexus.utils.config import Config
 
 # Load environment variables
 load_dotenv()
@@ -37,6 +38,7 @@ class AlpacaClient:
     """Alpaca execution client with live and simulated paper trading fallback."""
 
     def __init__(self, credentials: Optional[AlpacaCredentials] = None):
+        self.credentials: Optional[AlpacaCredentials] = None
         self.session: Optional[aiohttp.ClientSession] = None
         self.simulator = TradeSimulator()
         self.simulated = False
@@ -52,10 +54,18 @@ class AlpacaClient:
                 self.credentials = AlpacaCredentials(api_key, api_secret, paper_trading)
                 self.enabled = True
             else:
-                logger.warning("Alpaca credentials missing. Using simulated paper trading mode.")
-                self.credentials = None
-                self.enabled = True
-                self.simulated = True
+                if Config.ALLOW_SIMULATION_FALLBACK:
+                    logger.warning("Alpaca credentials missing. Using explicit simulated paper trading mode.")
+                    self.credentials = None
+                    self.enabled = True
+                    self.simulated = True
+                else:
+                    logger.error(
+                        "Alpaca credentials missing and simulation fallback is disabled. "
+                        "Set NEXUS_ALLOW_SIMULATION_FALLBACK=true only for non-production testing."
+                    )
+                    self.credentials = None
+                    self.enabled = False
         else:
             self.credentials = credentials
             self.enabled = True
@@ -67,6 +77,16 @@ class AlpacaClient:
                 "Alpaca execution initialized in %s mode.",
                 "PAPER" if self.credentials.paper_trading else "LIVE"
             )
+        elif self.simulated:
+            logger.info("Alpaca execution initialized in SIMULATION mode.")
+        else:
+            logger.warning("Alpaca execution disabled due to missing credentials.")
+
+    @property
+    def headers(self) -> Dict[str, str]:
+        if self.credentials is None:
+            return {}
+        return self.credentials.get_headers()
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self.session is None or self.session.closed:
@@ -86,7 +106,7 @@ class AlpacaClient:
 
         try:
             session = await self._get_session()
-            async with session.get(f"{self.base_url}/v2/account", headers=self.credentials.get_headers()) as response:
+            async with session.get(f"{self.base_url}/v2/account", headers=self.headers) as response:
                 data = await response.json()
                 if response.status in {200, 201}:
                     return {
@@ -128,7 +148,7 @@ class AlpacaClient:
 
         try:
             session = await self._get_session()
-            async with session.get(f"{self.base_url}/v2/positions", headers=self.credentials.get_headers()) as response:
+            async with session.get(f"{self.base_url}/v2/positions", headers=self.headers) as response:
                 if response.status in {200, 201}:
                     positions = await response.json()
                     return [{
@@ -164,6 +184,7 @@ class AlpacaClient:
     ) -> Dict[str, Any]:
         symbol = symbol.upper()
         if self.simulated:
+            result: Dict[str, Any]
             bars = await self.get_bars(symbol, timeframe="1Min", limit=1)
             current_price = float(bars[-1]["close"]) if bars else 100.0
             if order_type == "limit" and limit_price is not None:
@@ -231,7 +252,7 @@ class AlpacaClient:
 
             async with session.post(
                 f"{self.base_url}/v2/orders",
-                headers=self.credentials.get_headers(),
+                headers=self.headers,
                 json=order_data
             ) as response:
                 data = await response.json()
@@ -256,10 +277,10 @@ class AlpacaClient:
 
         try:
             session = await self._get_session()
-            params = {"status": status, "limit": limit}
-            async with session.get(f"{self.base_url}/v2/orders", headers=self.credentials.get_headers(), params=params) as response:
+            params: Dict[str, Any] = {"status": status, "limit": limit}
+            async with session.get(f"{self.base_url}/v2/orders", headers=self.headers, params=params) as response:
                 if response.status in {200, 201}:
-                    return await response.json()
+                    return cast(List[Dict[str, Any]], await response.json())
                 return []
         except Exception as e:
             logger.warning(f"Failed to fetch Alpaca orders: {e}")
@@ -271,7 +292,7 @@ class AlpacaClient:
 
         try:
             session = await self._get_session()
-            async with session.delete(f"{self.base_url}/v2/orders/{order_id}", headers=self.credentials.get_headers()) as response:
+            async with session.delete(f"{self.base_url}/v2/orders/{order_id}", headers=self.headers) as response:
                 if response.status in {200, 201}:
                     return {"success": True, "order_id": order_id}
                 data = await response.json()
@@ -291,7 +312,7 @@ class AlpacaClient:
         try:
             session = await self._get_session()
             while True:
-                params = {
+                params: Dict[str, Any] = {
                     "asset_class": asset_class,
                     "status": status,
                     "tradable": str(tradable).lower(),
@@ -302,7 +323,7 @@ class AlpacaClient:
 
                 async with session.get(
                     f"{self.base_url}/v2/assets",
-                    headers=self.credentials.get_headers(),
+                    headers=self.headers,
                     params=params
                 ) as response:
                     if response.status not in {200, 201}:
@@ -341,9 +362,9 @@ class AlpacaClient:
 
         try:
             session = await self._get_session()
-            async with session.get(f"{self.base_url}/v2/clock", headers=self.credentials.get_headers()) as response:
+            async with session.get(f"{self.base_url}/v2/clock", headers=self.headers) as response:
                 if response.status in {200, 201}:
-                    return await response.json()
+                    return cast(Dict[str, Any], await response.json())
                 return {"is_open": False}
         except Exception as e:
             logger.warning(f"Failed to fetch market clock: {e}")
@@ -354,7 +375,7 @@ class AlpacaClient:
         symbol: str,
         timeframe: str = "1Min",
         limit: int = 100,
-        start: str = None,
+        start: Optional[str] = None,
         feed: str = "iex"
     ) -> List[Dict[str, Any]]:
         symbol = symbol.upper()
@@ -364,14 +385,14 @@ class AlpacaClient:
         try:
             session = await self._get_session()
             for feed_candidate in [feed, "sip"]:
-                params = {"timeframe": timeframe, "limit": limit, "feed": feed_candidate}
+                params: Dict[str, Any] = {"timeframe": timeframe, "limit": limit, "feed": feed_candidate}
                 if start:
                     params["start"] = start
                 retries = 0
                 while retries < 3:
                     async with session.get(
                         f"{self.data_url}/v2/stocks/{symbol}/bars",
-                        headers=self.credentials.get_headers(),
+                        headers=self.headers,
                         params=params
                     ) as response:
                         if response.status in {200, 201}:
@@ -425,7 +446,7 @@ class AlpacaClient:
             session = await self._get_session()
             async with session.delete(
                 f"{self.base_url}/v2/positions/{symbol}",
-                headers=self.credentials.get_headers()
+                headers=self.headers
             ) as response:
                 if response.status in {200, 201}:
                     return {"success": True, "symbol": symbol}
