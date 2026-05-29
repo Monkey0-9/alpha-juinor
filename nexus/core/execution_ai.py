@@ -30,28 +30,27 @@ class ExecutionAgent:
         Parameters
         ----------
         market_state : np.ndarray
-            Feature vector.  When a full feature pipeline is wired,
+            Feature vector. When a full feature pipeline is wired,
             indices should map to:
                 [0] spread_bps, [1] volume_ratio, [2] volatility,
-                [3] momentum, [4..] reserved.
+                [3] momentum.
             If the vector is too short or all zeros, default to
             conservative execution (action 1).
         """
         if market_state is None or len(market_state) < 4:
             return 1  # Conservative default
 
+        spread_bps = float(market_state[0])
+        volume_ratio = float(market_state[1])
         volatility = float(market_state[2])
         momentum = float(market_state[3])
 
-        # High volatility → wait for calmer conditions
-        if volatility > 0.03:
+        if volatility > 0.035 or (spread_bps > 0.001 and volume_ratio < 0.7):
             return 0
 
-        # Strong directional momentum → aggressive fill
-        if abs(momentum) > 0.02:
+        if abs(momentum) > 0.025:
             return 2
 
-        # Default: conservative small order
         return 1
 
     def learn(self, reward: float) -> None:

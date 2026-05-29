@@ -41,7 +41,7 @@ class Config:
         os.getenv("NEXUS_MAX_DRAWDOWN", "0.15")
     )
     MAX_OPEN_POSITIONS = int(
-        os.getenv("NEXUS_MAX_OPEN_POSITIONS", "50")
+        os.getenv("NEXUS_MAX_OPEN_POSITIONS", "30")  # Down from 50 - higher conviction trades
     )
     MAX_DAILY_TRADES = int(
         os.getenv("NEXUS_MAX_DAILY_TRADES", "100")
@@ -57,19 +57,19 @@ class Config:
     )
     TRADE_ALL_ASSETS = os.getenv("NEXUS_TRADE_ALL", "false").lower() == "true"
     MIN_HOLD_CYCLES = int(
-        os.getenv("NEXUS_MIN_HOLD_CYCLES", "3")
+        os.getenv("NEXUS_MIN_HOLD_CYCLES", "2")  # Down from 3 - exit faster on loss
     )
     HEARTBEAT_INTERVAL = int(
         os.getenv("NEXUS_HEARTBEAT_INTERVAL", "60")
     )
     MAX_RESTARTS = int(os.getenv("NEXUS_MAX_RESTARTS", "5"))
 
-    # Institutional Trading Parameters
+    # Institutional Trading Parameters - OPTIMIZED FOR PROFITABILITY
     TAKE_PROFIT_THRESHOLD = float(
-        os.getenv("NEXUS_TAKE_PROFIT", "0.08")
+        os.getenv("NEXUS_TAKE_PROFIT", "0.05")  # Down from 0.08 - lock gains faster
     )
     STOP_LOSS_THRESHOLD = float(
-        os.getenv("NEXUS_STOP_LOSS", "-0.04")
+        os.getenv("NEXUS_STOP_LOSS", "-0.06")  # Up from -0.04 - reduce whipsaws
     )
     FALLBACK_EQUITY = float(
         os.getenv("NEXUS_FALLBACK_EQUITY", "1000000.0")

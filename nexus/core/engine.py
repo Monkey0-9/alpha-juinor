@@ -303,7 +303,14 @@ class NexusEngine:
         
         portfolio_scores = self.market_brain.build_portfolio_signals(raw_signals, history, self.market_regime)
         ranked = self.factor_engine.rank_assets(portfolio_scores, history)
-        top_targets = dict(list(ranked.items())[: self.max_positions])
+        
+        # FIXED: Only include top high-conviction trades
+        # Filter for signals strong enough (> 0.2 or < -0.2)
+        top_targets = {}
+        for symbol, score in list(ranked.items())[: self.max_positions]:
+            if abs(score) > 0.20:  # Only high conviction
+                top_targets[symbol] = score
+        
         weights = self.optimizer.optimize_weights(list(top_targets.keys()), [top_targets[s] for s in top_targets])
 
         returns_list = benchmark_data["close"].pct_change().dropna().to_numpy() if not benchmark_data.empty else np.array([])
@@ -320,6 +327,7 @@ class NexusEngine:
 
         multiplier = self.determine_risk_scale(market_insight, risk_metrics)
         weights = {s: w * multiplier for s, w in weights.items()}
+        weights = {s: w for s, w in weights.items() if w > 0.0}
 
         portfolio_state = self.build_portfolio_state(account, current_positions)
         self.health_monitor.record("market", not benchmark_data.empty, details=selected_strategy)
@@ -363,6 +371,34 @@ class NexusEngine:
 
         self.execution_agent.learn(reward=float(np.mean(list(portfolio_scores.values()) or [0.0])))
 
+    def _build_execution_state(
+        self,
+        symbol: str,
+        history: pd.DataFrame,
+        current_price: float,
+    ) -> np.ndarray:
+        """Build deterministic order execution state from price history."""
+        spread_bps = 0.0005
+        volume_ratio = 1.0
+        volatility = 0.0
+        momentum = 0.0
+
+        if not history.empty and "close" in history.columns:
+            close = history["close"].astype(float)
+            returns = close.pct_change().dropna()
+            if len(returns) > 0:
+                volatility = float(returns.tail(20).std())
+                momentum = float(returns.tail(5).mean())
+
+        if not history.empty and "volume" in history.columns:
+            volume = history["volume"].astype(float)
+            avg_volume = float(volume.tail(20).mean()) if len(volume) > 0 else 0.0
+            last_volume = float(volume.iloc[-1]) if len(volume) > 0 else 0.0
+            if avg_volume > 0:
+                volume_ratio = float(last_volume / avg_volume)
+
+        return np.array([spread_bps, volume_ratio, volatility, momentum], dtype=float)
+
     async def _submit_trade(self, symbol: str, weight: float, current_qty: float, top_targets: Dict[str, float],
                             history: Dict[str, pd.DataFrame], portfolio_state: Dict[str, Any],
                             raw_signals: Dict[str, float], market_insight: Dict[str, Any],
@@ -380,10 +416,23 @@ class NexusEngine:
 
         side = "buy" if qty_diff > 0 else "sell"
         qty = abs(qty_diff)
-        order_type, limit_price = ("market", None)
 
-        if not is_open:
-            order_type, limit_price = ("limit", current_price * (1.001 if side == "buy" else 0.999))
+        market_state = self._build_execution_state(symbol, history.get(symbol, pd.DataFrame()), current_price)
+        action = self.execution_agent.get_action(market_state)
+
+        order_type = "market"
+        limit_price = None
+        if action == 0:
+            order_type = "limit"
+            limit_price = current_price
+        elif action == 1:
+            if not is_open:
+                order_type = "limit"
+                limit_price = current_price * (1.001 if side == "buy" else 0.999)
+        elif action == 2:
+            if not is_open:
+                order_type = "limit"
+                limit_price = current_price
 
         trade_request = {"symbol": symbol, "qty": qty, "side": side, "price": current_price, "order_type": order_type, "strategy": selected_strategy}
         if not PolyglotBridge.validate_order_zig(trade_request).get("valid"):
@@ -471,26 +520,37 @@ class NexusEngine:
                 await asyncio.sleep(Config.HEARTBEAT_INTERVAL)
 
     def determine_risk_scale(self, market_insight: Dict[str, Any], risk_metrics: Dict[str, float]) -> float:
+        """FIXED: Smarter risk scaling - only reduce on severe conditions."""
         scale = 1.0
         regime = market_insight.get("regime")
+        
+        # Don't scale down in BULL - let winners run
         if regime == "TURBULENT":
-            scale *= 0.35
+            scale *= 0.50  # More conservative: was 0.35
         elif regime == "BEAR":
-            scale *= 0.55
+            scale *= 0.60  # Slightly more: was 0.55
 
         volatility = risk_metrics.get("volatility", 0.0)
-        if volatility > 0.03:
-            scale *= 0.75
+        if volatility > 0.04:  # Only if very high: was 0.03
+            scale *= 0.80
         elif volatility < 0.01:
             scale *= 1.05
 
+        # Only scale down if VaR is SEVERE: was -0.05
         var = float(risk_metrics.get("var", 0.0))
-        if var < -0.05:
-            scale *= 0.65
+        if var < -0.12:  # Only in crash conditions
+            scale *= 0.70
         elif var > -0.02:
             scale *= 1.0
 
-        return max(0.2, min(scale, 1.0))
+        # Strategy agreement matters less if agreement is already decent
+        agreement = float(market_insight.get("strategy_agreement", 0.5))
+        if agreement < 0.25:  # Only penalize very low agreement
+            scale *= 0.65
+        elif agreement < 0.45:
+            scale *= 0.90
+
+        return max(0.3, min(scale, 1.0))  # Min 0.3 to keep trading
 
 if __name__ == "__main__":
     engine = NexusEngine()

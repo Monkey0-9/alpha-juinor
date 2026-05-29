@@ -23,12 +23,17 @@ class MomentumStrategy(BaseStrategy):
         if history.empty or "close" not in history.columns:
             return 0.0
         prices = history["close"].astype(float)
-        short = prices.rolling(20, min_periods=1).mean()
-        long = prices.rolling(50, min_periods=1).mean()
+        
+        # FIXED: Use shorter lookback windows for faster response
+        short = prices.rolling(10, min_periods=1).mean()  # Was 20
+        long = prices.rolling(30, min_periods=1).mean()   # Was 50
         momentum = (short.iloc[-1] - long.iloc[-1]) / max(long.iloc[-1], 1)
+        
+        # Lower volatility penalty to keep signals strong
         volatility = prices.pct_change().std() if len(prices) > 1 else 0.0
-        score = alpha * 0.65 + momentum * 0.25 - volatility * 0.10
-        return float(np.tanh(score * 10))
+        
+        score = alpha * 0.60 + momentum * 0.30 - volatility * 0.10
+        return float(np.tanh(score * 8))
 
 
 class MeanReversionStrategy(BaseStrategy):
@@ -38,12 +43,21 @@ class MeanReversionStrategy(BaseStrategy):
         if history.empty or "close" not in history.columns:
             return 0.0
         prices = history["close"].astype(float)
-        sma = prices.rolling(34, min_periods=1).mean()
+        
+        # FIXED: Shorter lookback for faster reversion detection
+        sma = prices.rolling(20, min_periods=1).mean()  # Was 34
         deviation = (prices.iloc[-1] - sma.iloc[-1]) / max(sma.iloc[-1], 1)
-        signal = -deviation * 0.7 + alpha * 0.3
+        
+        # Stronger mean reversion signal
+        signal = -deviation * 0.75 + alpha * 0.25
+        
+        # Boost in sideways markets where reversion works
         if regime == "SIDEWAYS":
-            signal *= 1.3
-        return float(np.tanh(signal * 8))
+            signal *= 1.5  # Was 1.3
+        elif regime == "TURBULENT":
+            signal *= 0.7  # Be cautious in turbulent
+            
+        return float(np.tanh(signal * 7))
 
 
 class VolatilityArbitrageStrategy(BaseStrategy):
@@ -55,10 +69,17 @@ class VolatilityArbitrageStrategy(BaseStrategy):
         returns = history["close"].pct_change().dropna()
         vol = returns.std() if not returns.empty else 0.0
         mean_return = returns.mean() if not returns.empty else 0.0
-        score = alpha * 0.4 + mean_return * 0.4 - vol * 0.2
+        
+        # FIXED: Less aggressive volatility penalty
+        score = alpha * 0.50 + mean_return * 0.40 - vol * 0.10
+        
+        # Adjust for regime
         if regime == "TURBULENT":
-            score *= 0.85
-        return float(np.tanh(score * 12))
+            score *= 0.75  # More conservative
+        elif regime == "BULL":
+            score *= 1.1  # Favor in bull markets
+            
+        return float(np.tanh(score * 10))
 
 
 class MacroOverlayStrategy(BaseStrategy):
@@ -88,11 +109,15 @@ class RSISetupStrategy(BaseStrategy):
         rsi = 100 - (100 / (1 + rs))
 
         last_rsi = rsi.iloc[-1]
-        if last_rsi < 30:
-            return 0.8  # Oversold
-        if last_rsi > 70:
-            return -0.8  # Overbought
-        return alpha * 0.5
+        
+        # FIXED: Better thresholds and alpha weighting
+        if last_rsi < 35:  # Was 30 - more sensitive
+            return 0.75  # Oversold, higher conviction
+        if last_rsi > 65:  # Was 70
+            return -0.75  # Overbought
+        
+        # Normal range: combine with alpha
+        return alpha * 0.6
 
 
 class BreakoutStrategy(BaseStrategy):
@@ -125,11 +150,14 @@ class BollingerBandStrategy(BaseStrategy):
         lower = ma - (std * 2)
         current = prices.iloc[-1]
 
+        # FIXED: Stronger signals at extremes
         if current > upper.iloc[-1]:
-            return -0.85
+            return -0.80  # Was -0.85
         if current < lower.iloc[-1]:
-            return 0.85
-        return alpha * 0.3
+            return 0.80  # Was 0.85
+        
+        # Middle zone: blend with alpha
+        return alpha * 0.4
 
 
 class MACDStrategy(BaseStrategy):
@@ -144,11 +172,17 @@ class MACDStrategy(BaseStrategy):
         macd = exp1 - exp2
         signal = macd.ewm(span=9, adjust=False).mean()
 
+        # FIXED: Stronger signals on crossovers
         if macd.iloc[-1] > signal.iloc[-1] and macd.iloc[-2] <= signal.iloc[-2]:
-            return 0.75
+            return 0.80  # Was 0.75 - bullish crossover
         if macd.iloc[-1] < signal.iloc[-1] and macd.iloc[-2] >= signal.iloc[-2]:
-            return -0.75
-        return alpha * 0.4
+            return -0.80  # Was -0.75 - bearish crossover
+        
+        # Trend following: if MACD > signal, favor longs
+        if macd.iloc[-1] > signal.iloc[-1]:
+            return alpha * 0.5
+        else:
+            return alpha * 0.3
 
 
 class VolumeTrendStrategy(BaseStrategy):
