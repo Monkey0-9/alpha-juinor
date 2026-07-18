@@ -6,6 +6,8 @@ __pycache__/
 env/
 venv/
 .env
+.env.*
+!.env.example
 
 # Distribution / packaging
 dist/
@@ -28,3 +30,7 @@ htmlcov/
 *.log
 data/
 nexus.db
+
+# Rust polyglot build artifacts
+nexus/polyglot/rust_risk_engine/target/
+nexus/polyglot/rust_risk_engine/Cargo.lock

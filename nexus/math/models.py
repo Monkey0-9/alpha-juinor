@@ -1,9 +1,27 @@
 import logging
-from typing import Any
+from typing import Any, Callable, cast
 import numpy as np
-from numba import jit
 
 logger = logging.getLogger(__name__)
+
+try:
+    from numba import jit as _jit
+except Exception:
+    _jit = None
+
+
+def jit_decorator(*args: Any, **kwargs: Any) -> Callable[[Any], Any]:
+    """Gracefully fall back to a no-op decorator when Numba is unavailable."""
+
+    def decorator(func: Any) -> Any:
+        return func
+
+    if _jit is None:
+        if args and callable(args[0]) and len(args) == 1 and not kwargs:
+            return cast(Callable[[Any], Any], args[0])
+        return cast(Callable[[Any], Any], decorator)
+
+    return cast(Callable[[Any], Any], _jit(*args, **kwargs))
 
 
 class KalmanFilter:
@@ -153,7 +171,7 @@ class FractalEngine:
     """
 
     @staticmethod
-    @jit(nopython=True)  # type: ignore[untyped-decorator]
+    @jit_decorator(nopython=True)
     def _fast_fd(prices: np.ndarray[Any, Any]) -> float:
         n = len(prices)
         if n < 30:

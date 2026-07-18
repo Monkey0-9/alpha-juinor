@@ -10,6 +10,7 @@ from nexus.core.governance import GovernanceEngine
 from nexus.core.alpha import AlphaEngine
 from nexus.core.execution_ai import ExecutionAgent
 from nexus.core.intelligence import MarketBrain
+from nexus.core.superhuman_brain import SuperhumanBrain
 from nexus.core.monitoring import HealthMonitor
 from nexus.math.risk import RiskEngine
 from nexus.math.indicators import RegimeDetector
@@ -37,6 +38,7 @@ class NexusEngine:
         self.alpha_engine = AlphaEngine(backend_url=backend_url)
         self.execution_agent = ExecutionAgent()
         self.market_brain = MarketBrain()
+        self.superhuman_brain = SuperhumanBrain()  # Top-1% intelligence layer
         self.risk_engine = RiskEngine()
         self.health_monitor = HealthMonitor()
 
@@ -53,11 +55,15 @@ class NexusEngine:
         self.max_positions = Config.MAX_OPEN_POSITIONS
         self.last_universe_refresh = 0.0
         self.position_ages: Dict[str, int] = {}
-        
+
         # PERF FIX: Persistent client for connection pooling
         self._client: Optional[httpx.AsyncClient] = None
         # Tracking Submitted Orders
         self._active_orders: Dict[str, str] = {}  # symbol -> order_id
+
+        # Superhuman Brain: drawdown velocity tracker
+        self._equity_history: List[float] = []   # recent equity snapshots
+        self._conviction_cache: Dict[str, Any] = {}  # last cycle conviction signals
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Returns the shared AsyncClient for connection pooling."""
@@ -209,7 +215,7 @@ class NexusEngine:
         tasks = [fetch_symbol(symbol) for symbol in symbols]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         history: Dict[str, pd.DataFrame] = {}
-        for symbol, result in zip(symbols, results):
+        for symbol, result in zip(symbols, results, strict=False):
             if isinstance(result, BaseException):
                 continue
             if not result.empty:
@@ -299,12 +305,50 @@ class NexusEngine:
 
         market_insight = self.market_brain.analyze_market(benchmark_data, current_positions)
         self.market_regime = market_insight.get("regime", self.market_regime)
+        regime_probs = market_insight.get("regime_probabilities", {
+            "BULL": 0.25, "BEAR": 0.25, "SIDEWAYS": 0.25, "TURBULENT": 0.25
+        })
         selected_strategy = market_insight.get("selected_strategy", "Mean Reversion")
-        
-        portfolio_scores = self.market_brain.build_portfolio_signals(raw_signals, history, self.market_regime)
+        correlation_pulse = market_insight.get("correlation_pulse", {"size_multiplier": 1.0})
+
+        # ── SuperhumanBrain Conviction Layer ─────────────────────────────────
+        conviction_signals = self.superhuman_brain.evaluate_portfolio(
+            raw_signals, history, regime_probs, self.market_regime
+        )
+        intel_report = self.superhuman_brain.portfolio_intelligence_report(conviction_signals)
+        logger.info(
+            "[SuperhumanBrain] AvgConviction=%.0f%% | GlobalIC=%.3f | A-GradeSignals=%d/%d | GatePassRate=%.0f%%",
+            intel_report.get("avg_conviction", 0) * 100,
+            intel_report.get("global_ic", 0),
+            intel_report.get("a_grade_signals", 0),
+            intel_report.get("total_signals", 0),
+            intel_report.get("gate_pass_rate", 0) * 100,
+        )
+
+        # Blend raw signals with conviction-adjusted signals
+        enhanced_signals: Dict[str, float] = {}
+        for sym, conv_sig in conviction_signals.items():
+            if not conv_sig.gate_pass and conv_sig.conviction < 0.35:
+                # Gate CLOSED + low conviction → skip this symbol entirely
+                logger.debug("[SuperhumanBrain] Gated out %s (conviction=%.0f%%)", sym, conv_sig.conviction * 100)
+                continue
+            # Conviction-weighted signal: high conviction → use superhuman signal
+            # low conviction → fall back to raw alpha
+            raw = raw_signals.get(sym, 0.0)
+            blended = conv_sig.conviction * conv_sig.score + (1.0 - conv_sig.conviction) * raw
+            enhanced_signals[sym] = float(np.clip(blended, -1.0, 1.0))
+        # ─────────────────────────────────────────────────────────────────────
+
+        portfolio_scores = self.market_brain.build_portfolio_signals(enhanced_signals, history, self.market_regime)
         ranked = self.factor_engine.rank_assets(portfolio_scores, history)
         top_targets = dict(list(ranked.items())[: self.max_positions])
-        weights = self.optimizer.optimize_weights(list(top_targets.keys()), [top_targets[s] for s in top_targets])
+
+        # Kelly + IC + correlation-adjusted weights
+        weights = self.optimizer.optimize_weights(
+            list(top_targets.keys()),
+            [top_targets[s] for s in top_targets],
+            historical_data=history,
+        )
 
         returns_list = benchmark_data["close"].pct_change().dropna().to_numpy() if not benchmark_data.empty else np.array([])
         risk_metrics = {
@@ -319,7 +363,17 @@ class NexusEngine:
             risk_metrics["rust_var"] = float(rust_risk.get("var", 0.0))
 
         multiplier = self.determine_risk_scale(market_insight, risk_metrics)
+
+        # Correlation crisis brake: halve sizes if portfolio in crisis mode
+        crisis_mult = float(correlation_pulse.get("size_multiplier", 1.0))
+        multiplier *= crisis_mult
+
+        # Drawdown velocity protection: if equity dropped >3% in last 24h, cut sizes
+        ddv_mult = self._drawdown_velocity_multiplier(account)
+        multiplier *= ddv_mult
+
         weights = {s: w * multiplier for s, w in weights.items()}
+        self._conviction_cache = {sym: cv for sym, cv in conviction_signals.items()}
 
         portfolio_state = self.build_portfolio_state(account, current_positions)
         self.health_monitor.record("market", not benchmark_data.empty, details=selected_strategy)
@@ -362,6 +416,19 @@ class NexusEngine:
             await asyncio.gather(*trade_tasks)
 
         self.execution_agent.learn(reward=float(np.mean(list(portfolio_scores.values()) or [0.0])))
+
+        # Update IC tracker in optimizer with latest signal → return outcomes
+        for sym, score in portfolio_scores.items():
+            if sym in history and not history[sym].empty:
+                realized = float(history[sym]["close"].pct_change().dropna().iloc[-1])
+                self.optimizer.ic_tracker.record(sym, score, realized)
+        # Update SuperhumanBrain Bayesian posteriors
+        for sym, conv_sig in self._conviction_cache.items():
+            if sym in history and not history[sym].empty:
+                realized = float(history[sym]["close"].pct_change().dropna().iloc[-1])
+                self.superhuman_brain.update_strategy_outcomes(
+                    sym, conv_sig.strategy_votes, realized
+                )
 
     async def _submit_trade(self, symbol: str, weight: float, current_qty: float, top_targets: Dict[str, float],
                             history: Dict[str, pd.DataFrame], portfolio_state: Dict[str, Any],
@@ -471,26 +538,84 @@ class NexusEngine:
                 await asyncio.sleep(Config.HEARTBEAT_INTERVAL)
 
     def determine_risk_scale(self, market_insight: Dict[str, Any], risk_metrics: Dict[str, float]) -> float:
+        """
+        Dynamic risk scale using regime probabilities (not just a label)
+        and Kelly-adjusted volatility scaling.
+        """
         scale = 1.0
-        regime = market_insight.get("regime")
-        if regime == "TURBULENT":
-            scale *= 0.35
-        elif regime == "BEAR":
-            scale *= 0.55
+        regime_probs = market_insight.get("regime_probabilities", {})
 
+        # Probabilistic regime scaling (smoother than hard if/else)
+        turbulent_prob = regime_probs.get("TURBULENT", 0.0)
+        bear_prob      = regime_probs.get("BEAR", 0.0)
+        bull_prob      = regime_probs.get("BULL", 0.0)
+
+        scale *= (1.0 - turbulent_prob * 0.70)  # TURBULENT crushes scale
+        scale *= (1.0 - bear_prob * 0.45)        # BEAR reduces scale
+        scale *= (1.0 + bull_prob * 0.10)        # BULL slightly expands scale
+
+        # Volatility-adjusted Kelly multiplier
         volatility = risk_metrics.get("volatility", 0.0)
         if volatility > 0.03:
-            scale *= 0.75
-        elif volatility < 0.01:
-            scale *= 1.05
+            scale *= 0.72
+        elif volatility > 0.02:
+            scale *= 0.88
+        elif volatility < 0.008:
+            scale *= 1.08  # very low vol → increase sizing
 
+        # VaR gate
         var = float(risk_metrics.get("var", 0.0))
-        if var < -0.05:
-            scale *= 0.65
-        elif var > -0.02:
-            scale *= 1.0
+        if var < -0.07:
+            scale *= 0.55   # extreme tail risk
+        elif var < -0.05:
+            scale *= 0.72
+        elif var > -0.015:
+            scale *= 1.0    # benign VaR
 
-        return max(0.2, min(scale, 1.0))
+        # Forecast confidence boost
+        forecast_conf = market_insight.get("forecast_confidence", 0.5)
+        scale *= (0.85 + forecast_conf * 0.30)   # 0.85 → 1.15 range
+
+        return float(max(0.15, min(scale, 1.20)))
+
+    def _drawdown_velocity_multiplier(self, account: Dict[str, Any]) -> float:
+        """
+        Drawdown velocity protection: if equity drops >3% since last check,
+        halve position sizes. Prevents rapid equity erosion in trending down markets.
+        """
+        equity = float(account.get("equity", self.portfolio_value))
+        self._equity_history.append(equity)
+
+        # Keep last 48 snapshots (roughly 24h if cycle = 30min)
+        if len(self._equity_history) > 48:
+            self._equity_history = self._equity_history[-48:]
+
+        if len(self._equity_history) < 2:
+            return 1.0
+
+        # Compute recent drawdown velocity (last 6 snapshots ≈ 3h)
+        lookback = min(6, len(self._equity_history))
+        recent_high = max(self._equity_history[-lookback:])
+        current = self._equity_history[-1]
+
+        if recent_high <= 0:
+            return 1.0
+
+        drop_pct = (recent_high - current) / recent_high
+        if drop_pct > 0.05:
+            logger.warning(
+                "Drawdown velocity BRAKE: equity dropped %.1f%% in recent cycles → 0.40x sizing",
+                drop_pct * 100
+            )
+            return 0.40  # aggressive protection
+        elif drop_pct > 0.03:
+            logger.warning(
+                "Drawdown velocity CAUTION: equity dropped %.1f%% → 0.65x sizing",
+                drop_pct * 100
+            )
+            return 0.65
+
+        return 1.0
 
 if __name__ == "__main__":
     engine = NexusEngine()
