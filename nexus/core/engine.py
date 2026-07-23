@@ -20,6 +20,7 @@ from nexus.math.governance import LatticeVoter, StrategySwitcher
 from nexus.utils.config import Config
 from nexus.utils.platform_logging import setup_logging
 from nexus.utils.polyglot_bridge import PolyglotBridge
+from nexus.core.position_manager import PositionManager
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ class NexusEngine:
         # Superhuman Brain: drawdown velocity tracker
         self._equity_history: List[float] = []   # recent equity snapshots
         self._conviction_cache: Dict[str, Any] = {}  # last cycle conviction signals
+        self.position_manager = PositionManager()
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Returns the shared AsyncClient for connection pooling."""
@@ -160,7 +162,7 @@ class NexusEngine:
                     self.symbols = candidate_assets[:max_symbols]
 
                 if not self.symbols:
-                    self.symbols = ["AAPL", "MSFT", "QQQ", "SPY", "NVDA"]
+                    self.symbols = ["TSLA", "PLTR", "MSTR", "COIN", "NVDA", "TQQQ", "SOXL", "SPY"]
                 logger.info(
                     f"Loaded universe with {len(self.symbols)} symbols "
                     f"from {len(candidate_assets)} tradable Alpaca assets."
@@ -170,7 +172,7 @@ class NexusEngine:
                 raise ValueError(f"Asset scan returned {response.status_code}")
         except Exception as exc:
             logger.warning(f"Asset universe fallback: {exc}")
-            self.symbols = ["AAPL", "MSFT", "QQQ", "SPY", "NVDA", "IWM", "AMZN", "GOOG"]
+            self.symbols = ["TSLA", "PLTR", "MSTR", "COIN", "NVDA", "TQQQ", "SOXL", "SPY", "AAPL", "MSFT"]
 
     def _is_preferred_exchange(self, exchange: str) -> bool:
         preferred = {"NASDAQ", "NYSE", "ARCA", "AMEX", "NYSEARCA", "NYSEAMEX"}
@@ -276,7 +278,6 @@ class NexusEngine:
         except Exception:
             clock_data = {"is_open": False}
 
-        await self.manage_positions()
         account = await self.get_account_state()
         current_positions = await self.get_positions()
         holdings = {p["symbol"]: p for p in current_positions}
@@ -301,6 +302,9 @@ class NexusEngine:
         logger.info("History loaded for %s symbols out of %s selected symbols.", len(history), len(symbols))
         if not history:
             logger.warning("No history data could be loaded for the current symbol universe. This will prevent any orders from being submitted.")
+        
+        await self.manage_positions(current_positions, history)
+        
         benchmark_data = await self.alpha_engine.fetch_market_data("SPY", timeframe="1D", limit=120)
 
         market_insight = self.market_brain.analyze_market(benchmark_data, current_positions)
@@ -450,7 +454,7 @@ class NexusEngine:
         order_type, limit_price = ("market", None)
 
         if not is_open:
-            order_type, limit_price = ("limit", current_price * (1.001 if side == "buy" else 0.999))
+            order_type, limit_price = ("limit", current_price * (1.002 if side == "buy" else 0.998))
 
         trade_request = {"symbol": symbol, "qty": qty, "side": side, "price": current_price, "order_type": order_type, "strategy": selected_strategy}
         if not PolyglotBridge.validate_order_zig(trade_request).get("valid"):
@@ -500,28 +504,32 @@ class NexusEngine:
         client = await self._get_client()
         try:
             await client.delete(f"{self.backend_url}/api/alpaca/positions/{symbol}")
+            self.position_manager.reset_watermark(symbol)
         except Exception as exc:
             logger.error(f"Error closing position for {symbol}: {exc}")
 
-    async def manage_positions(self) -> None:
-        positions = await self.get_positions()
-        if not positions:
+    async def manage_positions(self, current_positions: List[Dict[str, Any]], history: Dict[str, pd.DataFrame]) -> None:
+        if not current_positions:
             return
 
         client = await self._get_client()
-        for pos in positions:
+        for pos in current_positions:
             symbol = pos.get("symbol")
             if not symbol:
                 continue
             try:
+                current_price = float(pos.get("current_price", 0.0))
+                avg_entry_price = float(pos.get("avg_entry_price", 0.0))
                 pnl_pct = float(pos.get("unrealized_plpc", 0.0))
-                if pnl_pct >= Config.TAKE_PROFIT_THRESHOLD or pnl_pct <= Config.STOP_LOSS_THRESHOLD:
-                    logger.info(
-                        "Closing %s because pnl_pct=%s reached TP/SL thresholds.",
-                        symbol,
-                        pnl_pct,
-                    )
+                pos_history = history.get(symbol, pd.DataFrame())
+
+                should_close = self.position_manager.evaluate_exit(
+                    symbol, current_price, avg_entry_price, pnl_pct, pos_history
+                )
+
+                if should_close:
                     await client.delete(f"{self.backend_url}/api/alpaca/positions/{symbol}")
+                    self.position_manager.reset_watermark(symbol)
             except Exception as exc:
                 logger.warning(f"Failed to evaluate close for {symbol}: {exc}")
 

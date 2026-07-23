@@ -18,6 +18,7 @@ import time
 from datetime import datetime
 import os
 from typing import Optional, Any
+from streamlit_autorefresh import st_autorefresh
 
 # --- Page Config ---
 st.set_page_config(
@@ -187,6 +188,10 @@ def main() -> None:
             unsafe_allow_html=True
         )
 
+    # ── Auto-Refresh ────────────────────────────────────────────────────────
+    # Refresh every 30 seconds (30000 milliseconds) for paper trading responsiveness
+    st_autorefresh(interval=30000, limit=None, key="dashboard_autorefresh")
+
     # ── Account Metrics ─────────────────────────────────────────────────────
     data_account = fetch("api/alpaca/account")
     if data_account:
@@ -316,7 +321,7 @@ def main() -> None:
 
         # ── Correlation Crisis Alert ────────────────────────────────────────
         corr_pulse = market_analysis.get("correlation_pulse", {})
-        if corr_pulse.get("crisis_mode"):
+        if isinstance(corr_pulse, dict) and corr_pulse.get("crisis_mode"):
             st.markdown(
                 "<div class='alert-crisis'>"
                 "⚠️ <strong>CORRELATION CRISIS DETECTED</strong> — All positions moving together. "

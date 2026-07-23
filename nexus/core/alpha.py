@@ -9,6 +9,7 @@ Replaces naive Kalman + Monte Carlo blend with:
   - Regime-adaptive signal weighting
   - Multi-factor signal combination with IC-optimal blending
 """
+
 import asyncio
 import logging
 import time
@@ -20,6 +21,7 @@ from nexus.math.models import KalmanFilter
 from nexus.math.indicators import HawkesProcess, compute_hurst_exponent
 from nexus.execution.alpaca import get_client
 from nexus.utils.config import Config
+from nexus.core.sentiment import SentimentEngine
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +44,9 @@ class AdaptiveKalmanFilter(KalmanFilter):
         Low vol  → decrease R → faster tracking
         """
         # Process variance (how much 'true' price drifts per step)
-        self.process_variance = max(1e-7, rolling_vol ** 2 * 0.1)
+        self.process_variance = max(1e-7, rolling_vol**2 * 0.1)
         # Measurement variance (sensor noise / microstructure noise)
-        self.measurement_variance = max(1e-5, rolling_vol ** 2 * 5.0)
+        self.measurement_variance = max(1e-5, rolling_vol**2 * 5.0)
 
 
 class AlphaEngine:
@@ -64,10 +66,11 @@ class AlphaEngine:
     _CACHE_TTL = 300  # 5 minutes
 
     def __init__(self, backend_url: str = Config.BACKEND_URL):
-        self.kf     = AdaptiveKalmanFilter()
+        self.kf = AdaptiveKalmanFilter()
         self.hawkes = HawkesProcess()
         self.backend_url = backend_url
         self.client = get_client()
+        self.sentiment_engine = SentimentEngine()
 
     # ------------------------------------------------------------------ #
     # Data Fetching (unchanged interface, same resilience)               #
@@ -95,9 +98,7 @@ class AlphaEngine:
 
         return df
 
-    async def _fetch_with_backoff(
-        self, symbol: str, timeframe: str, limit: int
-    ) -> pd.DataFrame:
+    async def _fetch_with_backoff(self, symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
         bars = []
         for attempt in range(2):
             try:
@@ -124,23 +125,25 @@ class AlphaEngine:
         else:
             try:
                 import yfinance as yf
+
                 yf_logger = logging.getLogger("yfinance")
                 old_yf_level = yf_logger.level
                 yf_logger.setLevel(logging.CRITICAL)
                 interval = "1d" if timeframe == "1D" else "15m" if timeframe == "15Min" else "1m"
                 df = yf.download(symbol, period="7d", interval=interval, progress=False)
-                if df.empty and timeframe == "1Min":
+                if getattr(df, "empty", True) and timeframe == "1Min":
                     df = yf.download(symbol, period="7d", interval="15m", progress=False)
             except Exception as e:
                 logger.debug(f"yfinance fallback failed for {symbol}: {e}")
                 return pd.DataFrame()
             finally:
                 try:
-                    yf_logger.setLevel(old_yf_level)
+                    if "yf_logger" in locals() and "old_yf_level" in locals():
+                        yf_logger.setLevel(old_yf_level)
                 except Exception:
                     pass
 
-        if df is None or (hasattr(df, 'empty') and df.empty):
+        if df is None or (hasattr(df, "empty") and df.empty):
             return pd.DataFrame()
 
         return self._normalize_columns(df, limit)
@@ -160,8 +163,11 @@ class AlphaEngine:
         for col in ["open", "high", "low", "close", "volume"]:
             if col not in df.columns:
                 df[col] = df["close"] if "close" in df.columns else 0.0
-            if isinstance(df[col], pd.DataFrame):
-                df[col] = df[col].iloc[:, 0]
+
+            # Type check workaround for pandas multi-column assignment
+            col_data = df[col]
+            if isinstance(col_data, pd.DataFrame):
+                df[col] = col_data.iloc[:, 0]
 
         return df.loc[:, ~df.columns.duplicated()].tail(limit)
 
@@ -169,7 +175,7 @@ class AlphaEngine:
     # Superhuman Signal Generation                                        #
     # ------------------------------------------------------------------ #
 
-    def generate_signal(self, data: pd.DataFrame) -> float:
+    def generate_signal(self, data: pd.DataFrame, sentiment_score: float = 0.0) -> float:
         """
         Generate multi-factor alpha signal with Superhuman intelligence.
 
@@ -199,12 +205,20 @@ class AlphaEngine:
             return 0.0
 
         # --- Factor 1: Trend Signal (Kalman-smoothed) ---
-        trend = float(denoised_prices[-1] / denoised_prices[-10] - 1) if len(denoised_prices) >= 10 else 0.0
+        trend = (
+            float(denoised_prices[-1] / denoised_prices[-10] - 1)
+            if len(denoised_prices) >= 10
+            else 0.0
+        )
         trend_score = float(np.tanh(trend * 20))
 
         # --- Factor 2: Entropy-Filtered Momentum ---
         momentum = float(pct_changes.tail(5).mean())
-        volatility = float(pct_changes.tail(20).std()) if len(pct_changes) >= 20 else float(pct_changes.std())
+        volatility = (
+            float(pct_changes.tail(20).std())
+            if len(pct_changes) >= 20
+            else float(pct_changes.std())
+        )
         entropy_filter = self._compute_entropy_filter(pct_changes.to_numpy())
         momentum_score = float(np.tanh(momentum * 10)) * entropy_filter
 
@@ -226,14 +240,22 @@ class AlphaEngine:
         # --- Volatility Penalty ---
         vol_penalty = 1.0 / (1.0 + volatility * 8.0)
 
+        # --- Factor 6: News Sentiment ---
+        # Sentiment contributes depending on config
+        sentiment_adj = 0.0
+        if Config.SENTIMENT_ENABLED:
+            sentiment_adj = sentiment_score * Config.SENTIMENT_WEIGHT
+
         # --- IC-Optimal Factor Blending ---
         # Weights: Hurst-gated direction (0.35) + entropy-mom (0.30) + trend (0.20) + VWAP (0.15)
-        signal = (
-            0.35 * hurst_signal
-            + 0.30 * momentum_score
-            + 0.20 * trend_score
-            + 0.15 * vwap_signal
-        ) * vol_penalty * hawkes_adj
+        # We scale base signal slightly to make room for sentiment
+        base_signal = (
+            (0.35 * hurst_signal + 0.30 * momentum_score + 0.20 * trend_score + 0.15 * vwap_signal)
+            * vol_penalty
+            * hawkes_adj
+        )
+
+        signal = base_signal * (1.0 - Config.SENTIMENT_WEIGHT) + sentiment_adj
 
         return float(np.clip(signal, -1.0, 1.0))
 
@@ -253,14 +275,13 @@ class AlphaEngine:
                 return 0.6
             entropy = float(-np.sum(hist * np.log(hist + 1e-9)))
             # Low entropy (< 1.5) = directional; High entropy (> 3.5) = noisy
-            filter_val = 1.0 - np.clip((entropy - 1.5) / 2.0, 0.0, 0.70)
+            clip_val = float(np.clip((entropy - 1.5) / 2.0, 0.0, 0.70))
+            filter_val = 1.0 - clip_val
             return float(filter_val)
         except Exception:
             return 0.6
 
-    def _hurst_gate(
-        self, hurst: float, trend_score: float, momentum_score: float
-    ) -> float:
+    def _hurst_gate(self, hurst: float, trend_score: float, momentum_score: float) -> float:
         """
         Hurst-gated directional signal.
 
@@ -300,9 +321,7 @@ class AlphaEngine:
             typical_price = close
             if "high" in data.columns and "low" in data.columns:
                 typical_price = (
-                    data["high"].astype(float)
-                    + data["low"].astype(float)
-                    + close
+                    data["high"].astype(float) + data["low"].astype(float) + close
                 ) / 3.0
 
             vwap_num = (typical_price * volume).cumsum()
@@ -334,7 +353,7 @@ class AlphaEngine:
     def monte_carlo_simulation(
         self,
         prices: np.ndarray[Any, Any],
-        num_paths: int = 300,
+        num_paths: int = 500,
         horizon: int = 20,
     ) -> float:
         """
@@ -346,7 +365,7 @@ class AlphaEngine:
             return 0.5
 
         returns = np.diff(np.log(prices)).astype(float)
-        mu    = float(np.mean(returns))
+        mu = float(np.mean(returns))
         sigma = float(np.std(returns)) if np.std(returns) > 1e-9 else 0.01
         last_price = float(prices[-1])
         success_count = 0
@@ -355,7 +374,7 @@ class AlphaEngine:
         rng = np.random.default_rng()
         for _ in range(half_paths):
             # Generate path + antithetic path
-            sampled    = rng.normal(mu, sigma, horizon)
+            sampled = rng.normal(mu, sigma, horizon)
             antithetic = (2.0 * mu) - sampled  # antithetic variates
 
             for path in [sampled, antithetic]:
@@ -375,25 +394,40 @@ class AlphaEngine:
         """
         Generate Superhuman alpha signals for all symbols.
         Blends: Kalman+Entropy+Hurst signal (0.65) + Monte Carlo (0.35)
+        Now uses multi-timeframe fetching (1Min, 15Min, 1D) for robust signal.
         """
         signals: Dict[str, float] = {}
         semaphore = asyncio.Semaphore(2)
 
         async def symbol_signal(symbol: str) -> Tuple[str, float]:
             async with semaphore:
-                data  = await self.fetch_market_data(symbol, timeframe=timeframe)
-                alpha = self.generate_signal(data)
-                if not data.empty:
+                # Fetch multi-timeframe data
+                data_15m = await self.fetch_market_data(symbol, timeframe="15Min")
+                data_1m = await self.fetch_market_data(symbol, timeframe="1Min")
+                data_1d = await self.fetch_market_data(symbol, timeframe="1D", limit=100)
+
+                sentiment = await self.sentiment_engine.get_sentiment(symbol)
+
+                alpha_15m = self.generate_signal(data_15m, sentiment) if not data_15m.empty else 0.0
+                alpha_1m = self.generate_signal(data_1m, sentiment) if not data_1m.empty else 0.0
+                alpha_1d = self.generate_signal(data_1d, sentiment) if not data_1d.empty else 0.0
+
+                # Multi-timeframe blending
+                alpha = (
+                    alpha_1m * Config.SIGNAL_1MIN_WEIGHT
+                    + alpha_15m * Config.SIGNAL_15MIN_WEIGHT
+                    + alpha_1d * Config.SIGNAL_1D_WEIGHT
+                )
+
+                if not data_15m.empty:
                     mc_prob = self.monte_carlo_simulation(
-                        data["close"].astype(float).to_numpy()
+                        data_15m["close"].astype(float).to_numpy()
                     )
                     # IC-optimal blending: signal carries more weight than MC
                     alpha = alpha * 0.65 + (mc_prob - 0.5) * 0.70
                 return symbol, float(np.clip(alpha, -1.0, 1.0))
 
-        results = await asyncio.gather(
-            *[symbol_signal(s) for s in symbols], return_exceptions=True
-        )
+        results = await asyncio.gather(*[symbol_signal(s) for s in symbols], return_exceptions=True)
         for r in results:
             if isinstance(r, tuple):
                 signals[r[0]] = r[1]

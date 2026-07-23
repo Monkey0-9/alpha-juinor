@@ -58,11 +58,31 @@ class GovernanceEngine:
 
     def __init__(
         self,
-        single_position_limit: float = 0.05,
-        max_drawdown_limit: float = 0.15,
+        single_position_limit: float = None,
+        max_drawdown_limit: float = None,
     ):
-        self.single_position_limit = single_position_limit
-        self.max_drawdown_limit = max_drawdown_limit
+        # Allow overriding limits via environment variables for runtime tuning
+        try:
+            env_pos = os.getenv("NEXUS_MAX_POSITION_SIZE")
+            if env_pos is not None and env_pos.strip() != "":
+                self.single_position_limit = float(env_pos)
+            elif single_position_limit is not None:
+                self.single_position_limit = float(single_position_limit)
+            else:
+                self.single_position_limit = 0.05
+        except Exception:
+            self.single_position_limit = 0.05
+
+        try:
+            env_dd = os.getenv("NEXUS_MAX_DRAWDOWN")
+            if env_dd is not None and env_dd.strip() != "":
+                self.max_drawdown_limit = float(env_dd)
+            elif max_drawdown_limit is not None:
+                self.max_drawdown_limit = float(max_drawdown_limit)
+            else:
+                self.max_drawdown_limit = 0.15
+        except Exception:
+            self.max_drawdown_limit = 0.15
         self.audit_log: List[Dict[str, Any]] = []
 
         # Configurable blacklist from env or file
