@@ -11,6 +11,21 @@ import logging
 import numpy as np
 import pandas as pd
 from typing import Dict, Any, List, Optional, Tuple
+import sys
+import os
+
+mingw_bin = os.path.expanduser(r"~\scoop\apps\mingw\current\bin")
+if os.path.exists(mingw_bin):
+    if hasattr(os, 'add_dll_directory'):
+        os.add_dll_directory(mingw_bin)
+    else:
+        os.environ['PATH'] = mingw_bin + os.pathsep + os.environ['PATH']
+
+cpp_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "cpp_extensions"))
+if cpp_dir not in sys.path:
+    sys.path.append(cpp_dir)
+
+import nexus_cpp  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -206,17 +221,25 @@ class PortfolioOptimizer:
         if df.shape[1] < 2 or df.shape[0] < 5:
             return weights
 
-        corr_matrix = df.corr().fillna(0.0)
+        # C++ Fast Correlation Matrix
+        returns_list = [df[col].fillna(0.0).tolist() for col in df.columns]
+        corr_matrix = nexus_cpp.matrix.compute_correlation_matrix(returns_list)
+        
+        print("C++ corr_matrix:", corr_matrix)
+        print("pandas corr_matrix:", df.corr().fillna(0.0))
+        
         adjusted = dict(weights)
+        columns = list(df.columns)
 
-        for sym_a in list(adjusted.keys()):
+        for i, sym_a in enumerate(columns):
+            if sym_a not in adjusted:
+                continue
             penalty = 1.0
-            for sym_b in list(adjusted.keys()):
-                if sym_a == sym_b:
+            for j, sym_b in enumerate(columns):
+                if sym_a == sym_b or sym_b not in adjusted:
                     continue
-                if sym_a in corr_matrix.index and sym_b in corr_matrix.columns:
-                    corr = abs(float(corr_matrix.loc[sym_a, sym_b]))
-                    if corr > self.CORR_THRESHOLD:
+                corr = abs(float(corr_matrix[i][j]))
+                if corr > self.CORR_THRESHOLD:
                         # Heavier weight gets less penalty; lighter gets more
                         if adjusted[sym_b] > adjusted[sym_a]:
                             excess = (corr - self.CORR_THRESHOLD) / (1.0 - self.CORR_THRESHOLD)
@@ -348,7 +371,7 @@ class MultiFactorEngine:
 
 class MonteCarloSimulator:
     """
-    Portfolio-level Monte Carlo survival analysis — unchanged interface.
+    Portfolio-level Monte Carlo survival analysis — accelerated by C++.
     """
 
     def run_survival_analysis(
@@ -364,17 +387,39 @@ class MonteCarloSimulator:
 
         mu    = float(np.mean(daily_returns))
         sigma = float(np.std(daily_returns))
-        if sigma == 0:
-            return 1.0
+        
+        try:
+            import sys
+            import os
+            
+            # Add MinGW bin to DLL search path for Windows Python 3.8+
+            mingw_bin = os.path.expanduser(r"~\scoop\apps\mingw\current\bin")
+            if os.path.exists(mingw_bin):
+                if hasattr(os, 'add_dll_directory'):
+                    os.add_dll_directory(mingw_bin)
+                else:
+                    os.environ['PATH'] = mingw_bin + os.pathsep + os.environ['PATH']
+                    
+            # Ensure the cpp_extensions dir is in path
+            cpp_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cpp_extensions")
+            if cpp_dir not in sys.path:
+                sys.path.append(cpp_dir)
+            import nexus_cpp
+            return nexus_cpp.run_survival_analysis(initial_capital, mu, sigma, days, n_simulations, ruin_threshold)
+        except ImportError as e:
+            logger.warning(f"Failed to load C++ extension: {e}. Falling back to Python implementation.")
+            if sigma == 0:
+                return 1.0
 
-        ruin_level = initial_capital * (1 - ruin_threshold)
-        survived   = 0
-        rng        = np.random.default_rng(42)
+            ruin_level = initial_capital * (1 - ruin_threshold)
+            survived   = 0
+            rng        = np.random.default_rng(42)
 
-        for _ in range(n_simulations):
-            path_returns = rng.normal(mu, sigma, days)
-            prices = initial_capital * np.cumprod(1 + path_returns)
-            if np.min(prices) > ruin_level:
-                survived += 1
+            for _ in range(n_simulations):
+                path_returns = rng.normal(mu, sigma, days)
+                prices = initial_capital * np.cumprod(1 + path_returns)
+                if np.min(prices) > ruin_level:
+                    survived += 1
 
-        return survived / n_simulations
+            return survived / n_simulations
+

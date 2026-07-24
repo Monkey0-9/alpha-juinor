@@ -1,27 +1,24 @@
 import logging
-from typing import Any, Callable, cast
+from typing import Any
 import numpy as np
+import sys
+import os
+
+# Add MinGW bin to DLL search path for Windows Python 3.8+
+mingw_bin = os.path.expanduser(r"~\scoop\apps\mingw\current\bin")
+if os.path.exists(mingw_bin):
+    if hasattr(os, 'add_dll_directory'):
+        os.add_dll_directory(mingw_bin)
+    else:
+        os.environ['PATH'] = mingw_bin + os.pathsep + os.environ['PATH']
+
+cpp_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "cpp_extensions"))
+if cpp_dir not in sys.path:
+    sys.path.append(cpp_dir)
+
+import nexus_cpp  # noqa: E402
 
 logger = logging.getLogger(__name__)
-
-try:
-    from numba import jit as _jit
-except Exception:
-    _jit = None
-
-
-def jit_decorator(*args: Any, **kwargs: Any) -> Callable[[Any], Any]:
-    """Gracefully fall back to a no-op decorator when Numba is unavailable."""
-
-    def decorator(func: Any) -> Any:
-        return func
-
-    if _jit is None:
-        if args and callable(args[0]) and len(args) == 1 and not kwargs:
-            return cast(Callable[[Any], Any], args[0])
-        return cast(Callable[[Any], Any], decorator)
-
-    return cast(Callable[[Any], Any], _jit(*args, **kwargs))
 
 
 class KalmanFilter:
@@ -70,16 +67,17 @@ class KalmanFilter:
         return float(self.post_estimate)
 
     def batch_filter(self, data: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
-        """Apply the filter to an entire data series."""
+        """Apply the C++ filter to an entire data series."""
         if len(data) == 0:
             return np.array([])
-        estimates = []
-        self.post_estimate = data[0]
-
-        for val in data:
-            estimates.append(self.update(val))
-
-        return np.array(estimates)
+        
+        filtered_data = nexus_cpp.kalman.batch_kalman_filter(
+            data.tolist(), self.process_variance, self.measurement_variance
+        )
+        if filtered_data:
+            self.post_estimate = filtered_data[-1]
+            
+        return np.array(filtered_data)
 
 
 class TrendAccelerationModel:
@@ -171,21 +169,8 @@ class FractalEngine:
     """
 
     @staticmethod
-    @jit_decorator(nopython=True)
     def _fast_fd(prices: np.ndarray[Any, Any]) -> float:
-        n = len(prices)
-        if n < 30:
-            return 1.5
-
-        variation = 0.0
-        for i in range(1, n):
-            variation += abs(prices[i] - prices[i - 1])
-
-        if variation == 0:
-            return 1.0
-
-        fd = 1.0 + (np.log(variation) / np.log(float(n)))
-        return float(min(2.0, max(1.0, fd)))
+        return nexus_cpp.fractal.compute_fractal_dimension(prices.tolist())
 
     def calculate_dimension(self, prices: np.ndarray[Any, Any]) -> float:
         return float(self._fast_fd(prices))

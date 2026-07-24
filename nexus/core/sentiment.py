@@ -2,7 +2,7 @@ import logging
 import asyncio
 import feedparser
 import re
-from typing import Dict, Any, List
+from typing import Dict, Any
 import datetime
 
 logger = logging.getLogger(__name__)

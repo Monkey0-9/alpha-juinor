@@ -13,6 +13,22 @@ import numpy as np
 import pandas as pd
 import logging
 
+import sys
+import os
+
+mingw_bin = os.path.expanduser(r"~\scoop\apps\mingw\current\bin")
+if os.path.exists(mingw_bin):
+    if hasattr(os, 'add_dll_directory'):
+        os.add_dll_directory(mingw_bin)
+    else:
+        os.environ['PATH'] = mingw_bin + os.pathsep + os.environ['PATH']
+
+cpp_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "cpp_extensions"))
+if cpp_dir not in sys.path:
+    sys.path.append(cpp_dir)
+
+import nexus_cpp  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 
@@ -224,15 +240,13 @@ class HawkesProcess:
         self.alpha = alpha
         self.beta  = beta
 
-    def calculate_intensity(self, events: np.ndarray[Any, Any]) -> float:
-        """Calculates intensity at the last event time."""
-        if len(events) == 0:
+    def calculate_intensity(self, events_or_returns: np.ndarray[Any, Any]) -> float:
+        """Calculates intensity. Now uses C++ backend taking returns directly."""
+        if len(events_or_returns) == 0:
             return self.mu
-        t_last = events[-1]
-        diffs = t_last - events[:-1]
-        diffs = np.clip(diffs, 0.0, 500.0)  # numerical stability
-        intensity = self.mu + np.sum(self.alpha * np.exp(-self.beta * diffs))
-        return float(intensity)
+        return nexus_cpp.timeseries.compute_hawkes_intensity(
+            events_or_returns.tolist(), self.mu, self.alpha, self.beta
+        )
 
 
 # ------------------------------------------------------------------ #
@@ -260,32 +274,9 @@ def _safe_series(col: Any) -> pd.Series:
 
 def compute_hurst_exponent(prices: pd.Series, max_lag: int = 20) -> float:
     """
-    Estimate Hurst exponent via R/S rescaled range analysis.
-    H > 0.55 → trending (momentum regime)
-    H < 0.45 → mean-reverting
-    H ≈ 0.50 → random walk (no edge)
+    Estimate Hurst exponent via C++ extension.
     """
     prices_arr = prices.astype(float).to_numpy()
-    if len(prices_arr) < max_lag * 2:
+    if len(prices_arr) < 10:
         return 0.5
-
-    lags = range(2, min(max_lag, len(prices_arr) // 2))
-    rs_values = []
-    lag_values = []
-
-    for lag in lags:
-        subseries = prices_arr[:lag]
-        mean_s = np.mean(subseries)
-        deviations = subseries - mean_s
-        cumulative = np.cumsum(deviations)
-        r = np.max(cumulative) - np.min(cumulative)
-        s = np.std(subseries, ddof=1)
-        if s > 0 and r > 0:
-            rs_values.append(np.log(r / s))
-            lag_values.append(np.log(lag))
-
-    if len(rs_values) < 2:
-        return 0.5
-
-    poly = np.polyfit(lag_values, rs_values, 1)
-    return float(np.clip(poly[0], 0.0, 1.0))
+    return nexus_cpp.fractal.compute_hurst_exponent(prices_arr.tolist())

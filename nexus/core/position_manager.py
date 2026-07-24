@@ -22,20 +22,24 @@ class PositionManager:
         Evaluate if a position should be closed based on dynamic risk rules.
         Returns True if the position should be closed.
         """
+        # Rule 1: Fixed Stop Loss (Disaster Prevention)
+        if pnl_pct <= Config.STOP_LOSS_THRESHOLD:
+            logger.info(f"Closing {symbol}: Fixed Stop Loss Hit ({pnl_pct:.2%})")
+            return True
+
+        # Rule 5: Hard Take Profit
+        if pnl_pct >= Config.TAKE_PROFIT_THRESHOLD:
+            logger.info(f"Closing {symbol}: Hard Take Profit Reached ({pnl_pct:.2%})")
+            return True
+
         if current_price <= 0 or avg_entry_price <= 0:
             return False
             
         # Update high watermark
         if symbol not in self._watermarks or current_price > self._watermarks[symbol]:
             self._watermarks[symbol] = current_price
-            
+
         highest_price = self._watermarks[symbol]
-        
-        # Rule 1: Fixed Stop Loss (Disaster Prevention)
-        if pnl_pct <= Config.STOP_LOSS_THRESHOLD:
-            logger.info(f"Closing {symbol}: Fixed Stop Loss Hit ({pnl_pct:.2%})")
-            return True
-            
         # Rule 2: Trailing Profit Lock
         # If we are up significantly, don't let it turn into a big loss.
         if (highest_price - avg_entry_price) / avg_entry_price >= Config.TRAILING_PROFIT_LOCK:

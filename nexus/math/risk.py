@@ -33,15 +33,36 @@ class RiskEngine:
         return self.calculate_historical_var(returns)
 
     def calculate_monte_carlo_var(self, returns: np.ndarray[Any, Any], num_paths: int = 5000, horizon: int = 20) -> float:
-        """Calculate Monte Carlo VaR using bootstrapped historical returns."""
+        """Calculate Monte Carlo VaR using bootstrapped historical returns (C++ Accelerated)."""
         if len(returns) < 2:
             return self.calculate_parametric_var(returns)
-        daily_returns = returns.astype(float)
-        simulated_end = []
-        for _ in range(num_paths):
-            path = np.random.choice(daily_returns, size=horizon, replace=True)
-            simulated_end.append(np.sum(path))
-        return float(np.percentile(simulated_end, (1 - self.confidence_level) * 100))
+        
+        daily_returns = returns.astype(float).tolist()
+        
+        try:
+            import sys
+            import os
+            # Add MinGW bin to DLL search path for Windows Python 3.8+
+            mingw_bin = os.path.expanduser(r"~\scoop\apps\mingw\current\bin")
+            if os.path.exists(mingw_bin):
+                if hasattr(os, 'add_dll_directory'):
+                    os.add_dll_directory(mingw_bin)
+                else:
+                    os.environ['PATH'] = mingw_bin + os.pathsep + os.environ['PATH']
+                    
+            cpp_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cpp_extensions")
+            if cpp_dir not in sys.path:
+                sys.path.append(cpp_dir)
+            import nexus_cpp
+            return nexus_cpp.calculate_monte_carlo_var(daily_returns, num_paths, horizon, self.confidence_level)
+        except ImportError as e:
+            logger.warning(f"Failed to load C++ extension: {e}. Falling back to Python implementation.")
+            simulated_end = []
+            daily_returns_arr = returns.astype(float)
+            for _ in range(num_paths):
+                path = np.random.choice(daily_returns_arr, size=horizon, replace=True)
+                simulated_end.append(np.sum(path))
+            return float(np.percentile(simulated_end, (1 - self.confidence_level) * 100))
 
     def calculate_cvar(self, returns: np.ndarray[Any, Any]) -> float:
         """Calculate Conditional VaR / Expected Shortfall."""

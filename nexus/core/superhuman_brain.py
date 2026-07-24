@@ -12,12 +12,16 @@ Architecture:
   SuperhumanBrain.evaluate_portfolio(signals, history, regime_probs)
     → Dict[symbol → ConvictionSignal(score, conviction, gate_pass, reasoning)]
 """
+import os
+import sys
 import logging
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
 from typing import Dict, Any, Tuple
 from collections import deque
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "cpp_extensions")))
 
 from nexus.math.models import FractalEngine, VolatilityTopologyHeuristic
 from nexus.core.strategies import StrategyFactory
@@ -270,11 +274,33 @@ class SuperhumanBrain:
 
     def __init__(self) -> None:
         strategies = StrategyFactory.all_strategies()
-        self.bayesian_weighter  = BayesianStrategyWeighter(strategies, window=30)
-        self.meta_calibrator    = MetaLearningSelfCalibrator(window=40)
-        self.fractal_gate       = FractalMarketGate()
+        self.strategies = strategies
+        from nexus.core.ml_brain import AdvancedMLBrain
+        try:
+            import nexus_onnx
+            self.cpp_available = True
+        except ImportError:
+            self.cpp_available = False
+            
+        self.ml_brain = AdvancedMLBrain()
+        
+        if self.cpp_available and hasattr(nexus_onnx, 'CppONNXBrain'):
+            self.lstm_brain = nexus_onnx.CppONNXBrain("models/lstm.onnx", True)
+            self.transformer_brain = nexus_onnx.CppONNXBrain("models/transformer.onnx", True)
+            self.ppo_agent = nexus_onnx.CppONNXBrain("models/ppo.onnx", True)
+            self.ensemble_fuser = nexus_onnx.EnsembleFuser()
+        else:
+            self.lstm_brain = None
+            self.transformer_brain = None
+            self.ppo_agent = None
+            self.ensemble_fuser = None
+            
+        self.bayesian_weighter = BayesianStrategyWeighter(strategies)
+        self.meta_calibrator = MetaLearningSelfCalibrator(window=40)
+        self.fractal_gate = FractalMarketGate()
         self._prev_signals: Dict[str, float] = {}
-        logger.info("SuperhumanBrain initialized with %d strategies", len(strategies))
+        self._prev_strategy_votes: Dict[str, Dict[str, float]] = {}
+        logger.info("SuperhumanBrain initialized with %d strategies, XGBoost, and C++ ONNX Models", len(strategies))
 
     # ---------------------------------------------------------------- #
     # Core Evaluation                                                   #
@@ -296,42 +322,73 @@ class SuperhumanBrain:
         self._update_meta_learner(raw_signals, historical_data)
 
         results: Dict[str, ConvictionSignal] = {}
-        bayesian_weights = self.bayesian_weighter.get_all_weights()
 
         for symbol, alpha in raw_signals.items():
             history = historical_data.get(symbol, pd.DataFrame())
 
-            # Step 1: Bayesian-fused strategy score
-            fused_score, strategy_votes = self._bayesian_fuse(
-                symbol, alpha, history, current_regime, bayesian_weights
-            )
+            # Step 1: Extract Features for ML Brain
+            features = {
+                "raw_alpha": alpha,
+                "regime_prob_bull": regime_probs.get("BULL", 0.0),
+                "regime_prob_bear": regime_probs.get("BEAR", 0.0),
+                "regime_prob_sideways": regime_probs.get("SIDEWAYS", 0.0),
+            }
+            strategy_votes = {}
+            for strat in self.strategies:
+                score = strat.score(symbol, alpha, history, current_regime)
+                features[f"strat_{strat.name}"] = float(score)
+                strategy_votes[strat.name] = float(score)
+                
+            self._prev_strategy_votes[symbol] = strategy_votes
 
-            # Step 2: Meta-learning IC adjustment
+            # Step 2: ML Brain Prediction (Ensemble XGBoost + C++ DL Models)
+            xgb_score = self.ml_brain.predict(features)
+            
+            # DL features: raw_alpha, regimes, and top strategy
+            dl_features = [
+                features.get("raw_alpha", 0.0),
+                features.get("regime_prob_bull", 0.0),
+                features.get("regime_prob_bear", 0.0),
+                features.get("regime_prob_sideways", 0.0),
+                features.get("strat_KalmanFilter", 0.0)
+            ]
+            
+            if self.lstm_brain is not None:
+                lstm_score = self.lstm_brain.predict(dl_features)[0]
+                transformer_score = self.transformer_brain.predict(dl_features)[0]
+                ppo_score = self.ppo_agent.predict(dl_features)[0]
+                dl_score = (lstm_score * 0.4) + (transformer_score * 0.4) + (ppo_score * 0.2)
+            else:
+                dl_score = 0.0
+                
+            fused_score = (xgb_score * 0.5) + (dl_score * 0.5)
+
+            # Step 3: Meta-learning IC adjustment
             ic_weight = self.meta_calibrator.get_ic_weight(symbol)
             adjusted_score = fused_score * (0.6 + 0.4 * ic_weight)
 
-            # Step 3: Information Ratio score
+            # Step 4: Information Ratio score
             ir_score = self._compute_ir_score(symbol, adjusted_score, history)
 
-            # Step 4: Fractal gate evaluation
+            # Step 5: Fractal gate evaluation
             gate_pass, size_mult, gate_reason = self.fractal_gate.evaluate(
                 history, adjusted_score, current_regime
             )
 
-            # Step 5: Final score with gate multiplier
+            # Step 6: Final score with gate multiplier
             final_score = float(np.tanh(adjusted_score * size_mult))
 
-            # Step 6: Conviction scoring
+            # Step 7: Conviction scoring
             conviction = self._compute_conviction(
                 fused_score, ic_weight, gate_pass, size_mult,
                 regime_probs, strategy_votes
             )
 
-            # Step 7: Regime bias label
+            # Step 8: Regime bias label
             regime_bias = max(regime_probs, key=lambda k: regime_probs[k])
 
             reasoning = (
-                f"Bayesian={fused_score:.3f} | IC={ic_weight:.2f} | "
+                f"ML_Fusion={fused_score:.3f} | IC={ic_weight:.2f} | "
                 f"Gate={gate_reason} | IR={ir_score:.3f} | "
                 f"RegimeBias={regime_bias} | Conviction={conviction:.0%}"
             )
@@ -486,6 +543,10 @@ class SuperhumanBrain:
                 history["close"].pct_change().dropna().iloc[-1]
             )
             self.meta_calibrator.record(symbol, prev_signal, realized)
+            
+            # Also update bayesian weighter if we cached strategy votes
+            if symbol in getattr(self, '_prev_strategy_votes', {}):
+                self.update_strategy_outcomes(symbol, self._prev_strategy_votes[symbol], realized)
 
     # ---------------------------------------------------------------- #
     # Bayesian Strategy Outcome Update (call after each cycle)         #

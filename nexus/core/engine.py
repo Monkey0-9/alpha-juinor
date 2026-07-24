@@ -508,7 +508,15 @@ class NexusEngine:
         except Exception as exc:
             logger.error(f"Error closing position for {symbol}: {exc}")
 
-    async def manage_positions(self, current_positions: List[Dict[str, Any]], history: Dict[str, pd.DataFrame]) -> None:
+    async def manage_positions(
+        self,
+        current_positions: Optional[List[Dict[str, Any]]] = None,
+        history: Optional[Dict[str, pd.DataFrame]] = None,
+    ) -> None:
+        if current_positions is None:
+            current_positions = await self.get_positions()
+        if history is None:
+            history = {}
         if not current_positions:
             return
 

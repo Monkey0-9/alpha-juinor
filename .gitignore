@@ -30,6 +30,8 @@ htmlcov/
 *.log
 data/
 nexus.db
+*.pdb
+*.onnx
 
 # Rust polyglot build artifacts
 nexus/polyglot/rust_risk_engine/target/

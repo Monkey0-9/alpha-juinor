@@ -17,11 +17,27 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Tuple
+import sys
+import os
+
 from nexus.math.models import KalmanFilter
 from nexus.math.indicators import HawkesProcess, compute_hurst_exponent
 from nexus.execution.alpaca import get_client
 from nexus.utils.config import Config
 from nexus.core.sentiment import SentimentEngine
+
+mingw_bin = os.path.expanduser(r"~\scoop\apps\mingw\current\bin")
+if os.path.exists(mingw_bin):
+    if hasattr(os, 'add_dll_directory'):
+        os.add_dll_directory(mingw_bin)
+    else:
+        os.environ['PATH'] = mingw_bin + os.pathsep + os.environ['PATH']
+
+cpp_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "cpp_extensions"))
+if cpp_dir not in sys.path:
+    sys.path.append(cpp_dir)
+
+import nexus_cpp  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -232,9 +248,8 @@ class AlphaEngine:
 
         # --- Factor 5: Hawkes Intensity Adjustment ---
         pct_arr = pct_changes.to_numpy()
-        extreme_mask = np.abs(pct_arr) > pct_changes.std()
-        extreme_idx = np.where(extreme_mask)[0].astype(float)
-        intensity = self.hawkes.calculate_intensity(extreme_idx)
+        # Use new HawkesProcess interface taking returns directly
+        intensity = self.hawkes.calculate_intensity(pct_arr)
         hawkes_adj = 1.0 / (1.0 + intensity)
 
         # --- Volatility Penalty ---
@@ -261,19 +276,12 @@ class AlphaEngine:
 
     def _compute_entropy_filter(self, returns: np.ndarray[Any, Any]) -> float:
         """
-        Shannon entropy filter for momentum signals.
-
-        High entropy (random-looking returns) → filter = 0.3 (suppress signal)
-        Low entropy (directional returns) → filter = 1.0 (pass signal)
+        Shannon entropy filter for momentum signals using C++ backend.
         """
         if len(returns) < 5:
             return 0.6
         try:
-            hist, _ = np.histogram(returns, bins=min(10, len(returns) // 2), density=True)
-            hist = hist[hist > 0]
-            if len(hist) == 0:
-                return 0.6
-            entropy = float(-np.sum(hist * np.log(hist + 1e-9)))
+            entropy = nexus_cpp.stats.compute_shannon_entropy(returns.tolist(), 10)
             # Low entropy (< 1.5) = directional; High entropy (> 3.5) = noisy
             clip_val = float(np.clip((entropy - 1.5) / 2.0, 0.0, 0.70))
             filter_val = 1.0 - clip_val
@@ -304,10 +312,7 @@ class AlphaEngine:
 
     def _compute_vwap_signal(self, data: pd.DataFrame, current_price: float) -> float:
         """
-        VWAP deviation signal for institutional flow detection.
-
-        Price above VWAP with rising volume → institutional accumulation (bullish)
-        Price below VWAP with rising volume → institutional distribution (bearish)
+        VWAP deviation signal for institutional flow detection using C++ backend.
         """
         if "volume" not in data.columns or "close" not in data.columns:
             return 0.0
@@ -324,14 +329,11 @@ class AlphaEngine:
                     data["high"].astype(float) + data["low"].astype(float) + close
                 ) / 3.0
 
-            vwap_num = (typical_price * volume).cumsum()
-            vwap_den = volume.cumsum().replace(0, np.nan)
-            vwap = (vwap_num / vwap_den).dropna()
-
-            if vwap.empty:
+            vwap_vec = nexus_cpp.signals.compute_vwap(typical_price.tolist(), volume.tolist())
+            if not vwap_vec:
                 return 0.0
-
-            vwap_val = float(vwap.iloc[-1])
+                
+            vwap_val = vwap_vec[-1]
             deviation = (current_price - vwap_val) / max(vwap_val, 1e-6)
 
             # Volume trend

@@ -301,7 +301,7 @@ def main() -> None:
                 st.bar_chart(
                     rp_df.set_index("Regime")["Probability"],
                     color="#00ff87",
-                    use_container_width=True,
+                    width="stretch",
                     height=160,
                 )
             with hurst_col:
@@ -444,7 +444,7 @@ def main() -> None:
                 "Avg Price": "${:,.2f}", "Mkt Price": "${:,.2f}",
                 "Value": "${:,.2f}", "P&L %": "{:+.2f}%",
             }),
-            use_container_width=True,
+            width="stretch",
             height=280,
         )
     else:
@@ -460,7 +460,7 @@ def main() -> None:
         if order_list:
             odf = pd.DataFrame(order_list)
             show_cols = [c for c in ["symbol", "side", "qty", "type", "status", "strategy"] if c in odf.columns]
-            st.dataframe(odf[show_cols], use_container_width=True, height=220)
+            st.dataframe(odf[show_cols], width="stretch", height=220)
         else:
             st.info("No recent orders.")
 

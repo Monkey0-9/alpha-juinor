@@ -20,7 +20,7 @@ def test_manage_positions_threshold():
     engine = NexusEngine(backend_url="http://127.0.0.1:8001")
 
     async def fake_get_positions():
-        return [{"symbol": "AAPL", "unrealized_plpc": 0.09}]
+        return [{"symbol": "AAPL", "unrealized_plpc": 0.15, "current_price": 115.0, "avg_entry_price": 100.0}]
 
     class FakeClient:
         def __init__(self):
