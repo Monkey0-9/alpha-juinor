@@ -110,10 +110,23 @@ class BayesianStrategyWeighter:
     def get_all_weights(self) -> Dict[str, float]:
         """Returns normalized Bayesian weights for all strategies."""
         raw = {n: self.get_weight(n) for n in self.strategy_names}
-        # Normalize relative to 0.5 (random chance baseline)
         adjusted = {n: max(0.0, w - 0.40) for n, w in raw.items()}
         total = sum(adjusted.values()) + 1e-9
         return {n: v / total for n, v in adjusted.items()}
+
+    def sample_thompson_weights(self) -> Dict[str, float]:
+        """
+        Thompson Sampling for Multi-Armed Bandit Strategy Selection.
+        Draws Monte Carlo samples from Beta(alpha, beta) posteriors for active strategy exploration.
+        """
+        samples = {}
+        for name in self.strategy_names:
+            a = self._alpha.get(name, 2.0)
+            b = self._beta.get(name, 2.0)
+            samples[name] = float(np.random.beta(a, b))
+
+        total = sum(samples.values()) + 1e-9
+        return {n: v / total for n, v in samples.items()}
 
 
 # ------------------------------------------------------------------ #

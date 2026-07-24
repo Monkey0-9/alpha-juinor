@@ -46,22 +46,10 @@ class AdaptiveKalmanFilter(KalmanFilter):
     """
     Adaptive Kalman Filter that updates its process/measurement variances
     dynamically from rolling observed volatility.
-
-    Tight variance (low vol) → more trust in model prediction
-    Wide variance (high vol) → more trust in new measurement
     """
 
     def adapt_to_volatility(self, rolling_vol: float) -> None:
-        """
-        Update Q (process variance) and R (measurement variance)
-        based on observed market volatility.
-
-        High vol → increase R (measurement noise) → smoother filter
-        Low vol  → decrease R → faster tracking
-        """
-        # Process variance (how much 'true' price drifts per step)
         self.process_variance = max(1e-7, rolling_vol**2 * 0.1)
-        # Measurement variance (sensor noise / microstructure noise)
         self.measurement_variance = max(1e-5, rolling_vol**2 * 5.0)
 
 
@@ -71,11 +59,13 @@ class AlphaEngine:
 
     Multi-factor signal combining:
     1. Adaptive Kalman-denoised trend
-    2. Entropy-filtered momentum (suppresses noisy distributions)
-    3. Hurst-gated directional signal (momentum vs. mean-reversion gate)
-    4. VWAP deviation signal (smart money tracking)
-    5. Hawkes Process intensity adjustment (vol clustering penalty)
-    6. Monte Carlo probability adjustment
+    2. Empirical Mode Decomposition (EMD) intrinsic modes
+    3. Discrete Wavelet Denoising (DWT soft-thresholding)
+    4. Cross-Asset Lead-Lag alpha signals
+    5. Entropy-filtered momentum
+    6. Hurst-gated directional signals
+    7. VWAP deviation signal
+    8. Hawkes Process volatility clustering penalty
     """
 
     _cache: Dict[str, Dict[str, Any]] = {}
@@ -87,6 +77,73 @@ class AlphaEngine:
         self.backend_url = backend_url
         self.client = get_client()
         self.sentiment_engine = SentimentEngine()
+
+    @staticmethod
+    def empirical_mode_decomposition(prices: np.ndarray[Any, Any], n_imfs: int = 3) -> Tuple[List[np.ndarray[Any, Any]], np.ndarray[Any, Any]]:
+        """
+        Empirical Mode Decomposition (EMD) Sifting Algorithm.
+        Decomposes price series into Intrinsic Mode Functions (IMFs) and low-frequency trend residual.
+        """
+        if len(prices) < 20:
+            return [prices], prices
+
+        resid = prices.astype(float).copy()
+        imfs = []
+
+        for _ in range(n_imfs):
+            # Sifting: local mean interpolation proxy
+            rolling_high = pd.Series(resid).rolling(5, min_periods=1, center=True).max().to_numpy()
+            rolling_low = pd.Series(resid).rolling(5, min_periods=1, center=True).min().to_numpy()
+            local_mean = (rolling_high + rolling_low) / 2.0
+            imf = resid - local_mean
+            imfs.append(imf)
+            resid = local_mean
+
+        return imfs, resid
+
+    @staticmethod
+    def wavelet_denoise(signal: np.ndarray[Any, Any], threshold_mult: float = 1.0) -> np.ndarray[Any, Any]:
+        """
+        Discrete Wavelet Denoising via Soft-Thresholding.
+        Smooths high-frequency noise while preserving price jump boundaries.
+        """
+        if len(signal) < 10:
+            return signal
+
+        diffs = np.diff(signal)
+        sigma = float(np.median(np.abs(diffs)) / 0.6745) + 1e-9
+        threshold = threshold_mult * sigma * np.sqrt(2 * np.log(len(signal)))
+
+        # Soft thresholding
+        denoised_diffs = np.sign(diffs) * np.maximum(0.0, np.abs(diffs) - threshold)
+        reconstructed = np.concatenate([[signal[0]], signal[0] + np.cumsum(denoised_diffs)])
+        return reconstructed
+
+    def compute_cross_asset_alpha(
+        self, target_symbol: str, target_df: pd.DataFrame, leader_dfs: Dict[str, pd.DataFrame], lag: int = 1
+    ) -> float:
+        """
+        Cross-Asset Lead-Lag Alpha:
+        Computes lagged cross-correlation against market leader assets (e.g. SPY/QQQ).
+        """
+        if target_df.empty or "close" not in target_df.columns or len(target_df) < 30:
+            return 0.0
+
+        target_ret = target_df["close"].pct_change().dropna()
+        cross_alphas = []
+
+        for leader, leader_df in leader_dfs.items():
+            if leader == target_symbol or leader_df.empty or "close" not in leader_df.columns:
+                continue
+
+            leader_ret = leader_df["close"].pct_change().dropna()
+            aligned = pd.concat([target_ret, leader_ret.shift(lag)], axis=1).dropna()
+            if len(aligned) > 20:
+                corr = float(aligned.corr().iloc[0, 1])
+                if not np.isnan(corr):
+                    cross_alphas.append(corr * float(aligned.iloc[-1, 1]))
+
+        return float(np.mean(cross_alphas)) if cross_alphas else 0.0
 
     # ------------------------------------------------------------------ #
     # Data Fetching (unchanged interface, same resilience)               #

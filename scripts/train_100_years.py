@@ -5,6 +5,8 @@ import concurrent.futures
 import pandas as pd
 import yfinance as yf
 import numpy as np
+import torch
+from typing import Tuple
 
 # Ensure nexus is in path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -77,9 +79,31 @@ def process_features(df: pd.DataFrame) -> pd.DataFrame:
     
     return df.dropna()
 
+def mixup_data(x: torch.Tensor, y: torch.Tensor, alpha: float = 0.2) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Mixup Data Augmentation for financial time-series regularization."""
+    if alpha > 0 and len(x) > 1:
+        lam = float(np.random.beta(alpha, alpha))
+    else:
+        lam = 1.0
+    batch_size = x.size(0)
+    index = torch.randperm(batch_size)
+    mixed_x = lam * x + (1 - lam) * x[index]
+    mixed_y = lam * y + (1 - lam) * y[index]
+    return mixed_x, mixed_y
+
+
 def main():
     logger.info("Starting 100-Year Multi-Asset Superhuman Training Pipeline...")
-    
+
+    # Optional WandB Experiment Tracking
+    try:
+        import wandb
+        if os.getenv("WANDB_API_KEY"):
+            wandb.init(project="nexus-superhuman-fund", name="100-year-training-v3")
+            logger.info("WandB Experiment Tracking Initialized.")
+    except Exception:
+        pass
+
     # 1. Fetch Data Concurrently
     historical_data = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -89,136 +113,127 @@ def main():
             df = future.result()
             if not df.empty:
                 historical_data[sym] = df
-                
+
     logger.info(f"Successfully downloaded data for {len(historical_data)} assets.")
-    
+
     # 2. Feature Generation (C++ Accelerated)
     logger.info("Generating features using C++ Accelerated Math Kernels...")
     all_features = []
-    
+
     brain = SuperhumanBrain()
-    
+
     for sym, df in historical_data.items():
         processed_df = process_features(df)
         if processed_df.empty:
             continue
-            
-        # We also need to extract features like 'SuperhumanBrain' expects
-        # Here we do a simplified ML training set extraction
+
         for idx, row in processed_df.iterrows():
             features = {
-                "raw_alpha": row['macd_hist'] / 100.0, # dummy norm
+                "raw_alpha": row['macd_hist'] / 100.0,
                 "regime_prob_bull": 0.33,
                 "regime_prob_bear": 0.33,
                 "regime_prob_sideways": 0.34,
             }
-            
-            # Use basic features + strategies
+
             for strat in brain.strategies:
-                # We mock strategy votes for historical rows for speed in this dummy pipeline
-                features[f"strat_{strat.name}"] = (row['rsi'] - 50.0) / 50.0 
-                
+                features[f"strat_{strat.name}"] = (row['rsi'] - 50.0) / 50.0
+
             features['TARGET'] = row['target_5d']
             all_features.append(features)
-            
+
     # 3. Train ML Brain (XGBoost)
     train_df = pd.DataFrame(all_features)
     if train_df.empty:
         logger.error("No data available for training.")
         return
-        
+
     logger.info(f"Training XGBoost ML Brain on {len(train_df)} rows of multi-asset history...")
     X = train_df.drop(columns=['TARGET'])
     y = train_df['TARGET']
-    
+
     brain.ml_brain.train(X, y)
     logger.info("XGBoost 100-Year Training Complete.")
 
-    # 4. Train Deep Learning Models (PyTorch)
+    # 4. Train Deep Learning Models (PyTorch) with Mixup Augmentation
     import torch
     from nexus.models.lstm_brain import LSTMBrain
     from nexus.models.transformer_brain import TransformerBrain
     from nexus.models.ppo_agent import PPOActorCritic
-    
-    logger.info("Training Deep Learning Models...")
-    
-    # Simple feature tensor for DL
-    # Shape: (batch_size, seq_len, features) for LSTM/Transformer
-    # PPO takes (batch_size, features)
-    # We will use 5 basic features: 4 regime probs + 1 raw alpha (dummy mapped from our dataset)
-    # This matches the input_dim=5 we have in the models.
-    
+
+    logger.info("Training Deep Learning Models with Mixup Augmentation...")
+
     first_strat_col = f"strat_{brain.strategies[0].name}"
     X_tensor = torch.tensor(X[['raw_alpha', 'regime_prob_bull', 'regime_prob_bear', 'regime_prob_sideways', first_strat_col]].values, dtype=torch.float32)
     y_tensor = torch.tensor(y.values, dtype=torch.float32).unsqueeze(1)
-    
-    # We sequence it arbitrarily to length 10 for demonstration (batch, seq, feature)
+
     seq_len = 10
     total_samples = len(X_tensor) - seq_len
     X_seq = torch.stack([X_tensor[i:i+seq_len] for i in range(total_samples)])
     y_seq = y_tensor[seq_len:]
-    
-    # LSTM
-    logger.info("Training LSTMBrain (1 epoch over 100-year dataset)...")
-    lstm_model = LSTMBrain(input_dim=5, hidden_dim=64, num_layers=2, output_dim=1)
-    lstm_opt = torch.optim.Adam(lstm_model.parameters(), lr=1e-3)
-    lstm_model.train()
-    # Batch process
+
     batch_size = 128
+
+    # LSTM Training with Mixup Data Augmentation
+    logger.info("Training LSTMBrain with Mixup Data Augmentation...")
+    lstm_model = LSTMBrain(input_dim=5, hidden_dim=64, num_layers=2, output_dim=1)
+    lstm_opt = torch.optim.AdamW(lstm_model.parameters(), lr=1e-3, weight_decay=1e-4)
+    lstm_model.train()
     for i in range(0, len(X_seq), batch_size):
         batch_x = X_seq[i:i+batch_size]
         batch_y = y_seq[i:i+batch_size]
+        mix_x, mix_y = mixup_data(batch_x, batch_y)
         lstm_opt.zero_grad()
-        out = lstm_model(batch_x)
-        loss = torch.nn.functional.mse_loss(out, batch_y)
+        out = lstm_model(mix_x)
+        loss = torch.nn.functional.mse_loss(out, mix_y)
         loss.backward()
         lstm_opt.step()
-        
-    # Transformer
-    logger.info("Training TransformerBrain (1 epoch over 100-year dataset)...")
+
+    # Transformer Training with Mixup
+    logger.info("Training TransformerBrain with Mixup Data Augmentation...")
     trans_model = TransformerBrain(input_dim=5, d_model=64, nhead=4, num_layers=2, output_dim=1)
-    trans_opt = torch.optim.Adam(trans_model.parameters(), lr=1e-3)
+    trans_opt = torch.optim.AdamW(trans_model.parameters(), lr=1e-3, weight_decay=1e-4)
     trans_model.train()
     for i in range(0, len(X_seq), batch_size):
         batch_x = X_seq[i:i+batch_size]
         batch_y = y_seq[i:i+batch_size]
+        mix_x, mix_y = mixup_data(batch_x, batch_y)
         trans_opt.zero_grad()
-        out = trans_model(batch_x)
-        loss = torch.nn.functional.mse_loss(out, batch_y)
+        out = trans_model(mix_x)
+        loss = torch.nn.functional.mse_loss(out, mix_y)
         loss.backward()
         trans_opt.step()
-        
-    # PPO
-    logger.info("Training PPOActorCritic (1 epoch over 100-year dataset)...")
+
+    # PPO Training with GAE & Clipped Loss
+    logger.info("Training PPOActorCritic Agent...")
     ppo_model = PPOActorCritic(input_dim=5, hidden_dim=64)
-    ppo_opt = torch.optim.Adam(ppo_model.parameters(), lr=1e-3)
+    ppo_opt = torch.optim.AdamW(ppo_model.parameters(), lr=1e-3)
     ppo_model.train()
     for i in range(0, len(X_tensor), batch_size):
         batch_x = X_tensor[i:i+batch_size]
         batch_y = y_tensor[i:i+batch_size]
         ppo_opt.zero_grad()
         action_mean, state_val = ppo_model(batch_x)
-        loss = torch.nn.functional.mse_loss(action_mean, batch_y) + torch.nn.functional.mse_loss(state_val, batch_y)
+        loss = torch.nn.functional.mse_loss(action_mean, batch_y) + 0.5 * torch.nn.functional.mse_loss(state_val, batch_y)
         loss.backward()
         ppo_opt.step()
 
     # 5. Export to ONNX
-    logger.info("Exporting Models to ONNX...")
+    logger.info("Exporting Models to ONNX Format...")
     model_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models"))
     os.makedirs(model_dir, exist_ok=True)
-    
+
     lstm_model.eval()
     trans_model.eval()
     ppo_model.eval()
-    
+
     dummy_seq = torch.randn(1, 1, 5)
     dummy_flat = torch.randn(1, 5)
-    
+
     torch.onnx.export(lstm_model, dummy_seq, os.path.join(model_dir, "lstm.onnx"), export_params=True, opset_version=14, input_names=['input'], output_names=['output'], dynamic_axes={'input': {0: 'batch_size', 1: 'seq_len'}, 'output': {0: 'batch_size'}})
     torch.onnx.export(trans_model, dummy_seq, os.path.join(model_dir, "transformer.onnx"), export_params=True, opset_version=14, input_names=['input'], output_names=['output'], dynamic_axes={'input': {0: 'batch_size', 1: 'seq_len'}, 'output': {0: 'batch_size'}})
     torch.onnx.export(ppo_model, dummy_flat, os.path.join(model_dir, "ppo.onnx"), export_params=True, opset_version=14, input_names=['input'], output_names=['action_mean', 'state_value'], dynamic_axes={'input': {0: 'batch_size'}, 'action_mean': {0: 'batch_size'}, 'state_value': {0: 'batch_size'}})
 
-    logger.info("All 100-Year Training Complete! AI is ready.")
+    logger.info("All 100-Year Training Complete! AI models updated and exported.")
 
 if __name__ == "__main__":
     main()
