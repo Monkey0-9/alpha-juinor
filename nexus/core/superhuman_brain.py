@@ -275,7 +275,7 @@ class SuperhumanBrain:
     def __init__(self) -> None:
         strategies = StrategyFactory.all_strategies()
         self.strategies = strategies
-        from nexus.core.ml_brain import AdvancedMLBrain
+        from nexus.core.ml_brain import AdvancedMLBrain, ONNXBrain
         try:
             import nexus_onnx
             self.cpp_available = True
@@ -290,9 +290,9 @@ class SuperhumanBrain:
             self.ppo_agent = nexus_onnx.CppONNXBrain("models/ppo.onnx", True)
             self.ensemble_fuser = nexus_onnx.EnsembleFuser()
         else:
-            self.lstm_brain = None
-            self.transformer_brain = None
-            self.ppo_agent = None
+            self.lstm_brain = ONNXBrain("models/lstm.onnx", input_dim=5)
+            self.transformer_brain = ONNXBrain("models/transformer.onnx", input_dim=5)
+            self.ppo_agent = ONNXBrain("models/ppo.onnx", input_dim=5)
             self.ensemble_fuser = None
             
         self.bayesian_weighter = BayesianStrategyWeighter(strategies)
@@ -354,9 +354,12 @@ class SuperhumanBrain:
             ]
             
             if self.lstm_brain is not None:
-                lstm_score = self.lstm_brain.predict(dl_features)[0]
-                transformer_score = self.transformer_brain.predict(dl_features)[0]
-                ppo_score = self.ppo_agent.predict(dl_features)[0]
+                res_l = self.lstm_brain.predict(dl_features)
+                res_t = self.transformer_brain.predict(dl_features)
+                res_p = self.ppo_agent.predict(dl_features)
+                lstm_score = float(res_l[0]) if isinstance(res_l, (list, np.ndarray)) else float(res_l)
+                transformer_score = float(res_t[0]) if isinstance(res_t, (list, np.ndarray)) else float(res_t)
+                ppo_score = float(res_p[0]) if isinstance(res_p, (list, np.ndarray)) else float(res_p)
                 dl_score = (lstm_score * 0.4) + (transformer_score * 0.4) + (ppo_score * 0.2)
             else:
                 dl_score = 0.0

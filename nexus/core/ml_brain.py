@@ -14,7 +14,7 @@ try:
 except (ImportError, OSError) as e:
     logger.warning(f"PyTorch is not available or failed to load: {e}. Deep Learning modules will be disabled.")
     TORCH_AVAILABLE = False
-from typing import Dict  # noqa: E402
+from typing import Dict, Any, Union, List, Optional  # noqa: E402
 
 class AdvancedMLBrain:
     """
@@ -177,13 +177,19 @@ class ONNXBrain:
             dynamic_axes={'features': {0: 'batch_size'}, 'signal': {0: 'batch_size'}}
         )
 
-    def predict(self, current_features: Dict[str, float]) -> float:
-        if self.session is None or not current_features:
+    def predict(self, current_features: Any) -> float:
+        if self.session is None or current_features is None:
             return 0.0
 
-        # Create numpy array (batch_size=1)
-        # Pad or truncate to self.input_dim
-        vals = list(current_features.values())
+        if isinstance(current_features, dict):
+            vals = list(current_features.values())
+        elif isinstance(current_features, (list, tuple)):
+            vals = list(current_features)
+        elif isinstance(current_features, np.ndarray):
+            vals = current_features.flatten().tolist()
+        else:
+            vals = []
+
         if len(vals) < self.input_dim:
             vals = vals + [0.0] * (self.input_dim - len(vals))
         elif len(vals) > self.input_dim:
@@ -191,9 +197,16 @@ class ONNXBrain:
 
         input_data = np.array([vals], dtype=np.float32)
 
+        # Check expected rank of ONNX input tensor
         try:
+            expected_shape = self.session.get_inputs()[0].shape
+            if len(expected_shape) == 3:
+                # Add sequence dimension for 3D inputs (batch_size, seq_len, input_dim)
+                input_data = np.expand_dims(input_data, axis=1)
+
             ort_outs = self.session.run(None, {self.input_name: input_data})
-            pred = ort_outs[0][0][0]
+            out = ort_outs[0]
+            pred = float(np.ravel(out)[0])
             return float(np.clip(pred, -1.0, 1.0))
         except Exception as e:
             logger.error(f"ONNX prediction failed: {e}")
@@ -211,8 +224,12 @@ class ONNXBrain:
             input_data = input_data[:, :self.input_dim]
 
         try:
+            expected_shape = self.session.get_inputs()[0].shape
+            if len(expected_shape) == 3:
+                input_data = np.expand_dims(input_data, axis=1)
+
             ort_outs = self.session.run(None, {self.input_name: input_data})
-            preds = ort_outs[0].flatten()
+            preds = np.ravel(ort_outs[0])
             return np.clip(preds, -1.0, 1.0)
         except Exception as e:
             logger.error(f"ONNX batch prediction failed: {e}")
