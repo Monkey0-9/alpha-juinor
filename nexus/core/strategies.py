@@ -9,13 +9,16 @@ Upgrades from 14 equal-weighted strategies to an adaptive ensemble with:
   - RegimePersistenceStrategy: exploits regime autocorrelation
   - All strategies return float scores; confidence tracked externally
 """
+
 import logging
 import numpy as np
 import pandas as pd
 from typing import Optional, Dict, List, Tuple
 from collections import deque
 from nexus.data.features import FeatureEngineer
-from nexus.models.zoo.time_series import GradientBoostedTimeSeriesModel as TimeSeriesModel
+from nexus.models.zoo.time_series import (
+    GradientBoostedTimeSeriesModel as TimeSeriesModel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +27,15 @@ logger = logging.getLogger(__name__)
 # Base Strategy                                                        #
 # ------------------------------------------------------------------ #
 
+
 class BaseStrategy:
     """Base class for all strategy modules."""
+
     name: str = "Base"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         if history.empty:
             return 0.0
         return float(alpha)
@@ -56,10 +63,13 @@ def _extract_series(df: pd.DataFrame, col: str) -> pd.Series:
 # Core 14 Strategies — upgraded with regime-adaptation & safe series #
 # ------------------------------------------------------------------ #
 
+
 class MomentumStrategy(BaseStrategy):
     name = "Momentum"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         prices = _extract_series(history, "close")
         if prices.empty or len(prices) < 5:
             return 0.0
@@ -74,14 +84,22 @@ class MomentumStrategy(BaseStrategy):
         else:  # SIDEWAYS
             short_w, long_w = 20, 50
 
-        short_ma = float(prices.rolling(short_w, min_periods=1).mean().iloc[-1])
+        short_ma = float(
+            prices.rolling(short_w, min_periods=1).mean().iloc[-1]
+        )
         long_ma = float(prices.rolling(long_w, min_periods=1).mean().iloc[-1])
         momentum = (short_ma - long_ma) / max(long_ma, 1.0)
-        volatility = float(prices.pct_change().std()) if len(prices) > 1 else 0.0
+        volatility = (
+            float(prices.pct_change().std()) if len(prices) > 1 else 0.0
+        )
 
         # Regime boost: momentum strategies shine in BULL
-        regime_mult = 1.25 if regime == "BULL" else (0.70 if regime == "BEAR" else 1.0)
-        score = (alpha * 0.55 + momentum * 0.35 - volatility * 0.10) * regime_mult
+        regime_mult = (
+            1.25 if regime == "BULL" else (0.70 if regime == "BEAR" else 1.0)
+        )
+        score = (
+            alpha * 0.55 + momentum * 0.35 - volatility * 0.10
+        ) * regime_mult
         return float(np.tanh(score * 10))
 
     def score_with_confidence(
@@ -103,13 +121,19 @@ class MomentumStrategy(BaseStrategy):
 class MeanReversionStrategy(BaseStrategy):
     name = "MeanReversion"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         prices = _extract_series(history, "close")
         if prices.empty or len(prices) < 5:
             return 0.0
 
         # Dynamic Regime-Adaptive Window
-        lookback = 14 if regime == "TURBULENT" else (20 if regime == "SIDEWAYS" else 34)
+        lookback = (
+            14
+            if regime == "TURBULENT"
+            else (20 if regime == "SIDEWAYS" else 34)
+        )
         sma = float(prices.rolling(lookback, min_periods=1).mean().iloc[-1])
         current_price = float(prices.iloc[-1])
         deviation = (current_price - sma) / max(sma, 1.0)
@@ -120,7 +144,6 @@ class MeanReversionStrategy(BaseStrategy):
         elif regime == "BULL":
             signal *= 0.75  # mean reversion weaker in trending markets
         return float(np.tanh(signal * 8))
-
 
     def score_with_confidence(
         self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
@@ -134,7 +157,9 @@ class MeanReversionStrategy(BaseStrategy):
 class VolatilityArbitrageStrategy(BaseStrategy):
     name = "VolatilityArbitrage"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         if history.empty or "close" not in history.columns:
             return 0.0
         returns = history["close"].pct_change().dropna()
@@ -149,7 +174,9 @@ class VolatilityArbitrageStrategy(BaseStrategy):
 class MacroOverlayStrategy(BaseStrategy):
     name = "MacroOverlay"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         if history.empty or "close" not in history.columns:
             return 0.0
         returns = history["close"].pct_change().dropna()
@@ -165,20 +192,31 @@ class MacroOverlayStrategy(BaseStrategy):
 class RSISetupStrategy(BaseStrategy):
     name = "RSI_Tactical"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
-        if history.empty or "close" not in history.columns or len(history) < 14:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
+        if (
+            history.empty
+            or "close" not in history.columns
+            or len(history) < 14
+        ):
             return 0.0
         delta = history["close"].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs   = gain / (loss + 1e-9)
-        rsi  = 100 - (100 / (1 + rs))
+        rs = gain / (loss + 1e-9)
+        rsi = 100 - (100 / (1 + rs))
         last_rsi = float(rsi.iloc[-1])
 
-        # Dynamic levels: use rolling 5th/95th percentile instead of fixed 30/70
+        # Dynamic levels: use rolling 5th/95th percentile instead of fixed
+        # 30/70
         rsi_roll = rsi.dropna()
-        os_level = float(rsi_roll.quantile(0.12)) if len(rsi_roll) >= 14 else 30.0
-        ob_level = float(rsi_roll.quantile(0.88)) if len(rsi_roll) >= 14 else 70.0
+        os_level = (
+            float(rsi_roll.quantile(0.12)) if len(rsi_roll) >= 14 else 30.0
+        )
+        ob_level = (
+            float(rsi_roll.quantile(0.88)) if len(rsi_roll) >= 14 else 70.0
+        )
 
         if last_rsi < os_level:
             conf_boost = (os_level - last_rsi) / max(os_level, 1.0)
@@ -201,11 +239,17 @@ class RSISetupStrategy(BaseStrategy):
 class BreakoutStrategy(BaseStrategy):
     name = "InstitutionalBreakout"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
-        if history.empty or "close" not in history.columns or len(history) < 20:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
+        if (
+            history.empty
+            or "close" not in history.columns
+            or len(history) < 20
+        ):
             return 0.0
         high_20 = history["high"].rolling(20).max().iloc[-2]
-        low_20  = history["low"].rolling(20).min().iloc[-2]
+        low_20 = history["low"].rolling(20).min().iloc[-2]
         current = history["close"].iloc[-1]
         if current > high_20:
             # Volume confirmation: breakout with rising volume is stronger
@@ -214,7 +258,9 @@ class BreakoutStrategy(BaseStrategy):
                 avg_vol = float(history["volume"].tail(20).mean())
                 last_vol = float(history["volume"].iloc[-1])
                 if avg_vol > 0:
-                    vol_conf = min(1.35, 1.0 + (last_vol / avg_vol - 1.0) * 0.5)
+                    vol_conf = min(
+                        1.35, 1.0 + (last_vol / avg_vol - 1.0) * 0.5
+                    )
             return float(min(0.95, 0.85 * vol_conf))
         if current < low_20:
             return -0.90
@@ -224,11 +270,13 @@ class BreakoutStrategy(BaseStrategy):
 class BollingerBandStrategy(BaseStrategy):
     name = "Bollinger_Reversion"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         if history.empty or len(history) < 20:
             return 0.0
         prices = history["close"].astype(float)
-        ma  = prices.rolling(20).mean()
+        ma = prices.rolling(20).mean()
         std = prices.rolling(20).std()
         upper = ma + (std * 2)
         lower = ma - (std * 2)
@@ -250,22 +298,30 @@ class BollingerBandStrategy(BaseStrategy):
 class MACDStrategy(BaseStrategy):
     name = "MACD_Institutional"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         if history.empty or len(history) < 26:
             return 0.0
         prices = history["close"].astype(float)
-        exp1   = prices.ewm(span=12, adjust=False).mean()
-        exp2   = prices.ewm(span=26, adjust=False).mean()
-        macd   = exp1 - exp2
+        exp1 = prices.ewm(span=12, adjust=False).mean()
+        exp2 = prices.ewm(span=26, adjust=False).mean()
+        macd = exp1 - exp2
         signal = macd.ewm(span=9, adjust=False).mean()
-        hist   = macd - signal
+        hist = macd - signal
 
         # Use histogram slope for conviction
         hist_slope = float(hist.diff().iloc[-1]) if len(hist) >= 2 else 0.0
 
-        if macd.iloc[-1] > signal.iloc[-1] and macd.iloc[-2] <= signal.iloc[-2]:
+        if (
+            macd.iloc[-1] > signal.iloc[-1]
+            and macd.iloc[-2] <= signal.iloc[-2]
+        ):
             return float(min(0.90, 0.70 + abs(hist_slope) * 50))
-        if macd.iloc[-1] < signal.iloc[-1] and macd.iloc[-2] >= signal.iloc[-2]:
+        if (
+            macd.iloc[-1] < signal.iloc[-1]
+            and macd.iloc[-2] >= signal.iloc[-2]
+        ):
             return float(max(-0.90, -0.70 - abs(hist_slope) * 50))
         return float(alpha * 0.4)
 
@@ -273,7 +329,9 @@ class MACDStrategy(BaseStrategy):
 class VolumeTrendStrategy(BaseStrategy):
     name = "VolumePriceTrend"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         if history.empty or "volume" not in history.columns:
             return 0.0
         vpt = (history["volume"] * (history["close"].pct_change())).cumsum()
@@ -288,12 +346,14 @@ class VolumeTrendStrategy(BaseStrategy):
 class StochasticStrategy(BaseStrategy):
     name = "Stochastic_Momentum"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         if history.empty or len(history) < 14:
             return 0.0
-        low_14  = history["low"].rolling(14).min()
+        low_14 = history["low"].rolling(14).min()
         high_14 = history["high"].rolling(14).max()
-        denom   = (high_14 - low_14).replace(0, np.nan)
+        denom = (high_14 - low_14).replace(0, np.nan)
         k = 100 * (history["close"] - low_14) / denom
         d = k.rolling(3).mean()
 
@@ -315,18 +375,24 @@ class StochasticStrategy(BaseStrategy):
 class EMACrossoverStrategy(BaseStrategy):
     name = "EMA_Trend_Follower"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         if history.empty or len(history) < 50:
             return 0.0
-        ema8  = history["close"].ewm(span=8).mean()
+        ema8 = history["close"].ewm(span=8).mean()
         ema21 = history["close"].ewm(span=21).mean()
         ema50 = history["close"].ewm(span=50).mean()
 
         if ema8.iloc[-1] > ema21.iloc[-1] > ema50.iloc[-1]:
-            separation = (float(ema8.iloc[-1]) - float(ema50.iloc[-1])) / max(float(ema50.iloc[-1]), 1e-6)
+            separation = (float(ema8.iloc[-1]) - float(ema50.iloc[-1])) / max(
+                float(ema50.iloc[-1]), 1e-6
+            )
             return float(min(0.98, 0.80 + separation * 3.0))
         if ema8.iloc[-1] < ema21.iloc[-1] < ema50.iloc[-1]:
-            separation = (float(ema50.iloc[-1]) - float(ema8.iloc[-1])) / max(float(ema50.iloc[-1]), 1e-6)
+            separation = (float(ema50.iloc[-1]) - float(ema8.iloc[-1])) / max(
+                float(ema50.iloc[-1]), 1e-6
+            )
             return float(max(-0.98, -0.80 - separation * 3.0))
         return float(alpha * 0.1)
 
@@ -342,11 +408,13 @@ class EMACrossoverStrategy(BaseStrategy):
 class SuperTrendStrategy(BaseStrategy):
     name = "SuperTrend_Alpha"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         if history.empty or len(history) < 10:
             return 0.0
-        atr   = (history["high"] - history["low"]).rolling(10).mean()
-        hl2   = (history["high"] + history["low"]) / 2
+        atr = (history["high"] - history["low"]).rolling(10).mean()
+        hl2 = (history["high"] + history["low"]) / 2
         upper = hl2 + (3 * atr)
         lower = hl2 - (3 * atr)
 
@@ -361,14 +429,16 @@ class SuperTrendStrategy(BaseStrategy):
 class FisherTransformStrategy(BaseStrategy):
     name = "Fisher_Cycle"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         if history.empty or len(history) < 10:
             return 0.0
-        max_h  = history["high"].rolling(10).max()
-        min_l  = history["low"].rolling(10).min()
-        denom  = (max_h - min_l).replace(0, np.nan)
-        val    = 0.66 * ((history["close"] - min_l) / denom - 0.5)
-        val    = val.clip(-0.999, 0.999)
+        max_h = history["high"].rolling(10).max()
+        min_l = history["low"].rolling(10).min()
+        denom = (max_h - min_l).replace(0, np.nan)
+        val = 0.66 * ((history["close"] - min_l) / denom - 0.5)
+        val = val.clip(-0.999, 0.999)
         fisher = 0.5 * np.log((1 + val) / (1 - val + 1e-6))
 
         if fisher.iloc[-1] > 1.5:
@@ -381,27 +451,35 @@ class FisherTransformStrategy(BaseStrategy):
 class HurstExponentStrategy(BaseStrategy):
     name = "Hurst_Persistance"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         if history.empty or len(history) < 50:
             return 0.0
         lags = range(2, 20)
         tau = [
-            np.sqrt(np.std(np.subtract(
-                history["close"][lag:].to_numpy(),
-                history["close"][:-lag].to_numpy()
-            )))
+            np.sqrt(
+                np.std(
+                    np.subtract(
+                        history["close"][lag:].to_numpy(),
+                        history["close"][:-lag].to_numpy(),
+                    )
+                )
+            )
             for lag in lags
         ]
-        valid = [(np.log(lag), np.log(t)) for lag, t in zip(lags, tau) if t > 0]
+        valid = [
+            (np.log(lag), np.log(t)) for lag, t in zip(lags, tau) if t > 0
+        ]
         if len(valid) < 2:
             return float(alpha)
         log_lags, log_tau = zip(*valid)
-        poly  = np.polyfit(log_lags, log_tau, 1)
+        poly = np.polyfit(log_lags, log_tau, 1)
         hurst = poly[0] * 2.0
 
-        if hurst > 0.65:     # Trending: amplify momentum alpha
+        if hurst > 0.65:  # Trending: amplify momentum alpha
             return float(np.tanh(alpha * 1.6))
-        if hurst < 0.35:     # Mean-reverting: flip sign for mean-reversion play
+        if hurst < 0.35:  # Mean-reverting: flip sign for mean-reversion play
             return float(np.tanh(-alpha * 0.6))
         return float(alpha)  # Random walk: no edge → neutral
 
@@ -409,6 +487,7 @@ class HurstExponentStrategy(BaseStrategy):
 # ------------------------------------------------------------------ #
 # NEW: Adaptive Ensemble Strategy                                      #
 # ------------------------------------------------------------------ #
+
 
 class AdaptiveEnsembleStrategy(BaseStrategy):
     """
@@ -418,6 +497,7 @@ class AdaptiveEnsembleStrategy(BaseStrategy):
     Maintains a per-regime, per-strategy hit-rate window.
     High hit-rate strategies get boosted; low hit-rate strategies get penalized.
     """
+
     name = "Adaptive_Ensemble"
 
     def __init__(self, window: int = 20) -> None:
@@ -437,21 +517,27 @@ class AdaptiveEnsembleStrategy(BaseStrategy):
         if regime not in self._regime_history:
             self._regime_history[regime] = {}
         if strategy_name not in self._regime_history[regime]:
-            self._regime_history[regime][strategy_name] = deque(maxlen=self.window)
+            self._regime_history[regime][strategy_name] = deque(
+                maxlen=self.window
+            )
         self._regime_history[regime][strategy_name].append(
             1 if predicted_sign == realized_sign else 0
         )
 
     def get_strategy_weight(self, regime: str, strategy_name: str) -> float:
         """Returns hit-rate-based weight for a strategy in the given regime."""
-        history = self._regime_history.get(regime, {}).get(strategy_name, deque())
+        history = self._regime_history.get(regime, {}).get(
+            strategy_name, deque()
+        )
         if len(history) < 3:
             return 1.0  # neutral prior
         hit_rate = sum(history) / len(history)
         # Map hit_rate to weight: 0.5 (chance) → 0.5 weight; 1.0 → 2.0 weight
         return float(max(0.1, (hit_rate - 0.5) * 3.0 + 1.0))
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         """Score = IC-weighted average of all base strategy scores."""
         strategies = _BASE_STRATEGIES
         total_weight = 0.0
@@ -461,7 +547,7 @@ class AdaptiveEnsembleStrategy(BaseStrategy):
             w = self.get_strategy_weight(regime, strat.name)
             s = strat.score(symbol, alpha, history, regime)
             weighted_score += w * s
-            total_weight   += w
+            total_weight += w
 
         if total_weight < 1e-9:
             return float(alpha)
@@ -472,6 +558,7 @@ class AdaptiveEnsembleStrategy(BaseStrategy):
 # NEW: Order Flow Pressure Strategy                                    #
 # ------------------------------------------------------------------ #
 
+
 class OrderFlowPressureStrategy(BaseStrategy):
     """
     Institutional order flow detection via volume delta and price velocity.
@@ -481,29 +568,45 @@ class OrderFlowPressureStrategy(BaseStrategy):
     - Price velocity: speed and acceleration of recent price moves
     - When delta and velocity agree → strong institutional signal
     """
+
     name = "OrderFlow_Pressure"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
-        if history.empty or "volume" not in history.columns or len(history) < 10:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
+        if (
+            history.empty
+            or "volume" not in history.columns
+            or len(history) < 10
+        ):
             return 0.0
 
-        close   = history["close"].astype(float)
-        volume  = history["volume"].astype(float)
+        close = history["close"].astype(float)
+        volume = history["volume"].astype(float)
         returns = close.pct_change().dropna()
 
         # Volume delta: positive when price up, negative when price down
-        cum_delta = (volume * np.sign(returns.reindex(close.index).fillna(0.0))).cumsum()
-        delta_ma  = cum_delta.rolling(10, min_periods=1).mean()
-        delta_signal = float(np.tanh(
-            (float(cum_delta.iloc[-1]) - float(delta_ma.iloc[-1]))
-            / max(float(cum_delta.abs().mean()), 1e-6)
-        ))
+        cum_delta = (
+            volume * np.sign(returns.reindex(close.index).fillna(0.0))
+        ).cumsum()
+        delta_ma = cum_delta.rolling(10, min_periods=1).mean()
+        delta_signal = float(
+            np.tanh(
+                (float(cum_delta.iloc[-1]) - float(delta_ma.iloc[-1]))
+                / max(float(cum_delta.abs().mean()), 1e-6)
+            )
+        )
 
         # Price velocity
-        price_velocity   = float(close.diff().tail(5).mean())
-        price_accel      = float(close.diff().diff().tail(3).mean())
-        velocity_signal  = float(np.tanh((price_velocity + 0.3 * price_accel)
-                                         / max(float(close.std()), 1e-6) * 10))
+        price_velocity = float(close.diff().tail(5).mean())
+        price_accel = float(close.diff().diff().tail(3).mean())
+        velocity_signal = float(
+            np.tanh(
+                (price_velocity + 0.3 * price_accel)
+                / max(float(close.std()), 1e-6)
+                * 10
+            )
+        )
 
         # Agreement multiplier
         agreement = 1.0 if (delta_signal * velocity_signal) > 0 else 0.5
@@ -516,6 +619,7 @@ class OrderFlowPressureStrategy(BaseStrategy):
 # NEW: Regime Persistence Strategy                                     #
 # ------------------------------------------------------------------ #
 
+
 class RegimePersistenceStrategy(BaseStrategy):
     """
     Exploits regime autocorrelation.
@@ -525,13 +629,16 @@ class RegimePersistenceStrategy(BaseStrategy):
     In BEAR regime: amplify short signals with protective bias.
     In TURBULENT: use mean-reversion with wide stops.
     """
+
     name = "Regime_Persistence"
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         if history.empty or "close" not in history.columns:
             return 0.0
 
-        close   = history["close"].astype(float)
+        close = history["close"].astype(float)
         returns = close.pct_change().dropna()
         if returns.empty:
             return 0.0
@@ -550,8 +657,8 @@ class RegimePersistenceStrategy(BaseStrategy):
 
         elif regime == "TURBULENT":
             # High-frequency mean reversion in turbulent markets
-            sma  = float(close.rolling(10, min_periods=1).mean().iloc[-1])
-            dev  = (float(close.iloc[-1]) - sma) / max(sma, 1.0)
+            sma = float(close.rolling(10, min_periods=1).mean().iloc[-1])
+            dev = (float(close.iloc[-1]) - sma) / max(sma, 1.0)
             return float(np.tanh(-dev * 6.0))
 
         else:  # SIDEWAYS
@@ -565,28 +672,32 @@ class RegimePersistenceStrategy(BaseStrategy):
 # NEW: AI Engine Strategy                                              #
 # ------------------------------------------------------------------ #
 
+
 class AIEngineStrategy(BaseStrategy):
     """
-    Routes data through the Data Engine (FeatureEngineer) 
+    Routes data through the Data Engine (FeatureEngineer)
     and the AI Brain (TimeSeriesModel) to generate a signal.
     """
+
     name = "AI_Deep_Brain"
 
     def __init__(self):
         super().__init__()
         self.model = TimeSeriesModel()
 
-    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+    def score(
+        self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
+    ) -> float:
         if history.empty or len(history) < 50:
             return 0.0
 
         try:
             # 1. Feature Engineering
             features = FeatureEngineer.add_all_features(history)
-            
+
             # 2. AI Brain Prediction
             ai_signal = self.model.predict(features)
-            
+
             # 3. Combine with alpha
             score = (ai_signal * 0.7) + (alpha * 0.3)
             return float(np.tanh(score * 2))

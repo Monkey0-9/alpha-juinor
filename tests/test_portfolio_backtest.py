@@ -7,7 +7,10 @@ def test_portfolio_backtester_run():
     dates = pd.date_range(start="2024-01-01", periods=60, freq="B")
     symbols = ["AAA", "BBB", "CCC"]
     price_data = {
-        symbol: pd.Series(100 + np.cumsum(np.random.normal(0.1, 1.0, len(dates))), index=dates)
+        symbol: pd.Series(
+            100 + np.cumsum(np.random.normal(0.1, 1.0, len(dates))),
+            index=dates,
+        )
         for symbol in symbols
     }
     signal_data = {
@@ -19,7 +22,9 @@ def test_portfolio_backtester_run():
     result = backtester.run(price_data, signal_data, max_positions=2)
 
     assert result.equity_curve.index.equals(dates)
-    assert result.total_return == float(result.equity_curve.iloc[-1] / 1000000.0 - 1)
+    assert result.total_return == float(
+        result.equity_curve.iloc[-1] / 1000000.0 - 1
+    )
     assert isinstance(result.sharpe_ratio, float)
     assert isinstance(result.max_drawdown, float)
     assert 0.0 <= result.win_rate <= 1.0
@@ -29,7 +34,10 @@ def test_portfolio_backtester_walkforward():
     dates = pd.date_range(start="2024-01-01", periods=120, freq="B")
     symbols = ["AAA", "BBB", "CCC", "DDD"]
     price_data = {
-        symbol: pd.Series(100 + np.cumsum(np.random.normal(0.1, 1.0, len(dates))), index=dates)
+        symbol: pd.Series(
+            100 + np.cumsum(np.random.normal(0.1, 1.0, len(dates))),
+            index=dates,
+        )
         for symbol in symbols
     }
     signal_data = {

@@ -11,6 +11,7 @@ Full glassmorphic Streamlit matrix with:
   - Correlation crisis alert
   - Recent orders audit log
 """
+
 import streamlit as st
 import pandas as pd
 import httpx
@@ -29,7 +30,8 @@ st.set_page_config(
 )
 
 # --- Premium CSS ---
-st.markdown("""
+st.markdown(
+    """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;900&display=swap');
 
@@ -126,7 +128,9 @@ st.markdown("""
         margin: 28px 0 20px 0;
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 BACKEND_URL = os.getenv("NEXUS_BACKEND_URL", "http://localhost:8001")
 API_KEY = os.getenv("NEXUS_API_KEY", "")
@@ -146,15 +150,21 @@ def fetch(endpoint: str) -> Optional[Any]:
 def grade_css(grade: str) -> str:
     """Map conviction grade to CSS class."""
     return {
-        "A++": "grade-axx", "A+": "grade-ax", "A": "grade-a",
-        "B+": "grade-bx",   "B": "grade-b",   "C": "grade-c",
+        "A++": "grade-axx",
+        "A+": "grade-ax",
+        "A": "grade-a",
+        "B+": "grade-bx",
+        "B": "grade-b",
+        "C": "grade-c",
     }.get(grade, "grade-c")
 
 
 def regime_color(regime: str) -> str:
     return {
-        "BULL": "#00ff87", "BEAR": "#ff4b4b",
-        "SIDEWAYS": "#ffd60a", "TURBULENT": "#ff8c00",
+        "BULL": "#00ff87",
+        "BEAR": "#ff4b4b",
+        "SIDEWAYS": "#ffd60a",
+        "TURBULENT": "#ff8c00",
     }.get(regime.upper(), "#aaa")
 
 
@@ -173,58 +183,59 @@ def main() -> None:
     with col_h1:
         st.markdown(
             "# 🧠 NEXUS <span style='color:#00ff87'>SUPERHUMAN BRAIN</span>",
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
         st.markdown(
             "<p style='color:#555;margin-top:-12px;font-size:0.9rem;'>"
             "Institutional Edition v3.0 · Bayesian · Kelly · Fractal · Meta-Learning · 24/7 Autonomous"
             "</p>",
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
     with col_h2:
         st.markdown(
             "<div style='text-align:right;margin-top:22px;'>"
             "<span class='status-active'>⚡ BRAIN ONLINE</span></div>",
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
     # ── Auto-Refresh ────────────────────────────────────────────────────────
-    # Refresh every 30 seconds (30000 milliseconds) for paper trading responsiveness
+    # Refresh every 30 seconds (30000 milliseconds) for paper trading
+    # responsiveness
     st_autorefresh(interval=30000, limit=None, key="dashboard_autorefresh")
 
     # ── Account Metrics ─────────────────────────────────────────────────────
     data_account = fetch("api/alpaca/account")
     if data_account:
-        equity       = float(data_account.get("portfolio_value", 0))
+        equity = float(data_account.get("portfolio_value", 0))
         buying_power = float(data_account.get("buying_power", 0))
-        cash         = float(data_account.get("cash", 0))
-        mode         = "SIMULATED" if data_account.get("simulated") else "LIVE PAPER"
-        mode_color   = "#00ff87" if mode == "LIVE PAPER" else "#ffd60a"
+        cash = float(data_account.get("cash", 0))
+        mode = "SIMULATED" if data_account.get("simulated") else "LIVE PAPER"
+        mode_color = "#00ff87" if mode == "LIVE PAPER" else "#ffd60a"
 
         c1, c2, c3, c4 = st.columns(4)
         with c1:
             st.markdown(
                 f"<div class='glass-card'><div class='metric-label'>Portfolio Equity</div>"
                 f"<div class='metric-value'>${equity:,.2f}</div></div>",
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
         with c2:
             st.markdown(
                 f"<div class='glass-card'><div class='metric-label'>Buying Power</div>"
                 f"<div class='metric-value'>${buying_power:,.2f}</div></div>",
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
         with c3:
             st.markdown(
                 f"<div class='glass-card'><div class='metric-label'>Cash Balance</div>"
                 f"<div class='metric-value'>${cash:,.2f}</div></div>",
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
         with c4:
             st.markdown(
                 f"<div class='glass-card'><div class='metric-label'>Mode</div>"
                 f"<div class='metric-value' style='color:{mode_color}'>{mode}</div></div>",
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
     else:
         st.warning("⏳ Waiting for backend connection...")
@@ -233,8 +244,10 @@ def main() -> None:
 
     # ── SuperhumanBrain Conviction Panel ────────────────────────────────────
     st.markdown("### 🧠 SuperhumanBrain — Live Conviction Signals")
-    brain_data = fetch("api/monitor/brain/superhuman?symbols=AAPL,MSFT,NVDA,SPY,QQQ,AMZN,TSLA,GOOG")
-    analysis   = fetch("api/monitor/brain")
+    brain_data = fetch(
+        "api/monitor/brain/superhuman?symbols=AAPL,MSFT,NVDA,SPY,QQQ,AMZN,TSLA,GOOG"
+    )
+    analysis = fetch("api/monitor/brain")
     market_analysis = analysis.get("analysis", {}) if analysis else {}
 
     if brain_data and brain_data.get("status") == "success":
@@ -251,16 +264,20 @@ def main() -> None:
                 f"<div class='brain-card'><div class='metric-label'>Avg Conviction</div>"
                 f"<div class='metric-value' style='color:#00ff87'>{avg_conv:.0%}</div>"
                 f"<div class='metric-sub'>Portfolio-level confidence</div></div>",
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
         with s2:
             global_ic = intel.get("global_ic", 0)
-            ic_color = "#00ff87" if global_ic > 0.2 else "#ffd60a" if global_ic > 0 else "#ff4b4b"
+            ic_color = (
+                "#00ff87"
+                if global_ic > 0.2
+                else "#ffd60a" if global_ic > 0 else "#ff4b4b"
+            )
             st.markdown(
                 f"<div class='brain-card'><div class='metric-label'>Global IC Score</div>"
                 f"<div class='metric-value' style='color:{ic_color}'>{global_ic:.3f}</div>"
                 f"<div class='metric-sub'>Meta-learning calibration</div></div>",
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
         with s3:
             a_grade = intel.get("a_grade_signals", 0)
@@ -269,7 +286,7 @@ def main() -> None:
                 f"<div class='brain-card'><div class='metric-label'>A-Grade Signals</div>"
                 f"<div class='metric-value' style='color:#7b61ff'>{a_grade}/{total}</div>"
                 f"<div class='metric-sub'>Conviction ≥ 65%</div></div>",
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
         with s4:
             gate_rate = intel.get("gate_pass_rate", 0)
@@ -278,7 +295,7 @@ def main() -> None:
                 f"<div class='brain-card'><div class='metric-label'>Fractal Gate Rate</div>"
                 f"<div class='metric-value' style='color:{gate_color}'>{gate_rate:.0%}</div>"
                 f"<div class='metric-sub'>Signals passing fractal filter</div></div>",
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
         with s5:
             rc = regime_color(current_regime)
@@ -286,16 +303,20 @@ def main() -> None:
                 f"<div class='brain-card'><div class='metric-label'>Active Regime</div>"
                 f"<div class='metric-value' style='color:{rc}'>{current_regime}</div>"
                 f"<div class='metric-sub'>Dominant market state</div></div>",
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
 
         # ── Regime Probability Distribution ────────────────────────────────
         if regime_probs:
             st.markdown("#### Regime Probability Distribution")
-            rp_df = pd.DataFrame([
-                {"Regime": k, "Probability": round(v * 100, 1)}
-                for k, v in sorted(regime_probs.items(), key=lambda x: -x[1])
-            ])
+            rp_df = pd.DataFrame(
+                [
+                    {"Regime": k, "Probability": round(v * 100, 1)}
+                    for k, v in sorted(
+                        regime_probs.items(), key=lambda x: -x[1]
+                    )
+                ]
+            )
             bar_col, hurst_col = st.columns([2, 1])
             with bar_col:
                 st.bar_chart(
@@ -316,7 +337,7 @@ def main() -> None:
                     f"<div class='metric-sub' style='margin-top:10px'>Forecast Confidence</div>"
                     f"<div style='color:#aaa;font-size:1.2rem;font-weight:600'>{forecast_conf:.0%}</div>"
                     f"</div>",
-                    unsafe_allow_html=True
+                    unsafe_allow_html=True,
                 )
 
         # ── Correlation Crisis Alert ────────────────────────────────────────
@@ -328,7 +349,7 @@ def main() -> None:
                 f"Correlation proxy: {corr_pulse.get('avg_correlation', 0):.2f} · "
                 "Position sizes automatically halved by SuperhumanBrain."
                 "</div>",
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
 
         # ── Per-Symbol Conviction Cards ─────────────────────────────────────
@@ -336,25 +357,33 @@ def main() -> None:
         sorted_signals = sorted(
             signals.items(),
             key=lambda x: x[1].get("conviction", 0),
-            reverse=True
+            reverse=True,
         )
 
         # 4 cards per row
         for row_start in range(0, len(sorted_signals), 4):
-            row = sorted_signals[row_start:row_start + 4]
+            row = sorted_signals[row_start : row_start + 4]
             cols = st.columns(4)
             for col, (sym, sig) in zip(cols, row):
-                grade  = sig.get("grade", "C")
-                conv   = sig.get("conviction_pct", "0%")
-                score  = sig.get("score", 0.0)
-                ir     = sig.get("ir_score", 0.0)
-                gate   = sig.get("gate_pass", False)
-                bias   = sig.get("regime_bias", "?")
+                grade = sig.get("grade", "C")
+                conv = sig.get("conviction_pct", "0%")
+                score = sig.get("score", 0.0)
+                ir = sig.get("ir_score", 0.0)
+                gate = sig.get("gate_pass", False)
+                bias = sig.get("regime_bias", "?")
                 g_class = grade_css(grade)
 
-                score_color = "#00ff87" if score > 0.1 else "#ff4b4b" if score < -0.1 else "#ffd60a"
-                gate_text   = "<span class='gate-open'>● OPEN</span>" if gate else "<span class='gate-closed'>● CLOSED</span>"
-                b_color     = regime_color(bias)
+                score_color = (
+                    "#00ff87"
+                    if score > 0.1
+                    else "#ff4b4b" if score < -0.1 else "#ffd60a"
+                )
+                gate_text = (
+                    "<span class='gate-open'>● OPEN</span>"
+                    if gate
+                    else "<span class='gate-closed'>● CLOSED</span>"
+                )
+                b_color = regime_color(bias)
 
                 with col:
                     st.markdown(
@@ -375,10 +404,12 @@ def main() -> None:
                         f"<div><div class='metric-label'>Bias</div>"
                         f"<div style='color:{b_color};font-weight:600;font-size:0.8rem'>{bias}</div></div>"
                         f"</div></div>",
-                        unsafe_allow_html=True
+                        unsafe_allow_html=True,
                     )
     else:
-        st.info("🧠 SuperhumanBrain data loading... Backend may be starting up.")
+        st.info(
+            "🧠 SuperhumanBrain data loading... Backend may be starting up."
+        )
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
@@ -387,10 +418,10 @@ def main() -> None:
     i1, i2, i3 = st.columns(3)
 
     with i1:
-        regime    = market_analysis.get("regime", "UNCERTAIN")
-        forecast  = market_analysis.get("market_forecast", "NEUTRAL")
-        strategy  = market_analysis.get("selected_strategy", "N/A")
-        rc        = regime_color(regime)
+        regime = market_analysis.get("regime", "UNCERTAIN")
+        forecast = market_analysis.get("market_forecast", "NEUTRAL")
+        strategy = market_analysis.get("selected_strategy", "N/A")
+        rc = regime_color(regime)
         st.markdown(
             f"<div class='glass-card'>"
             f"<div class='metric-label'>Market Regime & Forecast</div>"
@@ -398,7 +429,7 @@ def main() -> None:
             f"<div style='color:#888;font-size:0.9rem;margin-top:4px'>{forecast}</div>"
             f"<div class='metric-sub' style='margin-top:8px'>Active Strategy: {strategy}</div>"
             f"</div>",
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
     with i2:
         agreement = market_analysis.get("strategy_agreement", 0.5)
@@ -408,20 +439,24 @@ def main() -> None:
             f"<div class='metric-value' style='color:#00aaff'>{agreement:.0%}</div>"
             f"<div class='metric-sub'>Consensus across 17 quant strategies</div>"
             f"</div>",
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
         st.progress(float(agreement))
     with i3:
         sentiment = market_analysis.get("market_sentiment", 0.5)
-        s_label   = market_analysis.get("market_sentiment_label", "Neutral")
-        s_color   = "#00ff87" if sentiment > 0.55 else "#ff4b4b" if sentiment < 0.45 else "#ffd60a"
+        s_label = market_analysis.get("market_sentiment_label", "Neutral")
+        s_color = (
+            "#00ff87"
+            if sentiment > 0.55
+            else "#ff4b4b" if sentiment < 0.45 else "#ffd60a"
+        )
         st.markdown(
             f"<div class='glass-card'>"
             f"<div class='metric-label'>Quantitative Sentiment</div>"
             f"<div class='metric-value' style='color:{s_color}'>{sentiment:.3f}</div>"
             f"<div style='color:{s_color};font-size:0.85rem;font-weight:600'>{s_label}</div>"
             f"</div>",
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
@@ -433,17 +468,37 @@ def main() -> None:
 
     if pos_list:
         pos_df = pd.DataFrame(pos_list)
-        display_cols = ["symbol", "qty", "avg_price", "current_price", "market_value", "unrealized_plpc", "side"]
+        display_cols = [
+            "symbol",
+            "qty",
+            "avg_price",
+            "current_price",
+            "market_value",
+            "unrealized_plpc",
+            "side",
+        ]
         for display_col in display_cols:
             if display_col not in pos_df.columns:
                 pos_df[display_col] = 0.0
         display = pos_df[display_cols].copy()
-        display.columns = ["Symbol", "Shares", "Avg Price", "Mkt Price", "Value", "P&L %", "Side"]
+        display.columns = [
+            "Symbol",
+            "Shares",
+            "Avg Price",
+            "Mkt Price",
+            "Value",
+            "P&L %",
+            "Side",
+        ]
         st.dataframe(
-            display.style.format({
-                "Avg Price": "${:,.2f}", "Mkt Price": "${:,.2f}",
-                "Value": "${:,.2f}", "P&L %": "{:+.2f}%",
-            }),
+            display.style.format(
+                {
+                    "Avg Price": "${:,.2f}",
+                    "Mkt Price": "${:,.2f}",
+                    "Value": "${:,.2f}",
+                    "P&L %": "{:+.2f}%",
+                }
+            ),
             width="stretch",
             height=280,
         )
@@ -459,7 +514,18 @@ def main() -> None:
         order_list = orders_data.get("orders", [])
         if order_list:
             odf = pd.DataFrame(order_list)
-            show_cols = [c for c in ["symbol", "side", "qty", "type", "status", "strategy"] if c in odf.columns]
+            show_cols = [
+                c
+                for c in [
+                    "symbol",
+                    "side",
+                    "qty",
+                    "type",
+                    "status",
+                    "strategy",
+                ]
+                if c in odf.columns
+            ]
             st.dataframe(odf[show_cols], width="stretch", height=220)
         else:
             st.info("No recent orders.")
@@ -468,7 +534,9 @@ def main() -> None:
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
     fc1, fc2, fc3 = st.columns([2, 1, 1])
     with fc1:
-        st.caption(f"🧠 SuperhumanBrain v3.0 · Last refresh: {datetime.now().strftime('%H:%M:%S')}")
+        st.caption(
+            f"🧠 SuperhumanBrain v3.0 · Last refresh: {datetime.now().strftime('%H:%M:%S')}"
+        )
     with fc2:
         st.caption("Bayesian · Kelly · Fractal · IC · 17 Strategies")
     with fc3:

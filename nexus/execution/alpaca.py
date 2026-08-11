@@ -23,6 +23,7 @@ ALPACA_API_BASE_URL = "https://api.alpaca.markets"
 ALPACA_PAPER_BASE_URL = "https://paper-api.alpaca.markets"
 ALPACA_DATA_BASE_URL = "https://data.alpaca.markets"
 
+
 @dataclass
 class AlpacaCredentials:
     api_key: str
@@ -33,8 +34,9 @@ class AlpacaCredentials:
         return {
             "APCA-API-KEY-ID": self.api_key,
             "APCA-API-SECRET-KEY": self.api_secret,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
+
 
 class AlpacaClient:
     """Alpaca execution client with live and simulated paper trading fallback."""
@@ -51,16 +53,22 @@ class AlpacaClient:
         if credentials is None:
             api_key = os.getenv("ALPACA_API_KEY", "")
             api_secret = os.getenv("ALPACA_API_SECRET", "")
-            paper_trading = os.getenv("ALPACA_PAPER_TRADING", "true").lower() == "true"
+            paper_trading = (
+                os.getenv("ALPACA_PAPER_TRADING", "true").lower() == "true"
+            )
             if api_key and api_secret:
                 # Strip potential whitespace or quotes from copy-paste errors
                 api_key = api_key.strip().strip('"').strip("'")
                 api_secret = api_secret.strip().strip('"').strip("'")
-                self.credentials = AlpacaCredentials(api_key, api_secret, paper_trading)
+                self.credentials = AlpacaCredentials(
+                    api_key, api_secret, paper_trading
+                )
                 self.enabled = True
             else:
                 if Config.ALLOW_SIMULATION_FALLBACK:
-                    logger.warning("Alpaca credentials missing. Using explicit simulated paper trading mode.")
+                    logger.warning(
+                        "Alpaca credentials missing. Using explicit simulated paper trading mode."
+                    )
                     self.credentials = None
                     self.enabled = True
                     self.simulated = True
@@ -75,17 +83,23 @@ class AlpacaClient:
             self.credentials = credentials
             self.enabled = True
 
-        self.base_url = ALPACA_PAPER_BASE_URL if self.credentials and self.credentials.paper_trading else ALPACA_API_BASE_URL
+        self.base_url = (
+            ALPACA_PAPER_BASE_URL
+            if self.credentials and self.credentials.paper_trading
+            else ALPACA_API_BASE_URL
+        )
         self.data_url = ALPACA_DATA_BASE_URL
         if self.credentials:
             logger.info(
                 "Alpaca execution initialized in %s mode.",
-                "PAPER" if self.credentials.paper_trading else "LIVE"
+                "PAPER" if self.credentials.paper_trading else "LIVE",
             )
         elif self.simulated:
             logger.info("Alpaca execution initialized in SIMULATION mode.")
         else:
-            logger.warning("Alpaca execution disabled due to missing credentials.")
+            logger.warning(
+                "Alpaca execution disabled due to missing credentials."
+            )
 
     @property
     def headers(self) -> Dict[str, str]:
@@ -106,12 +120,23 @@ class AlpacaClient:
         if self.simulated:
             account = self.simulator.get_account(self._current_prices())
             # If we fell back due to missing credentials, report it
-            err = "Invalid API Keys in .env" if self.credentials else "No keys provided"
-            return {**account, "enabled": True, "simulated": True, "error": err}
+            err = (
+                "Invalid API Keys in .env"
+                if self.credentials
+                else "No keys provided"
+            )
+            return {
+                **account,
+                "enabled": True,
+                "simulated": True,
+                "error": err,
+            }
 
         try:
             session = await self._get_session()
-            async with session.get(f"{self.base_url}/v2/account", headers=self.headers) as response:
+            async with session.get(
+                f"{self.base_url}/v2/account", headers=self.headers
+            ) as response:
                 data = await response.json()
                 if response.status in {200, 201}:
                     return {
@@ -121,16 +146,25 @@ class AlpacaClient:
                         "account_id": data.get("id"),
                         "buying_power": float(data.get("buying_power", 0)),
                         "cash": float(data.get("cash", 0)),
-                        "portfolio_value": float(data.get("portfolio_value", 0)),
+                        "portfolio_value": float(
+                            data.get("portfolio_value", 0)
+                        ),
                         "equity": float(data.get("equity", 0)),
                         "last_equity": float(data.get("last_equity", 0)),
-                        "timestamp": datetime.now(timezone.utc).isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     }
                 if response.status == 401:
-                    logger.warning("Alpaca API Keys invalid (401). Falling back to full simulation mode.")
+                    logger.warning(
+                        "Alpaca API Keys invalid (401). Falling back to full simulation mode."
+                    )
                     self.simulated = True
                     return await self.get_account()
-                return {"enabled": True, "simulated": False, "status": "ERROR", "error": f"HTTP {response.status}"}
+                return {
+                    "enabled": True,
+                    "simulated": False,
+                    "status": "ERROR",
+                    "error": f"HTTP {response.status}",
+                }
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.warning(f"Alpaca account request failed: {e}")
             return {"enabled": True, "simulated": False, "error": str(e)}
@@ -142,30 +176,42 @@ class AlpacaClient:
                     "symbol": pos["symbol"],
                     "qty": float(pos["qty"]),
                     "avg_price": float(pos["avg_price"]),
-                    "market_value": float(pos["qty"] * self._current_prices().get(pos["symbol"], 0.0)),
+                    "market_value": float(
+                        pos["qty"]
+                        * self._current_prices().get(pos["symbol"], 0.0)
+                    ),
                     "unrealized_pl": 0.0,
                     "unrealized_plpc": 0.0,
-                    "current_price": float(self._current_prices().get(pos["symbol"], 0.0)),
-                    "side": "long" if pos["qty"] > 0 else "short"
+                    "current_price": float(
+                        self._current_prices().get(pos["symbol"], 0.0)
+                    ),
+                    "side": "long" if pos["qty"] > 0 else "short",
                 }
                 for pos in self.simulator.get_positions()
             ]
 
         try:
             session = await self._get_session()
-            async with session.get(f"{self.base_url}/v2/positions", headers=self.headers) as response:
+            async with session.get(
+                f"{self.base_url}/v2/positions", headers=self.headers
+            ) as response:
                 if response.status in {200, 201}:
                     positions = await response.json()
-                    return [{
-                        "symbol": p.get("symbol"),
-                        "qty": float(p.get("qty", 0)),
-                        "avg_price": float(p.get("avg_entry_price", 0)),
-                        "market_value": float(p.get("market_value", 0)),
-                        "unrealized_pl": float(p.get("unrealized_pl", 0)),
-                        "unrealized_plpc": float(p.get("unrealized_plpc", 0)),
-                        "current_price": float(p.get("current_price", 0)),
-                        "side": p.get("side")
-                    } for p in positions]
+                    return [
+                        {
+                            "symbol": p.get("symbol"),
+                            "qty": float(p.get("qty", 0)),
+                            "avg_price": float(p.get("avg_entry_price", 0)),
+                            "market_value": float(p.get("market_value", 0)),
+                            "unrealized_pl": float(p.get("unrealized_pl", 0)),
+                            "unrealized_plpc": float(
+                                p.get("unrealized_plpc", 0)
+                            ),
+                            "current_price": float(p.get("current_price", 0)),
+                            "side": p.get("side"),
+                        }
+                        for p in positions
+                    ]
                 return []
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.warning(f"Failed to fetch Alpaca positions: {e}")
@@ -185,7 +231,7 @@ class AlpacaClient:
         trail_percent: Optional[float] = None,
         client_order_id: Optional[str] = None,
         strategy: Optional[str] = None,
-        extended_hours: bool = False
+        extended_hours: bool = False,
     ) -> Dict[str, Any]:
         symbol = symbol.upper()
         if self.simulated:
@@ -193,11 +239,16 @@ class AlpacaClient:
             bars = await self.get_bars(symbol, timeframe="1Min", limit=1)
             current_price = float(bars[-1]["close"]) if bars else 100.0
             if order_type == "limit" and limit_price is not None:
-                result = self.simulator.execute_limit_order(symbol, qty, limit_price, side)
+                result = self.simulator.execute_limit_order(
+                    symbol, qty, limit_price, side
+                )
             elif order_type == "market":
-                result = self.simulator.execute_market_order(symbol, qty, current_price, side)
+                result = self.simulator.execute_market_order(
+                    symbol, qty, current_price, side
+                )
             else:
-                # Simulated engine supports basic order acceptance for advanced order types.
+                # Simulated engine supports basic order acceptance for advanced
+                # order types.
                 result = {
                     "symbol": symbol,
                     "qty": abs(qty),
@@ -214,14 +265,14 @@ class AlpacaClient:
                 "success": True,
                 "simulated": True,
                 "asset_class": asset_class,
-                "strategy": strategy or "default"
+                "strategy": strategy or "default",
             }
 
         if asset_class != "equity":
             return {
                 "success": False,
                 "error": f"Unsupported asset class '{asset_class}' for live Alpaca execution. Use paper mode or equity instruments.",
-                "asset_class": asset_class
+                "asset_class": asset_class,
             }
 
         try:
@@ -232,8 +283,9 @@ class AlpacaClient:
                 "side": side,
                 "type": order_type,
                 "time_in_force": time_in_force,
-                "extended_hours": extended_hours
+                "extended_hours": extended_hours,
             }
+
             def round_price(p: float) -> str:
                 if p >= 1.0:
                     return str(round(p, 2))
@@ -252,13 +304,15 @@ class AlpacaClient:
             else:
                 unique_suffix = uuid.uuid4().hex[:8]
                 fallback_prefix = (strategy or "order").replace(" ", "_")
-                base_order_id = f"{symbol}-{side}-{fallback_prefix}-{unique_suffix}"
+                base_order_id = (
+                    f"{symbol}-{side}-{fallback_prefix}-{unique_suffix}"
+                )
                 order_data["client_order_id"] = base_order_id[:32]
 
             async with session.post(
                 f"{self.base_url}/v2/orders",
                 headers=self.headers,
-                json=order_data
+                json=order_data,
             ) as response:
                 data = await response.json()
                 if response.status in {200, 201}:
@@ -268,22 +322,39 @@ class AlpacaClient:
                         "order_id": data.get("id"),
                         "status": data.get("status"),
                         "asset_class": asset_class,
-                        "raw": data
+                        "raw": data,
                     }
-                logger.error(f"Alpaca order rejected: {response.status} {data}")
-                return {"success": False, "error": data.get("message", data), "asset_class": asset_class, "raw": data}
+                logger.error(
+                    f"Alpaca order rejected: {response.status} {data}"
+                )
+                return {
+                    "success": False,
+                    "error": data.get("message", data),
+                    "asset_class": asset_class,
+                    "raw": data,
+                }
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.error(f"Order submit failed: {e}")
-            return {"success": False, "error": str(e), "asset_class": asset_class}
+            return {
+                "success": False,
+                "error": str(e),
+                "asset_class": asset_class,
+            }
 
-    async def get_orders(self, status: str = "all", limit: int = 50) -> List[Dict[str, Any]]:
+    async def get_orders(
+        self, status: str = "all", limit: int = 50
+    ) -> List[Dict[str, Any]]:
         if self.simulated:
             return self.simulator.order_history[-limit:]
 
         try:
             session = await self._get_session()
             params: Dict[str, Any] = {"status": status, "limit": limit}
-            async with session.get(f"{self.base_url}/v2/orders", headers=self.headers, params=params) as response:
+            async with session.get(
+                f"{self.base_url}/v2/orders",
+                headers=self.headers,
+                params=params,
+            ) as response:
                 if response.status in {200, 201}:
                     return cast(List[Dict[str, Any]], await response.json())
                 return []
@@ -297,16 +368,27 @@ class AlpacaClient:
 
         try:
             session = await self._get_session()
-            async with session.delete(f"{self.base_url}/v2/orders/{order_id}", headers=self.headers) as response:
+            async with session.delete(
+                f"{self.base_url}/v2/orders/{order_id}", headers=self.headers
+            ) as response:
                 if response.status in {200, 201}:
                     return {"success": True, "order_id": order_id}
                 data = await response.json()
-                return {"success": False, "error": data.get("message", "Unable to cancel order")}
+                return {
+                    "success": False,
+                    "error": data.get("message", "Unable to cancel order"),
+                }
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.warning(f"Order cancel failed: {e}")
             return {"success": False, "error": str(e)}
 
-    async def get_assets(self, asset_class: str = "us_equity", status: str = "active", tradable: bool = True, page_size: int = 200) -> List[Dict[str, Any]]:
+    async def get_assets(
+        self,
+        asset_class: str = "us_equity",
+        status: str = "active",
+        tradable: bool = True,
+        page_size: int = 200,
+    ) -> List[Dict[str, Any]]:
         """Fetch the full Alpaca asset universe for the requested asset class."""
         if self.simulated:
             return self._generate_simulated_universe()
@@ -329,16 +411,20 @@ class AlpacaClient:
                 async with session.get(
                     f"{self.base_url}/v2/assets",
                     headers=self.headers,
-                    params=params
+                    params=params,
                 ) as response:
                     if response.status not in {200, 201}:
-                        logger.warning(f"Failed to fetch assets: HTTP {response.status}")
+                        logger.warning(
+                            f"Failed to fetch assets: HTTP {response.status}"
+                        )
                         break
 
                     result = await response.json()
                     if isinstance(result, dict):
                         page_assets = result.get("assets", [])
-                        page_token = result.get("next_page_token") or response.headers.get("x-next-page-token")
+                        page_token = result.get(
+                            "next_page_token"
+                        ) or response.headers.get("x-next-page-token")
                     else:
                         page_assets = result
                         page_token = response.headers.get("x-next-page-token")
@@ -362,12 +448,14 @@ class AlpacaClient:
                 "is_open": False,
                 "next_open": None,
                 "next_close": None,
-                "session": "SIMULATED"
+                "session": "SIMULATED",
             }
 
         try:
             session = await self._get_session()
-            async with session.get(f"{self.base_url}/v2/clock", headers=self.headers) as response:
+            async with session.get(
+                f"{self.base_url}/v2/clock", headers=self.headers
+            ) as response:
                 if response.status in {200, 201}:
                     return cast(Dict[str, Any], await response.json())
                 return {"is_open": False}
@@ -381,7 +469,7 @@ class AlpacaClient:
         timeframe: str = "1Min",
         limit: int = 100,
         start: Optional[str] = None,
-        feed: str = "iex"
+        feed: str = "iex",
     ) -> List[Dict[str, Any]]:
         symbol = symbol.upper()
         if self.simulated:
@@ -396,7 +484,10 @@ class AlpacaClient:
         cache_key = (symbol, timeframe, limit, start or "", feed)
         now = time.monotonic()
         cached_entry = self._bars_cache.get(cache_key)
-        if cached_entry and (now - cached_entry["timestamp"]) < self._bars_cache_ttl:
+        if (
+            cached_entry
+            and (now - cached_entry["timestamp"]) < self._bars_cache_ttl
+        ):
             return cached_entry["bars"]
 
         inflight_task = self._bars_inflight.get(cache_key)
@@ -407,7 +498,11 @@ class AlpacaClient:
             try:
                 session = await self._get_session()
                 for feed_candidate in [feed, "sip"]:
-                    params: Dict[str, Any] = {"timeframe": timeframe, "limit": limit, "feed": feed_candidate}
+                    params: Dict[str, Any] = {
+                        "timeframe": timeframe,
+                        "limit": limit,
+                        "feed": feed_candidate,
+                    }
                     if start:
                         params["start"] = start
                     retries = 0
@@ -415,7 +510,7 @@ class AlpacaClient:
                         async with session.get(
                             f"{self.data_url}/v2/stocks/{symbol}/bars",
                             headers=self.headers,
-                            params=params
+                            params=params,
                         ) as response:
                             if response.status in {200, 201}:
                                 data = await response.json()
@@ -427,10 +522,19 @@ class AlpacaClient:
                                 retries += 1
                                 retry_after = 0
                                 try:
-                                    retry_after = int(response.headers.get("Retry-After", "0") or 0)
+                                    retry_after = int(
+                                        response.headers.get(
+                                            "Retry-After", "0"
+                                        )
+                                        or 0
+                                    )
                                 except (ValueError, TypeError):
                                     retry_after = 0
-                                backoff = retry_after if retry_after > 0 else 1.5 * retries
+                                backoff = (
+                                    retry_after
+                                    if retry_after > 0
+                                    else 1.5 * retries
+                                )
                                 logger.warning(
                                     f"Alpaca bars request for {symbol} was rate limited (429). "
                                     f"Retry {retries}/3 after {backoff}s (Retry-After={retry_after})."
@@ -443,9 +547,13 @@ class AlpacaClient:
                                 )
                                 break
                             if response.status == 401:
-                                logger.warning("Alpaca API Keys invalid (401). Falling back to full simulation mode.")
+                                logger.warning(
+                                    "Alpaca API Keys invalid (401). Falling back to full simulation mode."
+                                )
                                 self.simulated = True
-                                return await self.get_bars(symbol, timeframe, limit, start, feed)
+                                return await self.get_bars(
+                                    symbol, timeframe, limit, start, feed
+                                )
                             logger.warning(
                                 f"Alpaca bars request for {symbol} returned HTTP {response.status}: {await response.text()}"
                             )
@@ -455,7 +563,9 @@ class AlpacaClient:
                     # Try the next feed candidate if this feed failed
                 return []
             except aiohttp.ClientConnectorError as e:
-                logger.error(f"DNS or Connection Error for {symbol}: {e}. Retrying with alternate DNS logic if possible.")
+                logger.error(
+                    f"DNS or Connection Error for {symbol}: {e}. Retrying with alternate DNS logic if possible."
+                )
                 return []
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
                 logger.warning(f"Failed to fetch bars for {symbol}: {e}")
@@ -466,7 +576,10 @@ class AlpacaClient:
         try:
             bars = await task
             if bars:
-                self._bars_cache[cache_key] = {"timestamp": time.monotonic(), "bars": bars}
+                self._bars_cache[cache_key] = {
+                    "timestamp": time.monotonic(),
+                    "bars": bars,
+                }
                 # Save to persistent SQLite cache
                 db_cache.save_bars(symbol, timeframe, bars)
             elif cached_bars:
@@ -488,8 +601,7 @@ class AlpacaClient:
         try:
             session = await self._get_session()
             async with session.delete(
-                f"{self.base_url}/v2/positions/{symbol}",
-                headers=self.headers
+                f"{self.base_url}/v2/positions/{symbol}", headers=self.headers
             ) as response:
                 if response.status in {200, 201}:
                     return {"success": True, "symbol": symbol}
@@ -498,21 +610,25 @@ class AlpacaClient:
             logger.warning(f"Failed to close position for {symbol}: {e}")
             return {"success": False, "error": str(e)}
 
-    def _generate_synthetic_bars(self, symbol: str, timeframe: str, limit: int) -> List[Dict[str, Any]]:
+    def _generate_synthetic_bars(
+        self, symbol: str, timeframe: str, limit: int
+    ) -> List[Dict[str, Any]]:
         now = datetime.now(timezone.utc)
         prices = np.cumprod(1 + np.random.normal(0, 0.0008, limit)) * 100
         bars = []
         for idx in range(limit):
             ts = now - pd.Timedelta(minutes=(limit - idx))
-            bars.append({
-                "t": ts.isoformat() + "Z",
-                "o": float(prices[idx] * (1 - np.random.random() * 0.001)),
-                "h": float(prices[idx] * (1 + np.random.random() * 0.001)),
-                "l": float(prices[idx] * (1 - np.random.random() * 0.001)),
-                "c": float(prices[idx]),
-                "v": int(1000 + np.random.randint(0, 1000)),
-                "close": float(prices[idx])
-            })
+            bars.append(
+                {
+                    "t": ts.isoformat() + "Z",
+                    "o": float(prices[idx] * (1 - np.random.random() * 0.001)),
+                    "h": float(prices[idx] * (1 + np.random.random() * 0.001)),
+                    "l": float(prices[idx] * (1 - np.random.random() * 0.001)),
+                    "c": float(prices[idx]),
+                    "v": int(1000 + np.random.randint(0, 1000)),
+                    "close": float(prices[idx]),
+                }
+            )
         return bars
 
     def _current_prices(self) -> Dict[str, float]:
@@ -520,11 +636,19 @@ class AlpacaClient:
 
     def _generate_simulated_universe(self) -> List[Dict[str, Any]]:
         return [
-            {"symbol": s, "name": f"{s} Corp", "exchange": "NASDAQ", "tradable": True, "status": "active"}
+            {
+                "symbol": s,
+                "name": f"{s} Corp",
+                "exchange": "NASDAQ",
+                "tradable": True,
+                "status": "active",
+            }
             for s in ["AAPL", "MSFT", "GOOG", "AMZN", "NVDA", "SPY", "QQQ"]
         ]
 
+
 _client: Optional[AlpacaClient] = None
+
 
 def get_client() -> AlpacaClient:
     global _client

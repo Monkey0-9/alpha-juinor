@@ -35,18 +35,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.info("Alpaca execution link established.")
             else:
                 error_msg = acc.get("error", "Unknown Error")
-                logger.warning(
-                    f"Alpaca status: {status} | Error: {error_msg}"
-                )
+                logger.warning(f"Alpaca status: {status} | Error: {error_msg}")
                 if status == "UNAUTHORIZED":
                     logger.error(
                         "CRITICAL: Alpaca API Keys invalid. "
                         "Check .env file."
                     )
         except Exception as exc:
-            logger.warning(
-                f"Unable to verify Alpaca account: {exc}"
-            )
+            logger.warning(f"Unable to verify Alpaca account: {exc}")
 
     yield
     await get_client().close()
@@ -63,7 +59,9 @@ app = FastAPI(
 
 # --- API Key Authentication Middleware ---
 @app.middleware("http")
-async def api_key_auth(request: Request, call_next: Callable[[Request], Awaitable[Any]]) -> Any:
+async def api_key_auth(
+    request: Request, call_next: Callable[[Request], Awaitable[Any]]
+) -> Any:
     """Verify X-API-Key header on mutation endpoints."""
     # Skip auth for health checks and GET-only read endpoints
     logger.info(f"API Request: {request.method} {request.url.path}")
@@ -102,13 +100,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/api/health")
 async def health() -> Dict[str, str]:
-    return {
-        "status": "healthy",
-        "service": "Nexus API",
-        "version": "2.0.0"
-    }
+    return {"status": "healthy", "service": "Nexus API", "version": "2.0.0"}
+
 
 app.include_router(alpaca_router)
 app.include_router(monitor_router)

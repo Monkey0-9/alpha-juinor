@@ -18,7 +18,7 @@ ext_modules = [
             "optimization.cpp",
             "feed.cpp",
             "backtest.cpp",
-            "onnx_inference.cpp"
+            "onnx_inference.cpp",
         ],
         include_dirs=[pybind11.get_include()],
         language="c++",

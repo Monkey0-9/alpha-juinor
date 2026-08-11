@@ -7,6 +7,7 @@ Replaces flat normalized weights with:
   - Cross-asset correlation penalty (forces diversification)
   - Sharpe-ranked factor blending with adaptive factor weights
 """
+
 import logging
 import numpy as np
 import pandas as pd
@@ -16,12 +17,14 @@ import os
 
 mingw_bin = os.path.expanduser(r"~\scoop\apps\mingw\current\bin")
 if os.path.exists(mingw_bin):
-    if hasattr(os, 'add_dll_directory'):
+    if hasattr(os, "add_dll_directory"):
         os.add_dll_directory(mingw_bin)
     else:
-        os.environ['PATH'] = mingw_bin + os.pathsep + os.environ['PATH']
+        os.environ["PATH"] = mingw_bin + os.pathsep + os.environ["PATH"]
 
-cpp_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "cpp_extensions"))
+cpp_dir = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "cpp_extensions")
+)
 if cpp_dir not in sys.path:
     sys.path.append(cpp_dir)
 
@@ -66,12 +69,12 @@ class KellyCriterionSizer:
         if avg_loss <= 0 or avg_win <= 0:
             return 0.02  # minimum allocation
 
-        b = avg_win / avg_loss          # win/loss ratio
+        b = avg_win / avg_loss  # win/loss ratio
         p = max(0.01, min(0.99, win_rate))
         q = 1.0 - p
 
         kelly_f = (p * b - q) / b
-        kelly_f = max(0.0, kelly_f)     # never short via Kelly
+        kelly_f = max(0.0, kelly_f)  # never short via Kelly
         return float(kelly_f * self.fraction)
 
 
@@ -93,15 +96,15 @@ class InformationCoefficientTracker:
             self._history[symbol] = []
         self._history[symbol].append((predicted, realized))
         if len(self._history[symbol]) > self.window * 2:
-            self._history[symbol] = self._history[symbol][-self.window:]
+            self._history[symbol] = self._history[symbol][-self.window :]
 
     def get_ic(self, symbol: str) -> float:
         """Returns rolling IC for symbol (-1 to 1). Defaults to 0 if insufficient data."""
         pairs = self._history.get(symbol, [])
         if len(pairs) < 5:
             return 0.0
-        predicted = [p for p, _ in pairs[-self.window:]]
-        realized  = [r for _, r in pairs[-self.window:]]
+        predicted = [p for p, _ in pairs[-self.window :]]
+        realized = [r for _, r in pairs[-self.window :]]
         if np.std(predicted) < 1e-9 or np.std(realized) < 1e-9:
             return 0.0
         corr = float(np.corrcoef(predicted, realized)[0, 1])
@@ -113,10 +116,11 @@ class InformationCoefficientTracker:
         if len(pairs) < 5:
             return 0.5  # neutral prior
         correct = sum(
-            1 for p, r in pairs[-self.window:]
+            1
+            for p, r in pairs[-self.window :]
             if (p > 0 and r > 0) or (p < 0 and r < 0)
         )
-        return float(correct / len(pairs[-self.window:]))
+        return float(correct / len(pairs[-self.window :]))
 
 
 class PortfolioOptimizer:
@@ -163,10 +167,14 @@ class PortfolioOptimizer:
         signals_arr = np.array(signals, dtype=float)
 
         # Step 1: IC scaling — amplify high-IC signals, dampen low-IC
-        ic_scales = np.array([
-            max(0.0, self.ic_tracker.get_ic(s) + 0.5)  # shift so 0 IC → 0.5 scale
-            for s in symbols
-        ], dtype=float)
+        ic_scales = np.array(
+            [
+                # shift so 0 IC → 0.5 scale
+                max(0.0, self.ic_tracker.get_ic(s) + 0.5)
+                for s in symbols
+            ],
+            dtype=float,
+        )
 
         scaled_signals = signals_arr * ic_scales
 
@@ -174,10 +182,12 @@ class PortfolioOptimizer:
         kelly_weights: Dict[str, float] = {}
         for sym, sig in zip(symbols, scaled_signals):
             win_rate = self.ic_tracker.get_win_rate(sym)
-            avg_win  = max(0.005, abs(sig) * 0.012)  # proxy from signal magnitude
+            # proxy from signal magnitude
+            avg_win = max(0.005, abs(sig) * 0.012)
             avg_loss = max(0.003, (1.0 - abs(sig)) * 0.008)
             kw = self.kelly_sizer.size_position(win_rate, avg_win, avg_loss)
-            kelly_weights[sym] = kw * abs(float(sig))  # scale by signal confidence
+            # scale by signal confidence
+            kelly_weights[sym] = kw * abs(float(sig))
 
         # Step 3: Correlation penalty
         if historical_data and len(symbols) > 1:
@@ -224,10 +234,10 @@ class PortfolioOptimizer:
         # C++ Fast Correlation Matrix
         returns_list = [df[col].fillna(0.0).tolist() for col in df.columns]
         corr_matrix = nexus_cpp.matrix.compute_correlation_matrix(returns_list)
-        
+
         print("C++ corr_matrix:", corr_matrix)
         print("pandas corr_matrix:", df.corr().fillna(0.0))
-        
+
         adjusted = dict(weights)
         columns = list(df.columns)
 
@@ -240,10 +250,12 @@ class PortfolioOptimizer:
                     continue
                 corr = abs(float(corr_matrix[i][j]))
                 if corr > self.CORR_THRESHOLD:
-                        # Heavier weight gets less penalty; lighter gets more
-                        if adjusted[sym_b] > adjusted[sym_a]:
-                            excess = (corr - self.CORR_THRESHOLD) / (1.0 - self.CORR_THRESHOLD)
-                            penalty *= (1.0 - 0.40 * excess)
+                    # Heavier weight gets less penalty; lighter gets more
+                    if adjusted[sym_b] > adjusted[sym_a]:
+                        excess = (corr - self.CORR_THRESHOLD) / (
+                            1.0 - self.CORR_THRESHOLD
+                        )
+                        penalty *= 1.0 - 0.40 * excess
             adjusted[sym_a] *= max(0.20, penalty)
 
         return adjusted
@@ -265,10 +277,10 @@ class MultiFactorEngine:
     def __init__(self) -> None:
         # Adaptive factor weights — recalibrated each call
         self._factor_weights = {
-            "alpha":    0.40,
+            "alpha": 0.40,
             "momentum": 0.30,
-            "quality":  0.20,
-            "ir":       0.10,
+            "quality": 0.20,
+            "ir": 0.10,
         }
 
     def rank_assets(
@@ -281,44 +293,49 @@ class MultiFactorEngine:
         """
         rankings: Dict[str, float] = {}
         factor_scores: Dict[str, Dict[str, float]] = {
-            "alpha": {}, "momentum": {}, "quality": {}, "ir": {}
+            "alpha": {},
+            "momentum": {},
+            "quality": {},
+            "ir": {},
         }
 
         for symbol, alpha in signals.items():
             data = historical_data.get(symbol, pd.DataFrame())
             if data.empty or "close" not in data.columns:
-                factor_scores["alpha"][symbol]    = alpha
+                factor_scores["alpha"][symbol] = alpha
                 factor_scores["momentum"][symbol] = 0.0
-                factor_scores["quality"][symbol]  = 0.0
-                factor_scores["ir"][symbol]       = alpha
+                factor_scores["quality"][symbol] = 0.0
+                factor_scores["ir"][symbol] = alpha
                 continue
 
             close = data["close"].astype(float)
             returns = close.pct_change().dropna()
             if returns.empty:
-                factor_scores["alpha"][symbol]    = alpha
+                factor_scores["alpha"][symbol] = alpha
                 factor_scores["momentum"][symbol] = 0.0
-                factor_scores["quality"][symbol]  = 0.0
-                factor_scores["ir"][symbol]       = alpha
+                factor_scores["quality"][symbol] = 0.0
+                factor_scores["ir"][symbol] = alpha
                 continue
 
             # Momentum: recent relative performance
             momentum = float((close.iloc[-1] / close.iloc[0]) - 1.0)
 
-            # Quality: inverse of volatility-adjusted returns (low vol = high quality)
+            # Quality: inverse of volatility-adjusted returns (low vol = high
+            # quality)
             vol = float(returns.std()) + 1e-8
             mean_ret = float(returns.mean())
             sharpe_proxy = mean_ret / vol  # daily Sharpe proxy
             quality = float(np.tanh(sharpe_proxy * 15.0))
 
-            # Information Ratio proxy: alpha / tracking_error vs SPY-like baseline
+            # Information Ratio proxy: alpha / tracking_error vs SPY-like
+            # baseline
             tracking_error = vol * np.sqrt(252)
             ir = float(alpha / max(tracking_error, 1e-4))
 
-            factor_scores["alpha"][symbol]    = float(alpha)
+            factor_scores["alpha"][symbol] = float(alpha)
             factor_scores["momentum"][symbol] = float(np.tanh(momentum * 10.0))
-            factor_scores["quality"][symbol]  = quality
-            factor_scores["ir"][symbol]       = float(np.tanh(ir * 2.0))
+            factor_scores["quality"][symbol] = quality
+            factor_scores["ir"][symbol] = float(np.tanh(ir * 2.0))
 
         # Adaptive factor weights: normalize each factor cross-sectionally
         self._recalibrate_weights(factor_scores, signals)
@@ -359,9 +376,8 @@ class MultiFactorEngine:
         for factor in self._factor_weights:
             new_w = factor_ics[factor] / total_ic
             self._factor_weights[factor] = (
-                (1 - smoothing) * self._factor_weights[factor]
-                + smoothing * new_w
-            )
+                1 - smoothing
+            ) * self._factor_weights[factor] + smoothing * new_w
 
         # Normalize
         total = sum(self._factor_weights.values()) + 1e-9
@@ -385,35 +401,44 @@ class MonteCarloSimulator:
         if len(daily_returns) < 2 or initial_capital <= 0 or days <= 0:
             return 0.5
 
-        mu    = float(np.mean(daily_returns))
+        mu = float(np.mean(daily_returns))
         sigma = float(np.std(daily_returns))
-        
+
         try:
             import sys
             import os
-            
+
             # Add MinGW bin to DLL search path for Windows Python 3.8+
             mingw_bin = os.path.expanduser(r"~\scoop\apps\mingw\current\bin")
             if os.path.exists(mingw_bin):
-                if hasattr(os, 'add_dll_directory'):
+                if hasattr(os, "add_dll_directory"):
                     os.add_dll_directory(mingw_bin)
                 else:
-                    os.environ['PATH'] = mingw_bin + os.pathsep + os.environ['PATH']
-                    
+                    os.environ["PATH"] = (
+                        mingw_bin + os.pathsep + os.environ["PATH"]
+                    )
+
             # Ensure the cpp_extensions dir is in path
-            cpp_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cpp_extensions")
+            cpp_dir = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "cpp_extensions"
+            )
             if cpp_dir not in sys.path:
                 sys.path.append(cpp_dir)
             import nexus_cpp
-            return nexus_cpp.run_survival_analysis(initial_capital, mu, sigma, days, n_simulations, ruin_threshold)
+
+            return nexus_cpp.run_survival_analysis(
+                initial_capital, mu, sigma, days, n_simulations, ruin_threshold
+            )
         except ImportError as e:
-            logger.warning(f"Failed to load C++ extension: {e}. Falling back to Python implementation.")
+            logger.warning(
+                f"Failed to load C++ extension: {e}. Falling back to Python implementation."
+            )
             if sigma == 0:
                 return 1.0
 
             ruin_level = initial_capital * (1 - ruin_threshold)
-            survived   = 0
-            rng        = np.random.default_rng(42)
+            survived = 0
+            rng = np.random.default_rng(42)
 
             for _ in range(n_simulations):
                 path_returns = rng.normal(mu, sigma, days)
@@ -422,4 +447,3 @@ class MonteCarloSimulator:
                     survived += 1
 
             return survived / n_simulations
-

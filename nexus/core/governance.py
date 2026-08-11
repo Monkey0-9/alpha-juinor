@@ -18,8 +18,7 @@ def _get_db() -> sqlite3.Connection:
     """Open or create the audit database."""
     _DB_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(_DB_PATH))
-    conn.execute(
-        """CREATE TABLE IF NOT EXISTS audit_log (
+    conn.execute("""CREATE TABLE IF NOT EXISTS audit_log (
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp TEXT    NOT NULL,
             symbol    TEXT    NOT NULL,
@@ -28,10 +27,8 @@ def _get_db() -> sqlite3.Connection:
             price     REAL,
             status    TEXT    NOT NULL,
             details   TEXT
-        )"""
-    )
-    conn.execute(
-        """CREATE TABLE IF NOT EXISTS trade_history (
+        )""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS trade_history (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp   TEXT    NOT NULL,
             symbol      TEXT    NOT NULL,
@@ -41,8 +38,7 @@ def _get_db() -> sqlite3.Connection:
             order_type  TEXT,
             strategy    TEXT,
             status      TEXT    NOT NULL
-        )"""
-    )
+        )""")
     conn.commit()
     return conn
 
@@ -97,11 +93,7 @@ class GovernanceEngine:
         # 1. Check env var (comma-separated symbols)
         env_val = os.getenv("NEXUS_BLACKLIST", "")
         if env_val.strip():
-            return {
-                s.strip().upper()
-                for s in env_val.split(",")
-                if s.strip()
-            }
+            return {s.strip().upper() for s in env_val.split(",") if s.strip()}
 
         # 2. Check file
         bl_path = Path("config/blacklist.txt")
@@ -156,9 +148,7 @@ class GovernanceEngine:
 
         # 3. Symbol Blacklist
         if symbol in self._blacklist:
-            violations.append(
-                f"BLACKLIST_SYMBOL: {symbol} is restricted"
-            )
+            violations.append(f"BLACKLIST_SYMBOL: {symbol} is restricted")
 
         if not violations:
             self._log_audit(trade_request, "APPROVED")

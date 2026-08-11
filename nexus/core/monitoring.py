@@ -27,8 +27,7 @@ class HealthMonitor:
 
         if not healthy:
             logger.critical(
-                f"HEALTH ALERT: {component} has failed. "
-                f"Details: {details}"
+                f"HEALTH ALERT: {component} has failed. " f"Details: {details}"
             )
             # Broadcast to Telegram/Discord
             asyncio.create_task(

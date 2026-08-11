@@ -19,22 +19,29 @@ class AIEnsembleBrain:
         self.confidence_gate = confidence_gate
         self.performance_history: Dict[str, List[int]] = {}
 
-    def add_model(self, model: Any, name: str = "Model", weight: float = 1.0) -> None:
-        self.models.append({
-            'name': name,
-            'model': model,
-            'weight': weight,
-            'regime_weights': {
-                'BULL': 1.0, 'BEAR': 1.0, 'SIDEWAYS': 1.0, 'TURBULENT': 0.5
+    def add_model(
+        self, model: Any, name: str = "Model", weight: float = 1.0
+    ) -> None:
+        self.models.append(
+            {
+                "name": name,
+                "model": model,
+                "weight": weight,
+                "regime_weights": {
+                    "BULL": 1.0,
+                    "BEAR": 1.0,
+                    "SIDEWAYS": 1.0,
+                    "TURBULENT": 0.5,
+                },
             }
-        })
+        )
         self.performance_history[name] = []
 
     def get_signal(
         self,
         features: pd.DataFrame,
         regime: str = "SIDEWAYS",
-        regime_probabilities: Optional[Dict[str, float]] = None
+        regime_probabilities: Optional[Dict[str, float]] = None,
     ) -> int:
         """
         Aggregates model signals into a unified decision:
@@ -49,9 +56,9 @@ class AIEnsembleBrain:
         total_weight = 0.0
 
         for item in self.models:
-            model = item['model']
-            name = item['name']
-            base_w = item['weight']
+            model = item["model"]
+            name = item["name"]
+            base_w = item["weight"]
 
             # Adjust weight by historical hit-rate if available
             hist = self.performance_history.get(name, [])
@@ -61,16 +68,16 @@ class AIEnsembleBrain:
                 hit_rate_mult = max(0.2, (accuracy - 0.45) * 3.0 + 1.0)
 
             # Adjust weight by regime
-            regime_mult = item['regime_weights'].get(regime, 1.0)
+            regime_mult = item["regime_weights"].get(regime, 1.0)
             if regime_probabilities:
-                turbulent_prob = regime_probabilities.get('TURBULENT', 0.0)
-                regime_mult *= (1.0 - turbulent_prob * 0.5)
+                turbulent_prob = regime_probabilities.get("TURBULENT", 0.0)
+                regime_mult *= 1.0 - turbulent_prob * 0.5
 
             effective_weight = base_w * hit_rate_mult * regime_mult
 
             try:
                 is_mock = "Mock" in type(model).__name__
-                if hasattr(model, 'predict_proba') and not is_mock:
+                if hasattr(model, "predict_proba") and not is_mock:
                     probs = model.predict_proba(features)
                     if isinstance(probs, dict):
                         p_buy = float(probs.get(1, 0.0))
@@ -83,7 +90,9 @@ class AIEnsembleBrain:
                 total_signal += sig * effective_weight
                 total_weight += effective_weight
             except Exception as e:
-                logger.debug("Ensemble model %s evaluation failed: %s", name, e)
+                logger.debug(
+                    "Ensemble model %s evaluation failed: %s", name, e
+                )
 
         if total_weight <= 1e-6:
             return 0
@@ -102,7 +111,7 @@ class AIEnsembleBrain:
         self,
         features: pd.DataFrame,
         regime: str = "SIDEWAYS",
-        regime_probabilities: Optional[Dict[str, float]] = None
+        regime_probabilities: Optional[Dict[str, float]] = None,
     ) -> Dict[str, float]:
         """
         Returns probabilistic summary across the ensemble:
@@ -112,16 +121,21 @@ class AIEnsembleBrain:
           - confidence: Strength of aggregated consensus [0.0, 1.0]
         """
         if not self.models or features.empty:
-            return {"p_buy": 0.33, "p_sell": 0.33, "expected_signal": 0.0, "confidence": 0.0}
+            return {
+                "p_buy": 0.33,
+                "p_sell": 0.33,
+                "expected_signal": 0.0,
+                "confidence": 0.0,
+            }
 
         total_buy = 0.0
         total_sell = 0.0
         total_weight = 0.0
 
         for item in self.models:
-            model = item['model']
-            name = item['name']
-            base_w = item['weight']
+            model = item["model"]
+            name = item["name"]
+            base_w = item["weight"]
 
             hist = self.performance_history.get(name, [])
             hit_rate_mult = 1.0
@@ -129,15 +143,15 @@ class AIEnsembleBrain:
                 accuracy = sum(hist[-20:]) / len(hist[-20:])
                 hit_rate_mult = max(0.2, (accuracy - 0.45) * 3.0 + 1.0)
 
-            regime_mult = item['regime_weights'].get(regime, 1.0)
+            regime_mult = item["regime_weights"].get(regime, 1.0)
             if regime_probabilities:
-                turbulent_prob = regime_probabilities.get('TURBULENT', 0.0)
-                regime_mult *= (1.0 - turbulent_prob * 0.5)
+                turbulent_prob = regime_probabilities.get("TURBULENT", 0.0)
+                regime_mult *= 1.0 - turbulent_prob * 0.5
 
             effective_weight = base_w * hit_rate_mult * regime_mult
 
             try:
-                if hasattr(model, 'predict_proba'):
+                if hasattr(model, "predict_proba"):
                     probs = model.predict_proba(features)
                     pb = probs.get(1, 0.0)
                     ps = probs.get(-1, 0.0)
@@ -153,7 +167,12 @@ class AIEnsembleBrain:
                 logger.debug("Model %s predict_proba error: %s", name, e)
 
         if total_weight <= 1e-6:
-            return {"p_buy": 0.33, "p_sell": 0.33, "expected_signal": 0.0, "confidence": 0.0}
+            return {
+                "p_buy": 0.33,
+                "p_sell": 0.33,
+                "expected_signal": 0.0,
+                "confidence": 0.0,
+            }
 
         agg_buy = total_buy / total_weight
         agg_sell = total_sell / total_weight
@@ -164,10 +183,12 @@ class AIEnsembleBrain:
             "p_buy": float(round(agg_buy, 4)),
             "p_sell": float(round(agg_sell, 4)),
             "expected_signal": float(round(exp_signal, 4)),
-            "confidence": float(round(confidence, 4))
+            "confidence": float(round(confidence, 4)),
         }
 
-    def record_outcome(self, model_name: str, predicted_signal: int, realized_return: float) -> None:
+    def record_outcome(
+        self, model_name: str, predicted_signal: int, realized_return: float
+    ) -> None:
         """Records outcome hit to adaptively adjust model weights over time."""
         if model_name in self.performance_history:
             correct = 1 if (predicted_signal * realized_return) > 0 else 0
@@ -178,7 +199,7 @@ class AIEnsembleBrain:
         model_name: str,
         predicted_prob: float,
         predicted_signal: float,
-        realized_return: float
+        realized_return: float,
     ) -> Dict[str, float]:
         """
         Records prediction calibration:
@@ -196,7 +217,5 @@ class AIEnsembleBrain:
         return {
             "brier_score": round(float(brier_score), 4),
             "signal_error": round(float(signal_error), 4),
-            "correct": correct
+            "correct": correct,
         }
-
-

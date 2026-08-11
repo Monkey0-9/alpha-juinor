@@ -3,7 +3,6 @@ import json
 import logging
 import time
 import pandas as pd
-import numpy as np
 from typing import Dict, Any, Optional, Tuple
 from nexus.data.features import FeatureEngineer
 from nexus.models.zoo.time_series import GradientBoostedTimeSeriesModel
@@ -31,7 +30,7 @@ class ModelRegistry:
             "sortino_ratio": 0.50,
             "max_drawdown": 0.15,
             "profit_factor": 1.05,
-            "win_rate": 0.50
+            "win_rate": 0.50,
         }
         self.active_model: Optional[Any] = None
         self._load_registry()
@@ -42,18 +41,24 @@ class ModelRegistry:
                 with open(self.registry_file, "r") as f:
                     data = json.load(f)
                     self.active_version = data.get("active_version", "v1.0.0")
-                    self.active_metrics = data.get("active_metrics", self.active_metrics)
+                    self.active_metrics = data.get(
+                        "active_metrics", self.active_metrics
+                    )
             except Exception as e:
                 logger.warning("Failed to load model registry: %s", e)
 
     def _save_registry(self) -> None:
         try:
             with open(self.registry_file, "w") as f:
-                json.dump({
-                    "active_version": self.active_version,
-                    "active_metrics": self.active_metrics,
-                    "last_updated": time.strftime("%Y-%m-%dT%H:%M:%SZ")
-                }, f, indent=2)
+                json.dump(
+                    {
+                        "active_version": self.active_version,
+                        "active_metrics": self.active_metrics,
+                        "last_updated": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    },
+                    f,
+                    indent=2,
+                )
         except Exception as e:
             logger.error("Failed to save model registry: %s", e)
 
@@ -71,7 +76,9 @@ class ModelRegistry:
         if len(features) < 40:
             return False, {}
 
-        evaluator = WalkForwardEvaluator(train_window=30, val_window=10, test_window=10, step_size=10)
+        evaluator = WalkForwardEvaluator(
+            train_window=30, val_window=10, test_window=10, step_size=10
+        )
         res = evaluator.evaluate_model(candidate_model_class, features)
 
         if res.get("status") != "success":
@@ -90,13 +97,20 @@ class ModelRegistry:
             "max_drawdown": candidate_dd,
             "profit_factor": candidate_pf,
             "win_rate": candidate_win,
-            "out_of_sample_samples": res.get("out_of_sample_samples", 0)
+            "out_of_sample_samples": res.get("out_of_sample_samples", 0),
         }
 
         # Institutional promotion gating:
-        # Candidate Sharpe must beat active Sharpe by >= 0.10, Profit Factor > 1.05, Max DD < 25%
-        if candidate_sharpe >= active_sharpe + 0.10 and candidate_pf > 1.05 and candidate_dd < 0.25:
-            major, minor, patch = self.active_version.replace("v", "").split(".")
+        # Candidate Sharpe must beat active Sharpe by >= 0.10, Profit Factor >
+        # 1.05, Max DD < 25%
+        if (
+            candidate_sharpe >= active_sharpe + 0.10
+            and candidate_pf > 1.05
+            and candidate_dd < 0.25
+        ):
+            major, minor, patch = self.active_version.replace("v", "").split(
+                "."
+            )
             new_version = f"v{major}.{minor}.{int(patch) + 1}"
 
             self.active_version = new_version
@@ -105,13 +119,17 @@ class ModelRegistry:
             self._save_registry()
             logger.info(
                 "NEW MODEL PROMOTED TO PRODUCTION: %s (Sharpe: %.2f vs prev %.2f, PF: %.2f)",
-                new_version, candidate_sharpe, active_sharpe, candidate_pf
+                new_version,
+                candidate_sharpe,
+                active_sharpe,
+                candidate_pf,
             )
             return True, candidate_metrics
 
         logger.info(
             "Candidate model rejected (Sharpe: %.2f vs required %.2f)",
-            candidate_sharpe, active_sharpe + 0.10
+            candidate_sharpe,
+            active_sharpe + 0.10,
         )
         return False, candidate_metrics
 
@@ -135,11 +153,13 @@ class ContinuousLearner:
         if historical_bars.empty or len(historical_bars) < 100:
             return False
 
-        logger.info("Executing continuous retraining cycle on %d bars...", len(historical_bars))
+        logger.info(
+            "Executing continuous retraining cycle on %d bars...",
+            len(historical_bars),
+        )
 
         promoted, metrics = self.registry.evaluate_candidate(
             GradientBoostedTimeSeriesModel, historical_bars
         )
         self.last_retrain_time = now
         return promoted
-

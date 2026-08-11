@@ -1,12 +1,23 @@
 import subprocess
 
+
 def build_rust() -> None:
     print("Building Rust Risk Engine...")
     try:
-        subprocess.run(["cargo", "build", "--release", "--manifest-path", "nexus/polyglot/rust_risk_engine/Cargo.toml"], check=True)
+        subprocess.run(
+            [
+                "cargo",
+                "build",
+                "--release",
+                "--manifest-path",
+                "nexus/polyglot/rust_risk_engine/Cargo.toml",
+            ],
+            check=True,
+        )
         print("[OK] Rust engine built.")
     except Exception as e:
         print(f"[FAIL] Rust build failed: {e}")
+
 
 def build_go() -> None:
     print("Building Go Auditor...")
@@ -18,6 +29,7 @@ def build_go() -> None:
     except Exception as e:
         print(f"[FAIL] Go check failed: {e}")
 
+
 def build_zig() -> None:
     print("Building Zig Validator...")
     try:
@@ -25,6 +37,7 @@ def build_zig() -> None:
         print("[OK] Zig toolchain verified.")
     except Exception as e:
         print(f"[FAIL] Zig check failed: {e}")
+
 
 if __name__ == "__main__":
     print("Nexus Polyglot Build Orchestrator")

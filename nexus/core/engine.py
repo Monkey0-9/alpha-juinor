@@ -34,7 +34,7 @@ class NexusEngine:
 
         self.governance = GovernanceEngine(
             single_position_limit=Config.MAX_POSITION_SIZE,
-            max_drawdown_limit=Config.MAX_DRAWDOWN
+            max_drawdown_limit=Config.MAX_DRAWDOWN,
         )
         self.alpha_engine = AlphaEngine(backend_url=backend_url)
         self.execution_agent = ExecutionAgent()
@@ -62,8 +62,9 @@ class NexusEngine:
         self._active_orders: Dict[str, str] = {}  # symbol -> order_id
 
         # Superhuman Brain: drawdown velocity tracker
-        self._equity_history: List[float] = []   # recent equity snapshots
-        self._conviction_cache: Dict[str, Any] = {}  # last cycle conviction signals
+        self._equity_history: List[float] = []  # recent equity snapshots
+        # last cycle conviction signals
+        self._conviction_cache: Dict[str, Any] = {}
         self.position_manager = PositionManager()
         self.learner = ContinuousLearner()
 
@@ -89,8 +90,10 @@ class NexusEngine:
         logger.info("Nexus engine resources released.")
 
     async def initialize(self) -> bool:
-        logger.info(f"Initializing Nexus engine with backend {self.backend_url}")
-        
+        logger.info(
+            f"Initializing Nexus engine with backend {self.backend_url}"
+        )
+
         client = await self._get_client()
         for attempt in range(1, 6):
             try:
@@ -101,11 +104,15 @@ class NexusEngine:
                     logger.info("Execution backend healthy.")
                     break
                 else:
-                    logger.warning(f"Backend returned status {response.status_code}. Retrying...")
-                    await asyncio.sleep(min(30, 2 ** attempt))
+                    logger.warning(
+                        f"Backend returned status {response.status_code}. Retrying..."
+                    )
+                    await asyncio.sleep(min(30, 2**attempt))
             except Exception as exc:
-                wait = min(30, 2 ** attempt)
-                logger.warning(f"Backend health check failed ({attempt}): {exc}. Retrying...")
+                wait = min(30, 2**attempt)
+                logger.warning(
+                    f"Backend health check failed ({attempt}): {exc}. Retrying..."
+                )
                 await asyncio.sleep(wait)
         else:
             logger.error("Unable to reach execution backend.")
@@ -114,7 +121,7 @@ class NexusEngine:
         # High-speed Go Audit
         audit = PolyglotBridge.audit_platform_go(self.backend_url)
         logger.info(f"Polyglot Audit Status: {audit.get('overall_health')}")
-        
+
         self.health_monitor.record("backend", True, "connected")
         await self.refresh_universe()
         return True
@@ -125,14 +132,13 @@ class NexusEngine:
         client = await self._get_client()
         try:
             params: Dict[str, Any] = {
-                "asset_class": "us_equity", 
-                "status": "active", 
-                "tradable": True, 
-                "limit": Config.MAX_UNIVERSE_ASSETS
+                "asset_class": "us_equity",
+                "status": "active",
+                "tradable": True,
+                "limit": Config.MAX_UNIVERSE_ASSETS,
             }
             response = await client.get(
-                f"{self.backend_url}/api/alpaca/assets", 
-                params=params
+                f"{self.backend_url}/api/alpaca/assets", params=params
             )
             if response.status_code == 200:
                 asset_data = response.json()
@@ -150,7 +156,9 @@ class NexusEngine:
                     candidate_assets.append(symbol)
 
                 if Config.TRADE_ALL_ASSETS:
-                    self.symbols = candidate_assets[: Config.MAX_UNIVERSE_ASSETS]
+                    self.symbols = candidate_assets[
+                        : Config.MAX_UNIVERSE_ASSETS
+                    ]
                 else:
                     max_symbols = min(Config.CANDIDATE_POOL_SIZE, 30)
                     if Config.CANDIDATE_POOL_SIZE > 30:
@@ -162,7 +170,16 @@ class NexusEngine:
                     self.symbols = candidate_assets[:max_symbols]
 
                 if not self.symbols:
-                    self.symbols = ["TSLA", "PLTR", "MSTR", "COIN", "NVDA", "TQQQ", "SOXL", "SPY"]
+                    self.symbols = [
+                        "TSLA",
+                        "PLTR",
+                        "MSTR",
+                        "COIN",
+                        "NVDA",
+                        "TQQQ",
+                        "SOXL",
+                        "SPY",
+                    ]
                 logger.info(
                     f"Loaded universe with {len(self.symbols)} symbols "
                     f"from {len(candidate_assets)} tradable Alpaca assets."
@@ -172,7 +189,18 @@ class NexusEngine:
                 raise ValueError(f"Asset scan returned {response.status_code}")
         except Exception as exc:
             logger.warning(f"Asset universe fallback: {exc}")
-            self.symbols = ["TSLA", "PLTR", "MSTR", "COIN", "NVDA", "TQQQ", "SOXL", "SPY", "AAPL", "MSFT"]
+            self.symbols = [
+                "TSLA",
+                "PLTR",
+                "MSTR",
+                "COIN",
+                "NVDA",
+                "TQQQ",
+                "SOXL",
+                "SPY",
+                "AAPL",
+                "MSFT",
+            ]
 
     def _is_preferred_exchange(self, exchange: str) -> bool:
         preferred = {"NASDAQ", "NYSE", "ARCA", "AMEX", "NYSEARCA", "NYSEAMEX"}
@@ -188,29 +216,42 @@ class NexusEngine:
     async def get_account_state(self) -> Dict[str, Any]:
         client = await self._get_client()
         try:
-            response = await client.get(f"{self.backend_url}/api/alpaca/account")
+            response = await client.get(
+                f"{self.backend_url}/api/alpaca/account"
+            )
             if response.status_code == 200:
                 return cast(Dict[str, Any], response.json())
         except Exception as exc:
             logger.warning(f"Account fetch failure: {exc}")
-        return {"equity": self.portfolio_value, "last_equity": self.portfolio_value}
+        return {
+            "equity": self.portfolio_value,
+            "last_equity": self.portfolio_value,
+        }
 
     async def get_positions(self) -> List[Dict[str, Any]]:
         client = await self._get_client()
         try:
-            response = await client.get(f"{self.backend_url}/api/alpaca/positions")
+            response = await client.get(
+                f"{self.backend_url}/api/alpaca/positions"
+            )
             if response.status_code == 200:
-                return cast(List[Dict[str, Any]], response.json().get("positions", []))
+                return cast(
+                    List[Dict[str, Any]], response.json().get("positions", [])
+                )
         except Exception as exc:
             logger.warning(f"Position fetch failure: {exc}")
         return []
 
-    async def fetch_universe_history(self, symbols: List[str], timeframe: str = "1D", limit: int = 80) -> Dict[str, pd.DataFrame]:
+    async def fetch_universe_history(
+        self, symbols: List[str], timeframe: str = "1D", limit: int = 80
+    ) -> Dict[str, pd.DataFrame]:
         semaphore = asyncio.Semaphore(2)
 
         async def fetch_symbol(symbol: str) -> pd.DataFrame:
             async with semaphore:
-                result = await self.alpha_engine.fetch_market_data(symbol, timeframe=timeframe, limit=limit)
+                result = await self.alpha_engine.fetch_market_data(
+                    symbol, timeframe=timeframe, limit=limit
+                )
                 await asyncio.sleep(0.12)
                 return result
 
@@ -224,13 +265,21 @@ class NexusEngine:
                 history[symbol] = result
         return history
 
-    def build_portfolio_state(self, account: Dict[str, Any], positions: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def build_portfolio_state(
+        self, account: Dict[str, Any], positions: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         total_value = float(account.get("equity", self.portfolio_value))
         last_equity = float(account.get("last_equity", total_value))
         if np.isnan(total_value) or total_value <= 0:
             total_value = self.portfolio_value
-        drawdown = max(0.0, (last_equity - total_value) / max(total_value, 1.0))
-        return {"total_value": total_value, "drawdown": drawdown, "positions": positions}
+        drawdown = max(
+            0.0, (last_equity - total_value) / max(total_value, 1.0)
+        )
+        return {
+            "total_value": total_value,
+            "drawdown": drawdown,
+            "positions": positions,
+        }
 
     async def _verify_order_fills(self) -> None:
         """Check status of active orders and clear them once filled/cancelled."""
@@ -246,9 +295,13 @@ class NexusEngine:
                 )
                 if response.status_code == 200:
                     order_info = response.json()
-                    status = order_info.get("status") or order_info.get("order_status")
+                    status = order_info.get("status") or order_info.get(
+                        "order_status"
+                    )
                     if status in {"filled", "canceled", "expired", "rejected"}:
-                        logger.info(f"Order {order_id} for {symbol} finalized: {status}")
+                        logger.info(
+                            f"Order {order_id} for {symbol} finalized: {status}"
+                        )
                         to_remove.append(symbol)
                 elif response.status_code == 404:
                     logger.warning(f"Order {order_id} not found on backend.")
@@ -265,7 +318,10 @@ class NexusEngine:
 
     async def run_cycle(self) -> None:
         logger.info("Starting new trading cycle.")
-        if time.time() - self.last_universe_refresh > Config.UNIVERSE_RESCAN_INTERVAL:
+        if (
+            time.time() - self.last_universe_refresh
+            > Config.UNIVERSE_RESCAN_INTERVAL
+        ):
             await self.refresh_universe()
 
         # Phase 1: Verify fills from previous cycle
@@ -274,7 +330,11 @@ class NexusEngine:
         client = await self._get_client()
         try:
             response = await client.get(f"{self.backend_url}/api/alpaca/clock")
-            clock_data = response.json() if response.status_code == 200 else {"is_open": False}
+            clock_data = (
+                response.json()
+                if response.status_code == 200
+                else {"is_open": False}
+            )
         except Exception:
             clock_data = {"is_open": False}
 
@@ -297,9 +357,17 @@ class NexusEngine:
         if not symbols:
             logger.warning("No trading symbols were loaded, skipping cycle.")
             return
-        raw_signals = await self.alpha_engine.get_batch_signals(symbols, timeframe="15Min")
-        history = await self.fetch_universe_history(symbols, timeframe="1D", limit=100)
-        logger.info("History loaded for %s symbols out of %s selected symbols.", len(history), len(symbols))
+        raw_signals = await self.alpha_engine.get_batch_signals(
+            symbols, timeframe="15Min"
+        )
+        history = await self.fetch_universe_history(
+            symbols, timeframe="1D", limit=100
+        )
+        logger.info(
+            "History loaded for %s symbols out of %s selected symbols.",
+            len(history),
+            len(symbols),
+        )
 
         # Automated continuous model retraining step
         for sym, df_history in history.items():
@@ -307,40 +375,58 @@ class NexusEngine:
                 self.learner.step_retrain(df_history)
                 break
         if not history:
-            logger.warning("No history data could be loaded for the current symbol universe. This will prevent any orders from being submitted.")
-        
+            logger.warning(
+                "No history data could be loaded for the current symbol universe. This will prevent any orders from being submitted."
+            )
+
         await self.manage_positions(current_positions, history)
-        
-        benchmark_data = await self.alpha_engine.fetch_market_data("SPY", timeframe="1D", limit=120)
+
+        benchmark_data = await self.alpha_engine.fetch_market_data(
+            "SPY", timeframe="1D", limit=120
+        )
 
         if not benchmark_data.empty:
             try:
-                self.market_regime = self.regime_detector.detect(benchmark_data)
+                self.market_regime = self.regime_detector.detect(
+                    benchmark_data
+                )
                 regime_probs = self.regime_detector.get_regime_probabilities()
             except Exception as e:
                 logger.warning(f"Regime detection failed: {e}")
                 self.market_regime = "SIDEWAYS"
-                regime_probs = {"BULL": 0.25, "BEAR": 0.25, "SIDEWAYS": 0.25, "TURBULENT": 0.25}
+                regime_probs = {
+                    "BULL": 0.25,
+                    "BEAR": 0.25,
+                    "SIDEWAYS": 0.25,
+                    "TURBULENT": 0.25,
+                }
         else:
             self.market_regime = "SIDEWAYS"
-            regime_probs = {"BULL": 0.25, "BEAR": 0.25, "SIDEWAYS": 0.25, "TURBULENT": 0.25}
+            regime_probs = {
+                "BULL": 0.25,
+                "BEAR": 0.25,
+                "SIDEWAYS": 0.25,
+                "TURBULENT": 0.25,
+            }
 
-        # ── AI Ensemble Brain Conviction Layer ─────────────────────────────────
+        # ── AI Ensemble Brain Conviction Layer ───────────────────────────────
         enhanced_signals: Dict[str, float] = {}
         for sym, df_history in history.items():
             raw = raw_signals.get(sym, 0.0)
-            
+
             # Pass through the ensemble brain
             ai_signal = self.ensemble_brain.get_signal(
-                features=df_history, 
-                regime=self.market_regime, 
-                regime_probabilities=regime_probs
+                features=df_history,
+                regime=self.market_regime,
+                regime_probabilities=regime_probs,
             )
-            
+
             if ai_signal == 0:
-                logger.debug(f"[AIEnsembleBrain] Gated out {sym} (NO_TRADE confidence)")
+                logger.debug(
+                    f"[AIEnsembleBrain] Gated out {sym} (NO_TRADE confidence)"
+                )
                 continue
-                
+
             # Blend Raw Alpha with Ensemble AI decision
             blended = (ai_signal * 0.7) + (raw * 0.3)
             enhanced_signals[sym] = float(np.clip(blended, -1.0, 1.0))
@@ -357,7 +443,11 @@ class NexusEngine:
             historical_data=history,
         )
 
-        returns_list = benchmark_data["close"].pct_change().dropna().to_numpy() if not benchmark_data.empty else np.array([])
+        returns_list = (
+            benchmark_data["close"].pct_change().dropna().to_numpy()
+            if not benchmark_data.empty
+            else np.array([])
+        )
         risk_metrics = {
             "var": 0.0,
             "cvar": 0.0,
@@ -365,31 +455,43 @@ class NexusEngine:
             "sharpe": 0.0,
         }
         if returns_list.size > 0:
-            rust_risk = PolyglotBridge.calculate_risk_rust(returns_list.tolist())
+            rust_risk = PolyglotBridge.calculate_risk_rust(
+                returns_list.tolist()
+            )
             risk_metrics = self.risk_engine.assess_risk(returns_list)
             risk_metrics["rust_var"] = float(rust_risk.get("var", 0.0))
 
-        multiplier = self.determine_risk_scale({"regime_probabilities": regime_probs}, risk_metrics)
+        multiplier = self.determine_risk_scale(
+            {"regime_probabilities": regime_probs}, risk_metrics
+        )
 
         # Correlation crisis brake: halve sizes if portfolio in crisis mode
         crisis_mult = 1.0
         multiplier *= crisis_mult
 
-        # Drawdown velocity protection: if equity dropped >3% in last 24h, cut sizes
+        # Drawdown velocity protection: if equity dropped >3% in last 24h, cut
+        # sizes
         ddv_mult = self._drawdown_velocity_multiplier(account)
         multiplier *= ddv_mult
 
         weights = {s: w * multiplier for s, w in weights.items()}
 
-        portfolio_state = self.build_portfolio_state(account, current_positions)
-        self.health_monitor.record("market", not benchmark_data.empty, details=self.market_regime)
-        self.health_monitor.record("risk", risk_metrics["var"] > -0.25, details=str(risk_metrics))
+        portfolio_state = self.build_portfolio_state(
+            account, current_positions
+        )
+        self.health_monitor.record(
+            "market", not benchmark_data.empty, details=self.market_regime
+        )
+        self.health_monitor.record(
+            "risk", risk_metrics["var"] > -0.25, details=str(risk_metrics)
+        )
         self.health_monitor.heartbeat()
 
         current_symbols = set(holdings.keys())
         target_symbols = set(weights.keys())
-        
-        # Close tasks: preserve positions for a minimum number of cycles after entry.
+
+        # Close tasks: preserve positions for a minimum number of cycles after
+        # entry.
         close_candidates = []
         for symbol in current_symbols - target_symbols:
             if self.position_ages.get(symbol, 0) >= Config.MIN_HOLD_CYCLES:
@@ -403,8 +505,10 @@ class NexusEngine:
                 )
 
         if close_candidates:
-            await asyncio.gather(*[self._close_position(s) for s in close_candidates])
-            
+            await asyncio.gather(
+                *[self._close_position(s) for s in close_candidates]
+            )
+
         # Trade tasks
         trade_tasks = []
         for symbol, weight in weights.items():
@@ -414,45 +518,72 @@ class NexusEngine:
                 continue
 
             current_qty = float(holdings.get(symbol, {}).get("qty", 0.0))
-            trade_tasks.append(self._submit_trade(
-                symbol, weight, current_qty, top_targets, history, portfolio_state,
-                raw_signals, {}, self.market_regime, is_open=clock_data.get("is_open", False)
-            ))
+            trade_tasks.append(
+                self._submit_trade(
+                    symbol,
+                    weight,
+                    current_qty,
+                    top_targets,
+                    history,
+                    portfolio_state,
+                    raw_signals,
+                    {},
+                    self.market_regime,
+                    is_open=clock_data.get("is_open", False),
+                )
+            )
         if trade_tasks:
             await asyncio.gather(*trade_tasks)
 
-        self.execution_agent.learn(reward=float(np.mean(list(portfolio_scores.values()) or [0.0])))
+        self.execution_agent.learn(
+            reward=float(np.mean(list(portfolio_scores.values()) or [0.0]))
+        )
 
         # Update IC tracker in optimizer with latest signal → return outcomes
         for sym, score in portfolio_scores.items():
             if sym in history and not history[sym].empty:
-                realized = float(history[sym]["close"].pct_change().dropna().iloc[-1])
+                realized = float(
+                    history[sym]["close"].pct_change().dropna().iloc[-1]
+                )
                 self.optimizer.ic_tracker.record(sym, score, realized)
-            
+
             # Record outcome for ensemble learning
             for pos in current_positions:
-                sym = pos.get('symbol')
-                unrealized_pl_pc = pos.get('unrealized_plpc', 0.0)
+                sym = pos.get("symbol")
+                unrealized_pl_pc = pos.get("unrealized_plpc", 0.0)
                 if sym in raw_signals and len(self.ensemble_brain.models) > 0:
                     sig = 1 if raw_signals[sym] > 0 else -1
                     self.ensemble_brain.record_outcome(
-                        model_name=self.ensemble_brain.models[0]['name'],
+                        model_name=self.ensemble_brain.models[0]["name"],
                         predicted_signal=sig,
-                        realized_return=float(unrealized_pl_pc)
+                        realized_return=float(unrealized_pl_pc),
                     )
 
-    async def _submit_trade(self, symbol: str, weight: float, current_qty: float, top_targets: Dict[str, float],
-                            history: Dict[str, pd.DataFrame], portfolio_state: Dict[str, Any],
-                            raw_signals: Dict[str, float], market_insight: Dict[str, Any],
-                            selected_strategy: str, is_open: bool) -> None:
-        if abs(weight) < 0.0001 or symbol not in history or history[symbol].empty:
+    async def _submit_trade(
+        self,
+        symbol: str,
+        weight: float,
+        current_qty: float,
+        top_targets: Dict[str, float],
+        history: Dict[str, pd.DataFrame],
+        portfolio_state: Dict[str, Any],
+        raw_signals: Dict[str, float],
+        market_insight: Dict[str, Any],
+        selected_strategy: str,
+        is_open: bool,
+    ) -> None:
+        if (
+            abs(weight) < 0.0001
+            or symbol not in history
+            or history[symbol].empty
+        ):
             return
         current_price = float(history[symbol]["close"].iloc[-1])
-        
+
         total_value = portfolio_state.get("total_value", self.portfolio_value)
         target_qty = int((total_value * abs(weight)) / max(current_price, 1.0))
         qty_diff = target_qty - abs(current_qty)
-        
+
         if abs(qty_diff) < 1 or (abs(qty_diff) * current_price < 100):
             return
 
@@ -461,16 +592,34 @@ class NexusEngine:
         order_type, limit_price = ("market", None)
 
         if not is_open:
-            order_type, limit_price = ("limit", current_price * (1.002 if side == "buy" else 0.998))
+            order_type, limit_price = (
+                "limit",
+                current_price * (1.002 if side == "buy" else 0.998),
+            )
 
-        trade_request = {"symbol": symbol, "qty": qty, "side": side, "price": current_price, "order_type": order_type, "strategy": selected_strategy}
+        trade_request = {
+            "symbol": symbol,
+            "qty": qty,
+            "side": side,
+            "price": current_price,
+            "order_type": order_type,
+            "strategy": selected_strategy,
+        }
         if not PolyglotBridge.validate_order_zig(trade_request).get("valid"):
             return
-        approved, _ = self.governance.check_compliance(trade_request, portfolio_state, current_qty=current_qty)
+        approved, _ = self.governance.check_compliance(
+            trade_request, portfolio_state, current_qty=current_qty
+        )
         if not approved:
             return
 
-        payload = {"symbol": symbol, "qty": qty, "side": side, "order_type": order_type, "strategy": selected_strategy}
+        payload = {
+            "symbol": symbol,
+            "qty": qty,
+            "side": side,
+            "order_type": order_type,
+            "strategy": selected_strategy,
+        }
         if limit_price:
             payload["limit_price"] = round(limit_price, 4)
         if not is_open:
@@ -478,7 +627,9 @@ class NexusEngine:
 
         client = await self._get_client()
         try:
-            response = await client.post(f"{self.backend_url}/api/alpaca/order", json=payload)
+            response = await client.post(
+                f"{self.backend_url}/api/alpaca/order", json=payload
+            )
             if response.status_code in {200, 201}:
                 order_data = response.json()
                 order_id = order_data.get("id") or order_data.get("order_id")
@@ -510,7 +661,9 @@ class NexusEngine:
     async def _close_position(self, symbol: str) -> None:
         client = await self._get_client()
         try:
-            await client.delete(f"{self.backend_url}/api/alpaca/positions/{symbol}")
+            await client.delete(
+                f"{self.backend_url}/api/alpaca/positions/{symbol}"
+            )
             self.position_manager.reset_watermark(symbol)
         except Exception as exc:
             logger.error(f"Error closing position for {symbol}: {exc}")
@@ -539,11 +692,17 @@ class NexusEngine:
                 pos_history = history.get(symbol, pd.DataFrame())
 
                 should_close = self.position_manager.evaluate_exit(
-                    symbol, current_price, avg_entry_price, pnl_pct, pos_history
+                    symbol,
+                    current_price,
+                    avg_entry_price,
+                    pnl_pct,
+                    pos_history,
                 )
 
                 if should_close:
-                    await client.delete(f"{self.backend_url}/api/alpaca/positions/{symbol}")
+                    await client.delete(
+                        f"{self.backend_url}/api/alpaca/positions/{symbol}"
+                    )
                     self.position_manager.reset_watermark(symbol)
             except Exception as exc:
                 logger.warning(f"Failed to evaluate close for {symbol}: {exc}")
@@ -560,7 +719,9 @@ class NexusEngine:
                     logger.error(f"Engine cycle error: {exc}")
                 await asyncio.sleep(Config.HEARTBEAT_INTERVAL)
 
-    def determine_risk_scale(self, market_insight: Dict[str, Any], risk_metrics: Dict[str, float]) -> float:
+    def determine_risk_scale(
+        self, market_insight: Dict[str, Any], risk_metrics: Dict[str, float]
+    ) -> float:
         """
         Dynamic risk scale using regime probabilities (not just a label)
         and Kelly-adjusted volatility scaling.
@@ -570,12 +731,12 @@ class NexusEngine:
 
         # Probabilistic regime scaling (smoother than hard if/else)
         turbulent_prob = regime_probs.get("TURBULENT", 0.0)
-        bear_prob      = regime_probs.get("BEAR", 0.0)
-        bull_prob      = regime_probs.get("BULL", 0.0)
+        bear_prob = regime_probs.get("BEAR", 0.0)
+        bull_prob = regime_probs.get("BULL", 0.0)
 
-        scale *= (1.0 - turbulent_prob * 0.70)  # TURBULENT crushes scale
-        scale *= (1.0 - bear_prob * 0.45)        # BEAR reduces scale
-        scale *= (1.0 + bull_prob * 0.10)        # BULL slightly expands scale
+        scale *= 1.0 - turbulent_prob * 0.70  # TURBULENT crushes scale
+        scale *= 1.0 - bear_prob * 0.45  # BEAR reduces scale
+        scale *= 1.0 + bull_prob * 0.10  # BULL slightly expands scale
 
         # Volatility-adjusted Kelly multiplier
         volatility = risk_metrics.get("volatility", 0.0)
@@ -589,15 +750,15 @@ class NexusEngine:
         # VaR gate
         var = float(risk_metrics.get("var", 0.0))
         if var < -0.07:
-            scale *= 0.55   # extreme tail risk
+            scale *= 0.55  # extreme tail risk
         elif var < -0.05:
             scale *= 0.72
         elif var > -0.015:
-            scale *= 1.0    # benign VaR
+            scale *= 1.0  # benign VaR
 
         # Forecast confidence boost
         forecast_conf = market_insight.get("forecast_confidence", 0.5)
-        scale *= (0.85 + forecast_conf * 0.30)   # 0.85 → 1.15 range
+        scale *= 0.85 + forecast_conf * 0.30  # 0.85 → 1.15 range
 
         return float(max(0.15, min(scale, 1.20)))
 
@@ -628,17 +789,18 @@ class NexusEngine:
         if drop_pct > 0.05:
             logger.warning(
                 "Drawdown velocity BRAKE: equity dropped %.1f%% in recent cycles → 0.40x sizing",
-                drop_pct * 100
+                drop_pct * 100,
             )
             return 0.40  # aggressive protection
         elif drop_pct > 0.03:
             logger.warning(
                 "Drawdown velocity CAUTION: equity dropped %.1f%% → 0.65x sizing",
-                drop_pct * 100
+                drop_pct * 100,
             )
             return 0.65
 
         return 1.0
+
 
 if __name__ == "__main__":
     engine = NexusEngine()

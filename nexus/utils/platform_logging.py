@@ -7,8 +7,10 @@ from datetime import datetime
 DEFAULT_LOG_FILE = os.getenv("NEXUS_LOG_FILE", "nexus_platform.log")
 LOG_JSON = os.getenv("NEXUS_LOG_JSON", "false").lower() == "true"
 
+
 class JsonFormatter(logging.Formatter):
     """Custom JSON formatter for institutional observability."""
+
     def format(self, record: logging.LogRecord) -> str:
         log_entry = {
             "timestamp": datetime.fromtimestamp(record.created).isoformat(),
@@ -23,17 +25,20 @@ class JsonFormatter(logging.Formatter):
             log_entry["exception"] = self.formatException(record.exc_info)
         return json.dumps(log_entry)
 
-def setup_logging(level: int = logging.INFO, log_file: str = DEFAULT_LOG_FILE) -> None:
+
+def setup_logging(
+    level: int = logging.INFO, log_file: str = DEFAULT_LOG_FILE
+) -> None:
     root = logging.getLogger()
     root.handlers.clear()
-    
+
     formatter: logging.Formatter
     if LOG_JSON:
         formatter = JsonFormatter()
     else:
         formatter = logging.Formatter(
             "%(asctime)s | %(name)s | %(levelname)s | %(message)s",
-            datefmt="%Y-%m-%dT%H:%M:%S"
+            datefmt="%Y-%m-%dT%H:%M:%S",
         )
 
     console_handler = logging.StreamHandler(sys.stdout)

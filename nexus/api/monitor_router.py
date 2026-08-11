@@ -7,9 +7,10 @@ Exposes all new intelligence data to the dashboard and external clients:
   GET /api/monitor/brain/superhuman    — conviction signals per symbol
   POST /api/monitor/backtest           — symbol backtest
 """
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Dict, Any, List
+from typing import Dict, Any
 import logging
 import pandas as pd
 import numpy as np
@@ -73,14 +74,16 @@ async def brain_snapshot(
     try:
         await get_client().get_positions()
     except Exception as exc:
-        logger.warning(f"Unable to load live positions for brain snapshot: {exc}")
+        logger.warning(
+            f"Unable to load live positions for brain snapshot: {exc}"
+        )
 
     analysis: Dict[str, Any] = {}
-    
+
     # Add regime detection logic
     regime_probs = _regime_detector.detect_probabilities(bars)
     current_regime = max(regime_probs, key=lambda k: regime_probs[k])
-    
+
     analysis["regime"] = current_regime
     analysis["regime_probabilities"] = regime_probs
     analysis["selected_strategy"] = "Ensemble Voting"
@@ -124,40 +127,46 @@ async def superhuman_snapshot(
     alpha_engine = AlphaEngine()
 
     # Fetch raw signals and history for all symbols
-    raw_signals = await alpha_engine.get_batch_signals(symbol_list, timeframe=timeframe)
+    raw_signals = await alpha_engine.get_batch_signals(
+        symbol_list, timeframe=timeframe
+    )
 
     # Fetch history for fractal gate + strategy scoring
     history: Dict[str, pd.DataFrame] = {}
     for sym in symbol_list:
-        df = await alpha_engine.fetch_market_data(sym, timeframe="1D", limit=80)
+        df = await alpha_engine.fetch_market_data(
+            sym, timeframe="1D", limit=80
+        )
         if not df.empty:
             history[sym] = df
 
     # Detect regime probabilities from SPY benchmark
     benchmark = history.get("SPY", pd.DataFrame())
     if benchmark.empty and "SPY" not in symbol_list:
-        benchmark = await alpha_engine.fetch_market_data("SPY", timeframe="1D", limit=80)
+        benchmark = await alpha_engine.fetch_market_data(
+            "SPY", timeframe="1D", limit=80
+        )
 
     regime_probs = _regime_detector.detect_probabilities(benchmark)
     current_regime = max(regime_probs, key=lambda k: regime_probs[k])
 
     # Run Ensemble Brain evaluation
     signals_out: Dict[str, Any] = {}
-    
+
     for sym, df_history in history.items():
         if df_history.empty:
             continue
-            
+
         ai_signal = _ensemble_brain.get_signal(
-            features=df_history, 
-            regime=current_regime, 
-            regime_probabilities=regime_probs
+            features=df_history,
+            regime=current_regime,
+            regime_probabilities=regime_probs,
         )
-        
+
         raw = raw_signals.get(sym, 0.0)
         gate_pass = abs(ai_signal) > 0.35
         score = (ai_signal * 0.7) + (raw * 0.3)
-        
+
         signals_out[sym] = {
             "score": round(score, 4),
             "conviction": round(abs(ai_signal), 4),
@@ -167,16 +176,15 @@ async def superhuman_snapshot(
             "regime_bias": ai_signal,
             "ir_score": round(score, 4),
             "reasoning": [f"Ensemble Signal: {ai_signal}"],
-            "strategy_votes": {}
+            "strategy_votes": {},
         }
 
     return {
         "status": "success",
         "regime": current_regime,
         "regime_probabilities": regime_probs,
-        "signals": signals_out
+        "signals": signals_out,
     }
-
 
 
 @router.post("/backtest")
@@ -204,8 +212,8 @@ async def run_backtest(request: BacktestRequest) -> Dict[str, Any]:
     backtester = BacktestEngine()
     result = backtester.run(prices, signal, entry_size=request.entry_size)
     return {
-        "status":       "success",
-        "metrics":      result.metrics,
-        "trades":       result.trades.tail(20).to_dict(orient="records"),
+        "status": "success",
+        "metrics": result.metrics,
+        "trades": result.trades.tail(20).to_dict(orient="records"),
         "equity_curve": result.equity_curve.tail(20).to_dict(),
     }

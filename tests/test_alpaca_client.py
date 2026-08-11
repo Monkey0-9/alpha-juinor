@@ -39,12 +39,28 @@ class FakeSession:
 
 def test_get_bars_deduplicates_concurrent_requests():
     async def run_test():
-        response = FakeResponse(200, {"bars": [{"t": "2024-01-01T00:00:00Z", "o": 1.0, "h": 1.1, "l": 0.9, "c": 1.0, "v": 100}]})
+        response = FakeResponse(
+            200,
+            {
+                "bars": [
+                    {
+                        "t": "2024-01-01T00:00:00Z",
+                        "o": 1.0,
+                        "h": 1.1,
+                        "l": 0.9,
+                        "c": 1.0,
+                        "v": 100,
+                    }
+                ]
+            },
+        )
         session = FakeSession(response)
         client = AlpacaClient(credentials=AlpacaCredentials("key", "secret"))
         client._get_session = AsyncMock(return_value=session)
 
-        results = await asyncio.gather(client.get_bars("AAPL"), client.get_bars("AAPL"))
+        results = await asyncio.gather(
+            client.get_bars("AAPL"), client.get_bars("AAPL")
+        )
 
         assert len(results[0]) == 1
         assert results[0] == results[1]

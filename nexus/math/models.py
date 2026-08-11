@@ -7,12 +7,14 @@ import os
 # Add MinGW bin to DLL search path for Windows Python 3.8+
 mingw_bin = os.path.expanduser(r"~\scoop\apps\mingw\current\bin")
 if os.path.exists(mingw_bin):
-    if hasattr(os, 'add_dll_directory'):
+    if hasattr(os, "add_dll_directory"):
         os.add_dll_directory(mingw_bin)
     else:
-        os.environ['PATH'] = mingw_bin + os.pathsep + os.environ['PATH']
+        os.environ["PATH"] = mingw_bin + os.pathsep + os.environ["PATH"]
 
-cpp_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "cpp_extensions"))
+cpp_dir = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "cpp_extensions")
+)
 if cpp_dir not in sys.path:
     sys.path.append(cpp_dir)
 
@@ -59,9 +61,7 @@ class KalmanFilter:
         gain = pri_error_covariance / (
             pri_error_covariance + self.measurement_variance
         )
-        self.post_estimate = (
-            pri_estimate + gain * (measurement - pri_estimate)
-        )
+        self.post_estimate = pri_estimate + gain * (measurement - pri_estimate)
         self.post_error_covariance = (1 - gain) * pri_error_covariance
 
         return float(self.post_estimate)
@@ -70,13 +70,13 @@ class KalmanFilter:
         """Apply the C++ filter to an entire data series."""
         if len(data) == 0:
             return np.array([])
-        
+
         filtered_data = nexus_cpp.kalman.batch_kalman_filter(
             data.tolist(), self.process_variance, self.measurement_variance
         )
         if filtered_data:
             self.post_estimate = filtered_data[-1]
-            
+
         return np.array(filtered_data)
 
 
@@ -98,10 +98,7 @@ class TrendAccelerationModel:
         velocity = np.diff(prices)
         acceleration = np.diff(velocity)
 
-        flow_force = (
-            np.mean(velocity[-5:])
-            + 0.5 * np.mean(acceleration[-3:])
-        )
+        flow_force = np.mean(velocity[-5:]) + 0.5 * np.mean(acceleration[-3:])
         return float(flow_force)
 
     def get_drift_velocity(self, prices: np.ndarray[Any, Any]) -> float:
@@ -134,8 +131,7 @@ class VolatilityTopologyHeuristic:
 
         variance = np.var(data_points)
         entropy = -np.sum(
-            np.abs(data_points)
-            * np.log(np.abs(data_points) + 1e-9)
+            np.abs(data_points) * np.log(np.abs(data_points) + 1e-9)
         )
 
         if entropy > 1000:

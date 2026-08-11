@@ -1,5 +1,3 @@
-import pytest
-import os
 import pandas as pd
 import numpy as np
 from nexus.research.walk_forward import WalkForwardEvaluator
@@ -13,24 +11,29 @@ def _create_sample_bars(rows=500):
     returns = np.zeros(rows)
     returns[1:] = np.diff(close) / close[:-1]
 
-    df = pd.DataFrame({
-        "close": close,
-        "returns": returns,
-        "rsi_14": np.random.uniform(30, 70, rows),
-        "macd": np.random.randn(rows) * 0.1,
-        "macd_signal": np.random.randn(rows) * 0.1,
-        "macd_hist": np.random.randn(rows) * 0.1,
-        "roc_10": np.random.randn(rows) * 0.05,
-        "bb_mean": close,
-        "bb_std": np.random.uniform(1, 5, rows),
-        "atr_14": np.random.uniform(0.5, 2, rows)
-    }, index=dates)
+    df = pd.DataFrame(
+        {
+            "close": close,
+            "returns": returns,
+            "rsi_14": np.random.uniform(30, 70, rows),
+            "macd": np.random.randn(rows) * 0.1,
+            "macd_signal": np.random.randn(rows) * 0.1,
+            "macd_hist": np.random.randn(rows) * 0.1,
+            "roc_10": np.random.randn(rows) * 0.05,
+            "bb_mean": close,
+            "bb_std": np.random.uniform(1, 5, rows),
+            "atr_14": np.random.uniform(0.5, 2, rows),
+        },
+        index=dates,
+    )
     return df
 
 
 def test_walk_forward_splits():
     df = _create_sample_bars(350)
-    evaluator = WalkForwardEvaluator(train_window=200, val_window=50, test_window=50, step_size=50)
+    evaluator = WalkForwardEvaluator(
+        train_window=200, val_window=50, test_window=50, step_size=50
+    )
     splits = evaluator.generate_splits(df)
     assert len(splits) >= 1
     assert "train" in splits[0]
@@ -40,7 +43,9 @@ def test_walk_forward_splits():
 
 def test_walk_forward_evaluation():
     df = _create_sample_bars(400)
-    evaluator = WalkForwardEvaluator(train_window=200, val_window=50, test_window=50, step_size=50)
+    evaluator = WalkForwardEvaluator(
+        train_window=200, val_window=50, test_window=50, step_size=50
+    )
     results = evaluator.evaluate_model(GradientBoostedTimeSeriesModel, df)
     assert results["status"] == "success"
     assert "cumulative_return" in results

@@ -16,11 +16,19 @@ def test_risk_engine_assess_risk():
     assert metrics["volatility"] >= 0
     assert isinstance(metrics["sharpe"], float)
 
+
 def test_manage_positions_threshold():
     engine = NexusEngine(backend_url="http://127.0.0.1:8001")
 
     async def fake_get_positions():
-        return [{"symbol": "AAPL", "unrealized_plpc": 0.15, "current_price": 115.0, "avg_entry_price": 100.0}]
+        return [
+            {
+                "symbol": "AAPL",
+                "unrealized_plpc": 0.15,
+                "current_price": 115.0,
+                "avg_entry_price": 100.0,
+            }
+        ]
 
     class FakeClient:
         def __init__(self):
@@ -39,4 +47,6 @@ def test_manage_positions_threshold():
     engine._get_client = fake_get_client
 
     asyncio.run(engine.manage_positions())
-    assert fake_client.closed_positions == ["http://127.0.0.1:8001/api/alpaca/positions/AAPL"]
+    assert fake_client.closed_positions == [
+        "http://127.0.0.1:8001/api/alpaca/positions/AAPL"
+    ]

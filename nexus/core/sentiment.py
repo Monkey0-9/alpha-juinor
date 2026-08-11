@@ -10,18 +10,19 @@ logger = logging.getLogger(__name__)
 
 try:
     from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
     VADER_AVAILABLE = True
 except ImportError:
     VADER_AVAILABLE = False
 
 try:
     from textblob import TextBlob
+
     TEXTBLOB_AVAILABLE = True
 except ImportError:
     TEXTBLOB_AVAILABLE = False
 
 try:
-    from transformers import pipeline
     TRANSFORMERS_AVAILABLE = True
 except (ImportError, OSError, RuntimeError):
     # transformers may fail to import due to environment or protobuf/tensorflow
@@ -31,19 +32,82 @@ except (ImportError, OSError, RuntimeError):
 
 class SentimentEngine:
     BULLISH_TERMS = {
-        "surge", "soar", "jump", "climb", "gain", "rally", "upbeat", "beat", "beats",
-        "growth", "buy", "upgrade", "outperform", "record", "profit", "bullish",
-        "strong", "higher", "breakout", "momentum", "upside", "positive", "expansion",
-        "opportunity", "innovation", "leadership", "dominant", "accelerate",
+        "surge",
+        "soar",
+        "jump",
+        "climb",
+        "gain",
+        "rally",
+        "upbeat",
+        "beat",
+        "beats",
+        "growth",
+        "buy",
+        "upgrade",
+        "outperform",
+        "record",
+        "profit",
+        "bullish",
+        "strong",
+        "higher",
+        "breakout",
+        "momentum",
+        "upside",
+        "positive",
+        "expansion",
+        "opportunity",
+        "innovation",
+        "leadership",
+        "dominant",
+        "accelerate",
     }
     BEARISH_TERMS = {
-        "plunge", "tumble", "fall", "drop", "decline", "slump", "miss", "misses",
-        "loss", "sell", "downgrade", "underperform", "warning", "bearish", "weak",
-        "lower", "crash", "lawsuit", "investigation", "recession", "inflation",
-        "slowdown", "downturn", "debt", "default", "bankruptcy", "volatile",
+        "plunge",
+        "tumble",
+        "fall",
+        "drop",
+        "decline",
+        "slump",
+        "miss",
+        "misses",
+        "loss",
+        "sell",
+        "downgrade",
+        "underperform",
+        "warning",
+        "bearish",
+        "weak",
+        "lower",
+        "crash",
+        "lawsuit",
+        "investigation",
+        "recession",
+        "inflation",
+        "slowdown",
+        "downturn",
+        "debt",
+        "default",
+        "bankruptcy",
+        "volatile",
     }
-    INTENSIFIERS = {"very", "extremely", "highly", "significantly", "remarkably", "substantially"}
-    NEGATORS = {"not", "no", "never", "neither", "nor", "cannot", "don't", "won't"}
+    INTENSIFIERS = {
+        "very",
+        "extremely",
+        "highly",
+        "significantly",
+        "remarkably",
+        "substantially",
+    }
+    NEGATORS = {
+        "not",
+        "no",
+        "never",
+        "neither",
+        "nor",
+        "cannot",
+        "don't",
+        "won't",
+    }
 
     def __init__(self, use_finbert: bool = False):
         self._cache: Dict[str, Dict[str, Any]] = {}
@@ -58,14 +122,18 @@ class SentimentEngine:
                 pass
 
     def _score_headline_advanced(self, title: str) -> float:
-        words = re.findall(r'\b\w+\b', title.lower())
+        words = re.findall(r"\b\w+\b", title.lower())
         word_set = set(words)
         bull_matches = word_set.intersection(self.BULLISH_TERMS)
         bear_matches = word_set.intersection(self.BEARISH_TERMS)
         score = 0.0
         for w in words:
             if w in self.INTENSIFIERS:
-                score += 0.15 if not any(n in word_set for n in self.NEGATORS) else -0.10
+                score += (
+                    0.15
+                    if not any(n in word_set for n in self.NEGATORS)
+                    else -0.10
+                )
             if w in self.NEGATORS:
                 score *= -0.5
         for term in bull_matches:
@@ -75,7 +143,7 @@ class SentimentEngine:
         if self._vader:
             try:
                 vs = self._vader.polarity_scores(title)
-                score = score * 0.6 + vs['compound'] * 0.4
+                score = score * 0.6 + vs["compound"] * 0.4
             except (ValueError, TypeError, AttributeError):
                 pass
         if TEXTBLOB_AVAILABLE:

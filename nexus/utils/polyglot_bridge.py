@@ -18,9 +18,7 @@ class PolyglotBridge:
         conf: float = 0.95,
     ) -> Dict[str, Any]:
         """Execute Rust Risk Engine for VaR calculation."""
-        input_data = json.dumps(
-            {"returns": returns, "confidence_level": conf}
-        )
+        input_data = json.dumps({"returns": returns, "confidence_level": conf})
         try:
             if not shutil.which("cargo"):
                 return {
@@ -30,10 +28,13 @@ class PolyglotBridge:
                 }
 
             cmd = [
-                "cargo", "run", "--quiet",
+                "cargo",
+                "run",
+                "--quiet",
                 "--manifest-path",
                 "nexus/polyglot/rust_risk_engine/Cargo.toml",
-                "--", input_data,
+                "--",
+                input_data,
             ]
             result = subprocess.run(
                 cmd,
@@ -99,9 +100,11 @@ class PolyglotBridge:
 
             input_data = json.dumps(order)
             cmd = [
-                "zig", "run",
+                "zig",
+                "run",
                 "nexus/polyglot/zig_validator/main.zig",
-                "--", input_data,
+                "--",
+                input_data,
             ]
             result = subprocess.run(
                 cmd,
