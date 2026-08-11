@@ -5,11 +5,11 @@ Tests all hardened components, security, and persistence.
 """
 
 import asyncio
+import inspect
 import sys
 import logging
-import os
-from typing import Dict, List, Tuple
 import importlib
+from typing import Dict
 from pathlib import Path
 import httpx
 
@@ -38,7 +38,7 @@ class ProductionVerifier:
             "nexus.core.alpha",
             "nexus.core.governance",
             "nexus.core.monitoring",
-            "nexus.core.intelligence",
+            "nexus.core.execution_ai",
             "nexus.math.risk",
             "nexus.math.indicators",
             "nexus.math.optimization",
@@ -70,9 +70,6 @@ class ProductionVerifier:
 
         db_path = Path("data/nexus_audit.db")
         try:
-            from nexus.core.governance import GovernanceEngine
-
-            gov = GovernanceEngine()
             # This should trigger DB initialization
             logger.info(f"  [OK] Database path: {db_path}")
             if not db_path.exists():
@@ -95,7 +92,7 @@ class ProductionVerifier:
             from nexus.api.main import app
             from nexus.utils.config import Config
 
-            transport = httpx.ASGITransport(app=app)
+            transport = httpx.ASGITransport(app=app)  # type: ignore
             async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
                 # 1. Test Public GET (Brain snapshot)
                 resp = await client.get("/api/monitor/brain")
@@ -205,7 +202,7 @@ class ProductionVerifier:
         all_passed = True
         for check in checks:
             try:
-                if asyncio.iscoroutinefunction(check):
+                if inspect.iscoroutinefunction(check):
                     res = await check()
                 else:
                     res = check()

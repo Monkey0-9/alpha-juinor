@@ -1,0 +1,409 @@
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:2:12: E401 multiple imports on one line
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:2:17: E703 statement ends with a semicolon
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:4:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:5:5: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:6:15: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:6:17: E201 whitespace after '('
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:6:21: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:6:26: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:6:31: E202 whitespace before ')'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:6:33: E703 statement ends with a semicolon
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:7:18: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:7:26: E231 missing whitespace after ':'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:8:5: E128 continuation line under-indented for visual indent
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:8:12: E231 missing whitespace after ':'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:8:26: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:8:30: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:8:34: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:8:45: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:9:5: E122 continuation line missing indentation or outdented
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:9:11: E231 missing whitespace after ':'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:9:20: E231 missing whitespace after ':'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:9:65: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:9:76: E231 missing whitespace after ':'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:10:5: E128 continuation line under-indented for visual indent
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:10:7: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:10:11: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:10:17: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:10:27: E231 missing whitespace after ','
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:12:1: E302 expected 2 blank lines, found 0
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:12:50: E231 missing whitespace after ':'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:12:69: E231 missing whitespace after ':'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:12:85: E703 statement ends with a semicolon
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:13:1: E302 expected 2 blank lines, found 0
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:13:16: E201 whitespace after '('
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:13:25: E202 whitespace before ')'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:14:17: E211 whitespace before '('
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:14:22: E201 whitespace after '('
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:14:32: E202 whitespace before ')'
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:15:6: E114 indentation is not a multiple of 4 (comment)
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:15:6: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:6: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:13: E701 multiple statements on one line (colon)
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:18: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:21: E702 multiple statements on one line (semicolon)
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:27: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:31: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:16:39: E702 multiple statements on one line (semicolon)
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:17:6: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\autopep8\test_data\basic.in.py:18:21: E117 over-indented
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:2:1: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:4:3: E114 indentation is not a multiple of 4 (comment)
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:4:3: E116 unexpected indentation (comment)
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:4:3: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:6:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:6:7: E117 over-indented
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:6:8: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:7:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:7:8: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:7:10: E201 whitespace after '('
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:7:14: E202 whitespace before ')'
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:8:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:11:7: E124 closing bracket does not match visual indentation
+.\.trunk\plugins\trunk\linters\black\test_data\basic.in.py:12:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\codespell\test_data\basic_py.in.py:20:26: E999 SyntaxError: invalid syntax
+.\.trunk\plugins\trunk\linters\cspell\test_data\basic_py.in.py:20:26: E999 SyntaxError: invalid syntax
+.\.trunk\plugins\trunk\linters\flake8\test_data\basic.in.py:7:1: F401 'sys' imported but unused
+.\.trunk\plugins\trunk\linters\flake8\test_data\basic.in.py:7:1: E305 expected 2 blank lines after class or function definition, found 1
+.\.trunk\plugins\trunk\linters\flake8\test_data\basic.in.py:7:1: E402 module level import not at top of file
+.\.trunk\plugins\trunk\linters\flake8\test_data\basic.in.py:10:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\flake8\test_data\basic.in.py:14:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:2:1: F401 'my_lib.Object' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:4:1: F401 'os' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:6:1: F401 'my_lib.Object3' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:8:1: F401 'my_lib.Object2' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib15' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib1' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib2' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib4' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib5' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib6' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib7' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib8' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib9' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib10' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib11' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib12' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib13' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:12:1: F401 'third_party.lib14' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:14:1: F811 redefinition of unused 'sys' from line 10
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:14:1: F401 'sys' imported but unused
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:16:1: F404 from __future__ imports must occur at the beginning of the file
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:18:1: F811 redefinition of unused 'lib3' from line 12
+.\.trunk\plugins\trunk\linters\isort\test_data\basic.in.py:18:1: F401 'third_party.lib3' imported but unused
+.\.trunk\plugins\trunk\linters\markdown-link-check\parse.py:64:22: W605 invalid escape sequence '\s'
+.\.trunk\plugins\trunk\linters\markdown-link-check\parse.py:64:26: W605 invalid escape sequence '\['
+.\.trunk\plugins\trunk\linters\markdown-link-check\parse.py:64:30: W605 invalid escape sequence '\]'
+.\.trunk\plugins\trunk\linters\markdown-link-check\parse.py:64:33: W605 invalid escape sequence '\s'
+.\.trunk\plugins\trunk\linters\markdown-link-check\parse.py:64:49: W605 invalid escape sequence '\s'
+.\.trunk\plugins\trunk\linters\markdown-link-check\parse.py:64:53: W605 invalid escape sequence '\d'
+.\.trunk\plugins\trunk\linters\mypy\test_data\basic.py:1:1: F401 'google.protobuf.descriptor_pb2 as d' imported but unused
+.\.trunk\plugins\trunk\linters\mypy\test_data\basic.py:3:1: F401 '.mypy_import2' imported but unused
+.\.trunk\plugins\trunk\linters\mypy\test_data\basic.py:5:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\mypy\test_data\basic.py:18:1: E402 module level import not at top of file
+.\.trunk\plugins\trunk\linters\mypy\test_data\basic.py:20:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\mypy\test_data\basic.py:21:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\mypy\test_data\source.py:3:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\mypy\test_data\source.py:5:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\mypy\test_data\source.py:6:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\mypy\test_data\source.py:8:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\mypy\test_data\source.py:9:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\nancy\parse.py:12:151: E501 line too long (163 > 150 characters)
+.\.trunk\plugins\trunk\linters\nancy\parse.py:17:151: E501 line too long (170 > 150 characters)
+.\.trunk\plugins\trunk\linters\nancy\parse.py:21:151: E501 line too long (209 > 150 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:9:151: E501 line too long (152 > 150 characters)
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:139:26: W605 invalid escape sequence '\s'
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:139:47: W605 invalid escape sequence '\s'
+.\.trunk\plugins\trunk\linters\osv-scanner\osv_to_sarif.py:166:151: E501 line too long (170 > 150 characters)
+.\.trunk\plugins\trunk\linters\pylint\test_data\basic.in.py:4:10: F821 undefined name 'raw_input'
+.\.trunk\plugins\trunk\linters\pylint\test_data\basic.in.py:5:8: F821 undefined name 'raw_input'
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:1:1: F401 'typing.Callable' imported but unused
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:1:1: F401 'typing.Iterator' imported but unused
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:1:1: F401 'typing.Union' imported but unused
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:1:1: F401 'typing.Optional' imported but unused
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:7:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:12:20: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:14:1: E305 expected 2 blank lines after class or function definition, found 1
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:15:1: F821 undefined name 'reveal_type'
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:17:9: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:18:10: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:22:1: E303 too many blank lines (3)
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:23:15: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:24:8: F821 undefined name 'ClassVar'
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:24:25: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:27:19: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:29:1: E305 expected 2 blank lines after class or function definition, found 1
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:31:11: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:35:1: E303 too many blank lines (3)
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:39:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:51:13: F821 undefined name 'reveal_type'
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:54:9: E731 do not assign a lambda expression, use a def
+.\.trunk\plugins\trunk\linters\pyright\test_data\basic.in.py:54:27: F821 undefined name 'reveal_type'
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:8:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:9:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:10:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:11:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:12:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:13:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:14:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:15:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:16:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:17:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:18:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:19:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:20:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:21:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:22:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:23:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:24:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:25:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:26:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:27:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:28:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:29:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:30:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:31:1: W191 indentation contains tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:42:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:44:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:45:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:46:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:47:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:48:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:49:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:50:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:51:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:52:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:53:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:54:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:55:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:56:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:57:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:58:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:59:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:60:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:61:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:62:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:63:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:67:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:68:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:69:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:70:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:71:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:72:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:73:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:74:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:75:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:76:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:77:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:78:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:80:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:81:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:82:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:83:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:84:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:86:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\remark-lint\parse.py:90:1: E101 indentation contains mixed spaces and tabs
+.\.trunk\plugins\trunk\linters\renovate\parse.py:24:151: E501 line too long (961 > 150 characters)
+.\.trunk\plugins\trunk\linters\ruff\test_data\basic.in.py:7:1: F401 'sys' imported but unused
+.\.trunk\plugins\trunk\linters\ruff\test_data\basic.in.py:7:1: E305 expected 2 blank lines after class or function definition, found 1
+.\.trunk\plugins\trunk\linters\ruff\test_data\basic.in.py:7:1: E402 module level import not at top of file
+.\.trunk\plugins\trunk\linters\ruff\test_data\basic.in.py:9:1: F401 'json' imported but unused
+.\.trunk\plugins\trunk\linters\ruff\test_data\basic.in.py:9:1: E402 module level import not at top of file
+.\.trunk\plugins\trunk\linters\ruff\test_data\basic.in.py:11:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\ruff\test_data\basic.in.py:15:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:2:1: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:4:3: E114 indentation is not a multiple of 4 (comment)
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:4:3: E116 unexpected indentation (comment)
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:4:3: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:6:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:6:7: E117 over-indented
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:6:8: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:7:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:7:8: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:7:10: E201 whitespace after '('
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:7:14: E202 whitespace before ')'
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:8:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:11:7: E124 closing bracket does not match visual indentation
+.\.trunk\plugins\trunk\linters\ruff\test_data\format.in.py:12:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\ruff\test_data\syntax.in.py:1:11: E999 SyntaxError: '{' was never closed
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:3:1: F811 redefinition of unused 'test' from line 1
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:3:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:4:3: F841 local variable 'substitution' is assigned to but never used
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:4:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:6:3: F841 local variable 'my_list' is assigned to but never used
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:6:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:6:13: F821 undefined name 'List'
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:7:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\sourcery\test_data\basic.in.py:9:3: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\trivy\trivy_fs_secret_to_sarif.py:7:151: E501 line too long (152 > 150 characters)
+.\.trunk\plugins\trunk\linters\trivy\trivy_fs_vuln_to_sarif.py:7:151: E501 line too long (152 > 150 characters)
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:1:1: F401 'typing.Callable' imported but unused
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:1:1: F401 'typing.Iterator' imported but unused
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:1:1: F401 'typing.Union' imported but unused
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:1:1: F401 'typing.Optional' imported but unused
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:7:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:14:1: E305 expected 2 blank lines after class or function definition, found 1
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:15:1: F821 undefined name 'reveal_type'
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:22:1: E303 too many blank lines (3)
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:23:15: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:24:8: F821 undefined name 'ClassVar'
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:24:25: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:27:19: E261 at least two spaces before inline comment
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:29:1: E305 expected 2 blank lines after class or function definition, found 1
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:35:1: E303 too many blank lines (3)
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:39:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:50:13: F821 undefined name 'reveal_type'
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:53:9: E731 do not assign a lambda expression, use a def
+.\.trunk\plugins\trunk\linters\ty\test_data\basic.in.py:53:27: F821 undefined name 'reveal_type'
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:8:1: F401 'sys' imported but unused
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:8:1: E305 expected 2 blank lines after class or function definition, found 1
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:8:1: E402 module level import not at top of file
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:11:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:15:1: E302 expected 2 blank lines, found 1
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:20:1: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:22:3: E114 indentation is not a multiple of 4 (comment)
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:22:3: E265 block comment should start with '# '
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:24:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:24:7: E117 over-indented
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:24:8: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:25:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:25:8: E225 missing whitespace around operator
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:25:10: E201 whitespace after '('
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:25:14: E202 whitespace before ')'
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:26:7: E111 indentation is not a multiple of 4
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:29:7: E124 closing bracket does not match visual indentation
+.\.trunk\plugins\trunk\linters\yapf\test_data\basic.in.py:30:7: E111 indentation is not a multiple of 4
+.\debug_opt.py:15:1: E402 module level import not at top of file
+.\debug_opt.py:23:61: E261 at least two spaces before inline comment
+.\logs\check_state.py:3:1: F401 'sys' imported but unused
+.\logs\check_state.py:59:1: W391 blank line at end of file
+.\logs\check_state2.py:30:1: W391 blank line at end of file
+.\nexus_24_7.py:39:1: W293 blank line contains whitespace
+.\nexus_24_7.py:88:1: W293 blank line contains whitespace
+.\nexus_24_7.py:98:1: W293 blank line contains whitespace
+.\nexus_24_7.py:101:42: W291 trailing whitespace
+.\nexus_24_7.py:106:1: W293 blank line contains whitespace
+.\nexus_24_7.py:177:1: W293 blank line contains whitespace
+.\nexus_24_7_menu.py:9:1: F401 'os' imported but unused
+.\nexus_24_7_menu.py:12:1: E302 expected 2 blank lines, found 1
+.\nexus_24_7_menu.py:28:1: E302 expected 2 blank lines, found 1
+.\nexus_24_7_menu.py:37:1: E302 expected 2 blank lines, found 1
+.\nexus_24_7_menu.py:43:66: W291 trailing whitespace
+.\nexus_24_7_menu.py:55:1: E302 expected 2 blank lines, found 1
+.\nexus_24_7_menu.py:60:66: W291 trailing whitespace
+.\nexus_24_7_menu.py:67:1: E302 expected 2 blank lines, found 1
+.\nexus_24_7_menu.py:72:39: W291 trailing whitespace
+.\nexus_24_7_menu.py:80:1: E302 expected 2 blank lines, found 1
+.\nexus_24_7_menu.py:85:1: W293 blank line contains whitespace
+.\nexus_24_7_menu.py:90:66: W291 trailing whitespace
+.\nexus_24_7_menu.py:98:1: E302 expected 2 blank lines, found 1
+.\nexus_24_7_menu.py:104:1: W293 blank line contains whitespace
+.\nexus_24_7_menu.py:109:1: W293 blank line contains whitespace
+.\nexus_24_7_menu.py:113:1: W293 blank line contains whitespace
+.\nexus_24_7_menu.py:122:1: W293 blank line contains whitespace
+.\nexus_24_7_menu.py:125:1: E302 expected 2 blank lines, found 1
+.\nexus_24_7_menu.py:133:1: E302 expected 2 blank lines, found 1
+.\nexus_24_7_menu.py:137:1: W293 blank line contains whitespace
+.\nexus_24_7_menu.py:140:1: W293 blank line contains whitespace
+.\nexus_24_7_menu.py:154:1: W293 blank line contains whitespace
+.\nexus_24_7_menu.py:157:1: W293 blank line contains whitespace
+.\nexus_24_7_menu.py:159:1: W293 blank line contains whitespace
+.\nexus_24_7_menu.py:166:1: W293 blank line contains whitespace
+.\nexus_24_7_menu.py:170:1: E302 expected 2 blank lines, found 1
+.\nexus_24_7_menu.py:175:1: W293 blank line contains whitespace
+.\nexus_24_7_menu.py:197:1: W293 blank line contains whitespace
+.\nexus_24_7_menu.py:200:1: E305 expected 2 blank lines after class or function definition, found 1
+.\nexus_orchestrator.py:188:1: W391 blank line at end of file
+.\nexus_service_manager.py:15:1: F401 'os' imported but unused
+.\scratch\debug_data.py:2:1: F401 'pandas as pd' imported but unused
+.\scratch\debug_data.py:4:1: F401 'nexus.utils.config.Config' imported but unused
+.\scratch\debug_data.py:6:1: E302 expected 2 blank lines, found 1
+.\scratch\diag_orders.py:6:1: E402 module level import not at top of file
+.\scratch\diag_orders.py:8:1: E302 expected 2 blank lines, found 1
+.\scratch\diag_positions.py:7:1: E402 module level import not at top of file
+.\scratch\diag_positions.py:9:1: E302 expected 2 blank lines, found 1
+.\scratch\final_integration_test.py:3:1: F401 'time' imported but unused
+.\scratch\final_integration_test.py:4:1: F401 'json' imported but unused
+.\scratch\final_integration_test.py:13:1: E302 expected 2 blank lines, found 1
+.\scratch\final_integration_test.py:16:1: W293 blank line contains whitespace
+.\scratch\final_integration_test.py:24:1: W293 blank line contains whitespace
+.\scratch\final_integration_test.py:61:1: E305 expected 2 blank lines after class or function definition, found 1
+.\scratch\read_audit_db.py:14:1: W293 blank line contains whitespace
+.\scratch\test_alpaca_connectivity.py:4:1: F401 'nexus.utils.config.Config' imported but unused
+.\scratch\test_alpaca_connectivity.py:9:1: E302 expected 2 blank lines, found 1
+.\scratch\test_alpaca_connectivity.py:12:1: W293 blank line contains whitespace
+.\scratch\test_alpaca_connectivity.py:16:1: W293 blank line contains whitespace
+.\scratch\test_alpaca_connectivity.py:19:21: F541 f-string is missing placeholders
+.\scratch\test_alpaca_connectivity.py:24:1: W293 blank line contains whitespace
+.\scratch\test_alpaca_connectivity.py:27:1: W293 blank line contains whitespace
+.\scratch\test_alpaca_connectivity.py:30:1: W293 blank line contains whitespace
+.\scripts\train_dl_models.py:5:1: F401 'os' imported but unused
+.\scripts\train_dl_models.py:6:1: F401 'sys' imported but unused
+.\test_engine.py:8:1: E402 module level import not at top of file
+.\test_engine.py:10:1: E302 expected 2 blank lines, found 1
+.\test_engine.py:17:1: W293 blank line contains whitespace
+.\tools\compare_sets.py:1:12: E401 multiple imports on one line
+.\tools\compare_sets.py:2:1: F401 'pathlib.Path' imported but unused
+.\tools\compare_sets.py:4:1: E302 expected 2 blank lines, found 1
+.\tools\compare_sets.py:5:16: E231 missing whitespace after ','
+.\tools\compare_sets.py:6:24: E231 missing whitespace after ','
+.\tools\compare_sets.py:6:33: E231 missing whitespace after ','
+.\tools\compare_sets.py:6:45: E231 missing whitespace after ','
+.\tools\compare_sets.py:13:1: E305 expected 2 blank lines after class or function definition, found 1
+.\tools\historical_optimize.py:12:1: F401 'pandas as pd' imported but unused
+.\tools\historical_optimize.py:19:1: E302 expected 2 blank lines, found 1
+.\tools\historical_optimize.py:23:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:28:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:31:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:35:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:39:5: F841 local variable 'close_prices' is assigned to but never used
+.\tools\historical_optimize.py:41:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:47:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:51:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:53:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:56:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:62:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:65:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:68:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:72:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:77:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:87:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:90:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:97:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:101:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:105:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:108:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:115:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:126:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:130:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:133:1: W293 blank line contains whitespace
+.\tools\historical_optimize.py:136:1: E305 expected 2 blank lines after class or function definition, found 1
+.\tools\inspect_alpaca.py:3:1: E302 expected 2 blank lines, found 1
+.\tools\inspect_alpaca.py:4:16: E231 missing whitespace after ','
+.\tools\inspect_alpaca.py:5:24: E231 missing whitespace after ','
+.\tools\inspect_alpaca.py:5:33: E231 missing whitespace after ','
+.\tools\inspect_alpaca.py:5:45: E231 missing whitespace after ','
+.\tools\inspect_alpaca.py:12:1: E305 expected 2 blank lines after class or function definition, found 1
+.\tools\inspect_alpaca.py:16:10: E231 missing whitespace after ','
+.\tools\inspect_alpaca.py:21:6: E231 missing whitespace after ','
+.\tools\print_alpaca_positions.py:2:1: F401 'pathlib.Path' imported but unused
+.\tools\print_alpaca_positions.py:4:1: E302 expected 2 blank lines, found 1
+.\tools\print_alpaca_positions.py:5:16: E231 missing whitespace after ','
+.\tools\print_alpaca_positions.py:6:24: E231 missing whitespace after ','
+.\tools\print_alpaca_positions.py:6:33: E231 missing whitespace after ','
+.\tools\print_alpaca_positions.py:6:45: E231 missing whitespace after ','
+.\tools\print_alpaca_positions.py:13:1: E305 expected 2 blank lines after class or function definition, found 1
+.\tools\reconcile_alpaca_nexus.py:105:1: E305 expected 2 blank lines after class or function definition, found 1
+.\tools\train_and_validate.py:4:83: W291 trailing whitespace
+.\tools\train_and_validate.py:10:1: E302 expected 2 blank lines, found 1
+.\tools\train_and_validate.py:14:1: W293 blank line contains whitespace
+.\tools\train_and_validate.py:27:1: W293 blank line contains whitespace
+.\tools\train_and_validate.py:35:1: W293 blank line contains whitespace
+.\tools\train_and_validate.py:40:1: W293 blank line contains whitespace
+.\tools\train_and_validate.py:50:1: W293 blank line contains whitespace
+.\tools\train_and_validate.py:55:1: E305 expected 2 blank lines after class or function definition, found 1
+.\verify_production_ready.py:77:1: W293 blank line contains whitespace
+.\verify_production_ready.py:144:1: W293 blank line contains whitespace
+.\verify_production_ready.py:221:1: W293 blank line contains whitespace
+.\verify_production_ready.py:225:1: W293 blank line contains whitespace
+.\verify_production_ready.py:232:1: W293 blank line contains whitespace

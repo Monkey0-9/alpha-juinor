@@ -28,7 +28,7 @@ htmlcov/
 
 # Local data
 *.log
-data/
+/data/
 nexus.db
 *.pdb
 *.onnx
