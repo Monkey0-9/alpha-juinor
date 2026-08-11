@@ -8,6 +8,8 @@ from typing import Dict, Any, Optional, Tuple
 from nexus.data.features import FeatureEngineer
 from nexus.models.zoo.time_series import GradientBoostedTimeSeriesModel
 
+from nexus.research.walk_forward import WalkForwardEvaluator
+
 logger = logging.getLogger(__name__)
 
 REGISTRY_PATH = os.path.join("models", "registry.json")
@@ -16,14 +18,21 @@ REGISTRY_PATH = os.path.join("models", "registry.json")
 class ModelRegistry:
     """
     Manages active production models vs candidate models.
-    Validates candidates out-of-sample and deploys ONLY if performance strictly improves.
+    Validates candidates out-of-sample on Sharpe, Sortino, Max Drawdown, and Profit Factor.
+    Deploys ONLY if out-of-sample risk-adjusted performance strictly improves.
     """
 
     def __init__(self, registry_file: str = REGISTRY_PATH):
         self.registry_file = registry_file
         os.makedirs(os.path.dirname(self.registry_file), exist_ok=True)
         self.active_version = "v1.0.0"
-        self.active_metrics: Dict[str, float] = {"accuracy": 0.50, "directional_f1": 0.50}
+        self.active_metrics: Dict[str, float] = {
+            "sharpe_ratio": 0.50,
+            "sortino_ratio": 0.50,
+            "max_drawdown": 0.15,
+            "profit_factor": 1.05,
+            "win_rate": 0.50
+        }
         self.active_model: Optional[Any] = None
         self._load_registry()
 
@@ -49,55 +58,60 @@ class ModelRegistry:
             logger.error("Failed to save model registry: %s", e)
 
     def evaluate_candidate(
-        self, candidate_model: Any, validation_data: pd.DataFrame
+        self, candidate_model_class: Any, validation_data: pd.DataFrame
     ) -> Tuple[bool, Dict[str, float]]:
         """
-        Evaluates candidate model on out-of-sample validation data.
-        Returns (is_promoted, candidate_metrics)
+        Evaluates candidate model using out-of-sample Walk-Forward evaluation.
+        Promotes ONLY if risk-adjusted metrics (Sharpe, Profit Factor, Max DD) exceed active benchmarks.
         """
-        if validation_data.empty or len(validation_data) < 20:
+        if validation_data.empty or len(validation_data) < 50:
             return False, {}
 
         features = FeatureEngineer.add_all_features(validation_data)
-        if len(features) < 15:
+        if len(features) < 40:
             return False, {}
 
-        correct = 0
-        total = 0
+        evaluator = WalkForwardEvaluator(train_window=30, val_window=10, test_window=10, step_size=10)
+        res = evaluator.evaluate_model(candidate_model_class, features)
 
-        # Run directional out-of-sample predictions
-        for i in range(len(features) - 1):
-            window = features.iloc[:i+1]
-            next_realized_ret = features['close'].iloc[i+1] - features['close'].iloc[i]
+        if res.get("status") != "success":
+            return False, {}
 
-            pred_signal = candidate_model.predict(window)
-            if pred_signal != 0:
-                if (pred_signal * next_realized_ret) > 0:
-                    correct += 1
-                total += 1
+        candidate_sharpe = res.get("sharpe_ratio", 0.0)
+        candidate_pf = res.get("profit_factor", 0.0)
+        candidate_dd = res.get("max_drawdown", 1.0)
+        candidate_win = res.get("win_rate", 0.0)
 
-        acc = (correct / total) if total > 0 else 0.50
-        candidate_metrics = {"accuracy": round(acc, 4), "total_signals": total}
+        active_sharpe = self.active_metrics.get("sharpe_ratio", 0.50)
 
-        # Deploy only if out-of-sample accuracy exceeds current active accuracy + 2% margin
-        min_required = self.active_metrics.get("accuracy", 0.50) + 0.02
-        if acc >= min_required and total >= 10:
+        candidate_metrics = {
+            "sharpe_ratio": candidate_sharpe,
+            "sortino_ratio": res.get("sortino_ratio", 0.0),
+            "max_drawdown": candidate_dd,
+            "profit_factor": candidate_pf,
+            "win_rate": candidate_win,
+            "out_of_sample_samples": res.get("out_of_sample_samples", 0)
+        }
+
+        # Institutional promotion gating:
+        # Candidate Sharpe must beat active Sharpe by >= 0.10, Profit Factor > 1.05, Max DD < 25%
+        if candidate_sharpe >= active_sharpe + 0.10 and candidate_pf > 1.05 and candidate_dd < 0.25:
             major, minor, patch = self.active_version.replace("v", "").split(".")
             new_version = f"v{major}.{minor}.{int(patch) + 1}"
 
             self.active_version = new_version
             self.active_metrics = candidate_metrics
-            self.active_model = candidate_model
+            self.active_model = candidate_model_class()
             self._save_registry()
             logger.info(
-                "NEW MODEL PROMOTED TO PRODUCTION: %s (Accuracy: %.2f%% vs previous %.2f%%)",
-                new_version, acc * 100, min_required * 100
+                "NEW MODEL PROMOTED TO PRODUCTION: %s (Sharpe: %.2f vs prev %.2f, PF: %.2f)",
+                new_version, candidate_sharpe, active_sharpe, candidate_pf
             )
             return True, candidate_metrics
 
         logger.info(
-            "Candidate model rejected (Accuracy: %.2f%% < required %.2f%%)",
-            acc * 100, min_required * 100
+            "Candidate model rejected (Sharpe: %.2f vs required %.2f)",
+            candidate_sharpe, active_sharpe + 0.10
         )
         return False, candidate_metrics
 
@@ -105,7 +119,7 @@ class ModelRegistry:
 class ContinuousLearner:
     """
     Automated continuous retraining pipeline.
-    Periodically retrains model on incoming bar data and submits to registry.
+    Periodically retrains models on incoming bar data and evaluates via Walk-Forward validation.
     """
 
     def __init__(self, registry: Optional[ModelRegistry] = None):
@@ -123,18 +137,9 @@ class ContinuousLearner:
 
         logger.info("Executing continuous retraining cycle on %d bars...", len(historical_bars))
 
-        # Walk-forward split: 70% train, 30% out-of-sample validation
-        split_idx = int(len(historical_bars) * 0.70)
-        train_df = historical_bars.iloc[:split_idx]
-        val_df = historical_bars.iloc[split_idx:]
-
-        # Feature engineering
-        train_features = FeatureEngineer.add_all_features(train_df)
-
-        candidate = GradientBoostedTimeSeriesModel()
-        if not candidate.fit(train_features):
-            return False
-
-        promoted, metrics = self.registry.evaluate_candidate(candidate, val_df)
+        promoted, metrics = self.registry.evaluate_candidate(
+            GradientBoostedTimeSeriesModel, historical_bars
+        )
         self.last_retrain_time = now
         return promoted
+

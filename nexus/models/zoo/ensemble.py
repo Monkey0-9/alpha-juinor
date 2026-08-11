@@ -173,3 +173,30 @@ class AIEnsembleBrain:
             correct = 1 if (predicted_signal * realized_return) > 0 else 0
             self.performance_history[model_name].append(correct)
 
+    def record_calibration_outcome(
+        self,
+        model_name: str,
+        predicted_prob: float,
+        predicted_signal: float,
+        realized_return: float
+    ) -> Dict[str, float]:
+        """
+        Records prediction calibration:
+          - brier_score = (predicted_prob - (1.0 if realized_return > 0 else 0.0))^2
+          - signal_error = |predicted_signal - sign(realized_return)|
+        """
+        target_binary = 1.0 if realized_return > 0 else 0.0
+        brier_score = (predicted_prob - target_binary) ** 2
+        signal_error = abs(predicted_signal - np.sign(realized_return))
+
+        correct = 1 if (predicted_signal * realized_return) > 0 else 0
+        if model_name in self.performance_history:
+            self.performance_history[model_name].append(correct)
+
+        return {
+            "brier_score": round(float(brier_score), 4),
+            "signal_error": round(float(signal_error), 4),
+            "correct": correct
+        }
+
+

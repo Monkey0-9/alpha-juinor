@@ -167,3 +167,12 @@ def test_portfolio_risk_calculation():
     assert "portfolio_vol" in res
     assert "diversification_ratio" in res
 
+def test_ensemble_record_calibration_outcome():
+    brain = AIEnsembleBrain()
+    brain.add_model(MagicMock(), name="m1")
+    calib = brain.record_calibration_outcome("m1", predicted_prob=0.8, predicted_signal=0.6, realized_return=0.02)
+    assert calib["correct"] == 1
+    assert "brier_score" in calib
+    assert "signal_error" in calib
+
+
