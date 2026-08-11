@@ -122,10 +122,48 @@ def test_ts_model_missing_features():
     pred = model.predict(df)
     assert pred == 0
 
-def test_pytorch_lstm_fallback():
-    model = PyTorchLSTMModel()
+def test_pytorch_lstm_model():
+    model = PyTorchLSTMModel(sequence_length=5, epochs=2)
     df = _create_ts_data(50)
     success = model.fit(df)
     assert success
     pred = model.predict(df)
     assert pred in [-1, 0, 1]
+    probs = model.predict_proba(df)
+    assert 1 in probs and -1 in probs and 0 in probs
+
+def test_temporal_transformer_model():
+    from nexus.models.zoo.time_series import TemporalTransformerModel
+    model = TemporalTransformerModel(sequence_length=5, epochs=2)
+    df = _create_ts_data(50)
+    success = model.fit(df)
+    assert success
+    pred = model.predict(df)
+    assert pred in [-1, 0, 1]
+    probs = model.predict_proba(df)
+    assert 1 in probs and -1 in probs and 0 in probs
+
+def test_ensemble_predict_proba_summary():
+    brain = AIEnsembleBrain()
+    mock_model = MagicMock()
+    mock_model.predict_proba.return_value = {1: 0.6, -1: 0.2, 0: 0.2}
+    brain.add_model(mock_model, name="m1", weight=1.0)
+
+    df = _create_ts_data(20)
+    summary = brain.predict_proba_summary(df)
+    assert "p_buy" in summary
+    assert "p_sell" in summary
+    assert summary["p_buy"] == 0.6
+    assert summary["expected_signal"] == 0.4
+
+def test_portfolio_risk_calculation():
+    from nexus.math.risk import RiskEngine
+    risk = RiskEngine()
+    weights = np.array([0.5, 0.5])
+    returns_matrix = np.random.randn(50, 2) * 0.01
+    res = risk.calculate_portfolio_risk(weights, returns_matrix)
+    assert "portfolio_var" in res
+    assert "portfolio_cvar" in res
+    assert "portfolio_vol" in res
+    assert "diversification_ratio" in res
+

@@ -159,3 +159,37 @@ class RiskEngine:
             "skewness": skewness,
             "kurtosis": kurt,
         }
+
+    def calculate_portfolio_risk(
+        self,
+        weights: np.ndarray,
+        returns_matrix: np.ndarray
+    ) -> Dict[str, float]:
+        """
+        Calculates multi-asset portfolio-level VaR, CVaR, portfolio volatility,
+        and diversification ratio from asset returns matrix and allocated weights.
+        """
+        if len(returns_matrix) == 0 or len(weights) == 0:
+            return {"portfolio_var": 0.0, "portfolio_cvar": 0.0, "portfolio_vol": 0.0, "diversification_ratio": 1.0}
+
+        w = np.array(weights, dtype=np.float64)
+        if abs(np.sum(w) - 1.0) > 1e-4 and np.sum(w) > 0:
+            w = w / np.sum(w)
+
+        # Portfolio return series: R_p = X * w
+        port_returns = returns_matrix @ w
+        port_vol = float(np.std(port_returns, ddof=1) * np.sqrt(252)) if len(port_returns) > 1 else 0.0
+
+        port_var = self.calculate_historical_var(port_returns)
+        port_cvar = self.calculate_cvar(port_returns)
+
+        asset_vols = np.std(returns_matrix, axis=0) * np.sqrt(252) if returns_matrix.ndim > 1 else np.std(returns_matrix) * np.sqrt(252)
+        weighted_vol = float(np.sum(w * asset_vols)) if returns_matrix.ndim > 1 else port_vol
+        div_ratio = float(weighted_vol / max(port_vol, 1e-6)) if port_vol > 0 else 1.0
+
+        return {
+            "portfolio_var": round(port_var, 6),
+            "portfolio_cvar": round(port_cvar, 6),
+            "portfolio_vol": round(port_vol, 6),
+            "diversification_ratio": round(div_ratio, 4)
+        }
