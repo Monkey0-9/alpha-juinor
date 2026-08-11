@@ -1,22 +1,10 @@
-"""
-nexus/core/alpha.py — Superhuman Alpha Signal Engine
-
-Replaces naive Kalman + Monte Carlo blend with:
-  - Entropy-filtered momentum (Shannon entropy down-weights noisy signals)
-  - Hurst-gated signals (H>0.55 → momentum, H<0.45 → mean-reversion)
-  - VWAP deviation alpha (smart money tracking)
-  - Adaptive Kalman variance (process/measurement updated from rolling vol)
-  - Regime-adaptive signal weighting
-  - Multi-factor signal combination with IC-optimal blending
-"""
-
 import asyncio
 import logging
 import time
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 import sys
 import os
 
@@ -37,39 +25,77 @@ cpp_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)
 if cpp_dir not in sys.path:
     sys.path.append(cpp_dir)
 
-import nexus_cpp  # noqa: E402
+import nexus_cpp
 
 logger = logging.getLogger(__name__)
 
+try:
+    import pywt
+    WAVELET_AVAILABLE = True
+except ImportError:
+    WAVELET_AVAILABLE = False
+
+try:
+    from PyEMD import EMD
+    EMD_AVAILABLE = True
+except ImportError:
+    EMD_AVAILABLE = False
+
 
 class AdaptiveKalmanFilter(KalmanFilter):
-    """
-    Adaptive Kalman Filter that updates its process/measurement variances
-    dynamically from rolling observed volatility.
-    """
-
     def adapt_to_volatility(self, rolling_vol: float) -> None:
         self.process_variance = max(1e-7, rolling_vol**2 * 0.1)
         self.measurement_variance = max(1e-5, rolling_vol**2 * 5.0)
 
 
+class CrossAssetAlphaModel:
+    def __init__(self, lookback: int = 60):
+        self.lookback = lookback
+        self._correlation_matrix: Dict[str, Dict[str, float]] = {}
+
+    def compute_pair_alpha(self, symbol: str, peer_symbols: List[str], prices: Dict[str, pd.Series]) -> float:
+        if len(peer_symbols) < 2 or symbol not in prices:
+            return 0.0
+        my_price = prices[symbol]
+        peer_alpha = 0.0
+        for peer in peer_symbols:
+            if peer == symbol or peer not in prices:
+                continue
+            peer_p = prices[peer]
+            aligned = pd.concat([my_price, peer_p], axis=1).dropna()
+            if len(aligned) < self.lookback:
+                continue
+            my_ret = aligned.iloc[:, 0].pct_change().dropna().tail(self.lookback)
+            peer_ret = aligned.iloc[:, 1].pct_change().dropna().tail(self.lookback)
+            if len(my_ret) < 10 or len(peer_ret) < 10:
+                continue
+            corr = my_ret.corr(peer_ret)
+            self._correlation_matrix.setdefault(symbol, {})[peer] = float(corr)
+            my_momentum = float(my_ret.tail(5).mean())
+            peer_momentum = float(peer_ret.tail(5).mean())
+            if corr > 0.7:
+                divergence = my_momentum - peer_momentum
+                peer_alpha += np.tanh(divergence * 5) * 0.3
+            elif corr < -0.3:
+                divergence = my_momentum + peer_momentum
+                peer_alpha += np.tanh(divergence * 3) * 0.2
+        return float(np.clip(peer_alpha, -0.5, 0.5))
+
+
+class WaveletDenoiser:
+    def denoise(self, prices: np.ndarray, wavelet: str = 'db4', level: int = 3) -> np.ndarray:
+        if not WAVELET_AVAILABLE or len(prices) < 2**level:
+            return prices
+        coeffs = pywt.wavedec(prices, wavelet, level=level)
+        sigma = np.median(np.abs(coeffs[-1])) / 0.6745
+        threshold = sigma * np.sqrt(2 * np.log(len(prices)))
+        coeffs_thresh = [coeffs[0]] + [pywt.threshold(c, threshold, mode='soft') for c in coeffs[1:]]
+        return pywt.waverec(coeffs_thresh, wavelet)[:len(prices)]
+
+
 class AlphaEngine:
-    """
-    Superhuman Alpha Generation Engine.
-
-    Multi-factor signal combining:
-    1. Adaptive Kalman-denoised trend
-    2. Empirical Mode Decomposition (EMD) intrinsic modes
-    3. Discrete Wavelet Denoising (DWT soft-thresholding)
-    4. Cross-Asset Lead-Lag alpha signals
-    5. Entropy-filtered momentum
-    6. Hurst-gated directional signals
-    7. VWAP deviation signal
-    8. Hawkes Process volatility clustering penalty
-    """
-
     _cache: Dict[str, Dict[str, Any]] = {}
-    _CACHE_TTL = 300  # 5 minutes
+    _CACHE_TTL = 300
 
     def __init__(self, backend_url: str = Config.BACKEND_URL):
         self.kf = AdaptiveKalmanFilter()
@@ -77,98 +103,18 @@ class AlphaEngine:
         self.backend_url = backend_url
         self.client = get_client()
         self.sentiment_engine = SentimentEngine()
+        self.cross_asset = CrossAssetAlphaModel()
+        self.wavelet = WaveletDenoiser()
 
-    @staticmethod
-    def empirical_mode_decomposition(prices: np.ndarray[Any, Any], n_imfs: int = 3) -> Tuple[List[np.ndarray[Any, Any]], np.ndarray[Any, Any]]:
-        """
-        Empirical Mode Decomposition (EMD) Sifting Algorithm.
-        Decomposes price series into Intrinsic Mode Functions (IMFs) and low-frequency trend residual.
-        """
-        if len(prices) < 20:
-            return [prices], prices
-
-        resid = prices.astype(float).copy()
-        imfs = []
-
-        for _ in range(n_imfs):
-            # Sifting: local mean interpolation proxy
-            rolling_high = pd.Series(resid).rolling(5, min_periods=1, center=True).max().to_numpy()
-            rolling_low = pd.Series(resid).rolling(5, min_periods=1, center=True).min().to_numpy()
-            local_mean = (rolling_high + rolling_low) / 2.0
-            imf = resid - local_mean
-            imfs.append(imf)
-            resid = local_mean
-
-        return imfs, resid
-
-    @staticmethod
-    def wavelet_denoise(signal: np.ndarray[Any, Any], threshold_mult: float = 1.0) -> np.ndarray[Any, Any]:
-        """
-        Discrete Wavelet Denoising via Soft-Thresholding.
-        Smooths high-frequency noise while preserving price jump boundaries.
-        """
-        if len(signal) < 10:
-            return signal
-
-        diffs = np.diff(signal)
-        sigma = float(np.median(np.abs(diffs)) / 0.6745) + 1e-9
-        threshold = threshold_mult * sigma * np.sqrt(2 * np.log(len(signal)))
-
-        # Soft thresholding
-        denoised_diffs = np.sign(diffs) * np.maximum(0.0, np.abs(diffs) - threshold)
-        reconstructed = np.concatenate([[signal[0]], signal[0] + np.cumsum(denoised_diffs)])
-        return reconstructed
-
-    def compute_cross_asset_alpha(
-        self, target_symbol: str, target_df: pd.DataFrame, leader_dfs: Dict[str, pd.DataFrame], lag: int = 1
-    ) -> float:
-        """
-        Cross-Asset Lead-Lag Alpha:
-        Computes lagged cross-correlation against market leader assets (e.g. SPY/QQQ).
-        """
-        if target_df.empty or "close" not in target_df.columns or len(target_df) < 30:
-            return 0.0
-
-        target_ret = target_df["close"].pct_change().dropna()
-        cross_alphas = []
-
-        for leader, leader_df in leader_dfs.items():
-            if leader == target_symbol or leader_df.empty or "close" not in leader_df.columns:
-                continue
-
-            leader_ret = leader_df["close"].pct_change().dropna()
-            aligned = pd.concat([target_ret, leader_ret.shift(lag)], axis=1).dropna()
-            if len(aligned) > 20:
-                corr = float(aligned.corr().iloc[0, 1])
-                if not np.isnan(corr):
-                    cross_alphas.append(corr * float(aligned.iloc[-1, 1]))
-
-        return float(np.mean(cross_alphas)) if cross_alphas else 0.0
-
-    # ------------------------------------------------------------------ #
-    # Data Fetching (unchanged interface, same resilience)               #
-    # ------------------------------------------------------------------ #
-
-    async def fetch_market_data(
-        self,
-        symbol: str,
-        timeframe: str = "1Min",
-        limit: int = 250,
-    ) -> pd.DataFrame:
-        """Fetch market bars with caching, retries, and extended lookback."""
-        cache_key = f"{symbol}_{timeframe}"
+    async def fetch_market_data(self, symbol: str, timeframe: str = "1Min", limit: int = 250) -> pd.DataFrame:
+        cache_key = f"{symbol}_{timeframe}_{limit}"
         now = time.time()
-
-        if symbol == "SPY" and cache_key in self._cache:
-            entry = self._cache[cache_key]
-            if now - entry["timestamp"] < self._CACHE_TTL:
-                return entry["data"]
-
+        entry = self._cache.get(cache_key)
+        if entry and now - entry["timestamp"] < self._CACHE_TTL:
+            return entry["data"]
         df = await self._fetch_with_backoff(symbol, timeframe, limit)
-
-        if not df.empty and symbol == "SPY":
+        if not df.empty:
             self._cache[cache_key] = {"timestamp": now, "data": df}
-
         return df
 
     async def _fetch_with_backoff(self, symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
@@ -176,20 +122,14 @@ class AlphaEngine:
         for attempt in range(2):
             try:
                 days_to_lookback = (limit // 390) + 3
-                start_date = (
-                    datetime.now(timezone.utc) - timedelta(days=days_to_lookback)
-                ).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-                bars = await self.client.get_bars(
-                    symbol, timeframe=timeframe, limit=limit, start=start_date
-                )
+                start_date = (datetime.now(timezone.utc) - timedelta(days=days_to_lookback)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                bars = await self.client.get_bars(symbol, timeframe=timeframe, limit=limit, start=start_date)
                 if len(bars) >= 20:
                     break
                 if attempt == 0:
                     await asyncio.sleep(1)
             except Exception as e:
-                logger.debug(f"Alpaca fetch failed for {symbol} (Attempt {attempt}): {e}")
-
+                logger.debug("Alpaca fetch failed for %s (Attempt %d): %s", symbol, attempt, e)
         df = None
         if bars and len(bars) >= 5:
             df = pd.DataFrame(bars)
@@ -198,7 +138,6 @@ class AlphaEngine:
         else:
             try:
                 import yfinance as yf
-
                 yf_logger = logging.getLogger("yfinance")
                 old_yf_level = yf_logger.level
                 yf_logger.setLevel(logging.CRITICAL)
@@ -207,285 +146,159 @@ class AlphaEngine:
                 if getattr(df, "empty", True) and timeframe == "1Min":
                     df = yf.download(symbol, period="7d", interval="15m", progress=False)
             except Exception as e:
-                logger.debug(f"yfinance fallback failed for {symbol}: {e}")
+                logger.debug("yfinance fallback failed for %s: %s", symbol, e)
                 return pd.DataFrame()
             finally:
                 try:
-                    if "yf_logger" in locals() and "old_yf_level" in locals():
+                    if 'yf_logger' in locals() and 'old_yf_level' in locals():
                         yf_logger.setLevel(old_yf_level)
                 except Exception:
                     pass
-
         if df is None or (hasattr(df, "empty") and df.empty):
             return pd.DataFrame()
-
         return self._normalize_columns(df, limit)
 
     def _normalize_columns(self, df: pd.DataFrame, limit: int) -> pd.DataFrame:
-        """Standardize column names across different data providers."""
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = [str(c[0]).lower() for c in df.columns]
         else:
             df.columns = [str(c).lower() for c in df.columns]
-
         rename_map = {"adj close": "close", "unadjusted close": "close"}
         for k, v in rename_map.items():
             if k in df.columns and v not in df.columns:
                 df[v] = df[k]
-
         for col in ["open", "high", "low", "close", "volume"]:
             if col not in df.columns:
                 df[col] = df["close"] if "close" in df.columns else 0.0
-
-            # Type check workaround for pandas multi-column assignment
             col_data = df[col]
             if isinstance(col_data, pd.DataFrame):
                 df[col] = col_data.iloc[:, 0]
-
         return df.loc[:, ~df.columns.duplicated()].tail(limit)
 
-    # ------------------------------------------------------------------ #
-    # Superhuman Signal Generation                                        #
-    # ------------------------------------------------------------------ #
-
-    def generate_signal(self, data: pd.DataFrame, sentiment_score: float = 0.0) -> float:
-        """
-        Generate multi-factor alpha signal with Superhuman intelligence.
-
-        Factor stack:
-        1. Adaptive Kalman trend score (regime-adaptive noise filter)
-        2. Entropy-filtered momentum (suppresses noise via Shannon entropy)
-        3. Hurst-gated direction gate (momentum vs. mean-reversion)
-        4. VWAP deviation signal (smart money flow detection)
-        5. Hawkes intensity adjustment (vol clustering risk penalty)
-        """
+    def generate_signal(self, data: pd.DataFrame, sentiment_score: float = 0.0, peer_data: Optional[Dict[str, pd.Series]] = None, peer_symbols: Optional[List[str]] = None) -> float:
         if data.empty or "close" not in data.columns:
             return 0.0
-
         prices = data["close"].astype(float).to_numpy().flatten()
-
-        # Adapt Kalman filter to current volatility environment
         if len(prices) > 5:
             rolling_vol = float(np.std(np.diff(prices[-20:]) / (prices[-20:-1] + 1e-9)))
             self.kf.adapt_to_volatility(rolling_vol)
-
-        denoised_prices = self.kf.batch_filter(prices)
+        prices_denoised = self.wavelet.denoise(prices) if len(prices) > 32 else prices
+        denoised_prices = self.kf.batch_filter(prices_denoised)
         if len(denoised_prices) < 5:
             return 0.0
-
         pct_changes = pd.Series(denoised_prices).pct_change().dropna()
         if pct_changes.empty:
             return 0.0
-
-        # --- Factor 1: Trend Signal (Kalman-smoothed) ---
-        trend = (
-            float(denoised_prices[-1] / denoised_prices[-10] - 1)
-            if len(denoised_prices) >= 10
-            else 0.0
-        )
+        trend = float(denoised_prices[-1] / denoised_prices[-10] - 1) if len(denoised_prices) >= 10 else 0.0
         trend_score = float(np.tanh(trend * 20))
-
-        # --- Factor 2: Entropy-Filtered Momentum ---
         momentum = float(pct_changes.tail(5).mean())
-        volatility = (
-            float(pct_changes.tail(20).std())
-            if len(pct_changes) >= 20
-            else float(pct_changes.std())
-        )
+        volatility = float(pct_changes.tail(20).std()) if len(pct_changes) >= 20 else float(pct_changes.std())
         entropy_filter = self._compute_entropy_filter(pct_changes.to_numpy())
         momentum_score = float(np.tanh(momentum * 10)) * entropy_filter
-
-        # --- Factor 3: Hurst Exponent Gate ---
         price_series = pd.Series(prices)
         hurst = compute_hurst_exponent(price_series)
         hurst_signal = self._hurst_gate(hurst, trend_score, momentum_score)
-
-        # --- Factor 4: VWAP Deviation Signal ---
         vwap_signal = self._compute_vwap_signal(data, prices[-1] if len(prices) > 0 else 0.0)
-
-        # --- Factor 5: Hawkes Intensity Adjustment ---
         pct_arr = pct_changes.to_numpy()
-        # Use new HawkesProcess interface taking returns directly
         intensity = self.hawkes.calculate_intensity(pct_arr)
         hawkes_adj = 1.0 / (1.0 + intensity)
-
-        # --- Volatility Penalty ---
         vol_penalty = 1.0 / (1.0 + volatility * 8.0)
-
-        # --- Factor 6: News Sentiment ---
-        # Sentiment contributes depending on config
         sentiment_adj = 0.0
         if Config.SENTIMENT_ENABLED:
             sentiment_adj = sentiment_score * Config.SENTIMENT_WEIGHT
-
-        # --- IC-Optimal Factor Blending ---
-        # Weights: Hurst-gated direction (0.35) + entropy-mom (0.30) + trend (0.20) + VWAP (0.15)
-        # We scale base signal slightly to make room for sentiment
-        base_signal = (
-            (0.35 * hurst_signal + 0.30 * momentum_score + 0.20 * trend_score + 0.15 * vwap_signal)
-            * vol_penalty
-            * hawkes_adj
-        )
-
+        cross_asset_alpha = 0.0
+        if peer_data and peer_symbols:
+            cross_asset_alpha = self.cross_asset.compute_pair_alpha("SPY", peer_symbols, peer_data)
+        base_signal = (0.30 * hurst_signal + 0.25 * momentum_score + 0.20 * trend_score + 0.15 * vwap_signal + 0.10 * cross_asset_alpha) * vol_penalty * hawkes_adj
         signal = base_signal * (1.0 - Config.SENTIMENT_WEIGHT) + sentiment_adj
-
         return float(np.clip(signal, -1.0, 1.0))
 
-    def _compute_entropy_filter(self, returns: np.ndarray[Any, Any]) -> float:
-        """
-        Shannon entropy filter for momentum signals using C++ backend.
-        """
+    def _compute_entropy_filter(self, returns: np.ndarray) -> float:
         if len(returns) < 5:
             return 0.6
         try:
             entropy = nexus_cpp.stats.compute_shannon_entropy(returns.tolist(), 10)
-            # Low entropy (< 1.5) = directional; High entropy (> 3.5) = noisy
             clip_val = float(np.clip((entropy - 1.5) / 2.0, 0.0, 0.70))
-            filter_val = 1.0 - clip_val
-            return float(filter_val)
+            return 1.0 - clip_val
         except Exception:
             return 0.6
 
     def _hurst_gate(self, hurst: float, trend_score: float, momentum_score: float) -> float:
-        """
-        Hurst-gated directional signal.
-
-        H > 0.60 → Persistent trend → use momentum direction, amplified
-        H < 0.40 → Mean-reverting → flip signal direction
-        H ≈ 0.50 → Random walk → suppress signal (no statistical edge)
-        """
         if hurst > 0.60:
-            # Persistent: trend and momentum agree → amplify
             amplifier = min(1.5, 1.0 + (hurst - 0.60) * 3.0)
             return float(np.tanh((trend_score * 0.55 + momentum_score * 0.45) * amplifier))
         elif hurst < 0.40:
-            # Mean-reverting: opposite of momentum
             reverter = min(1.3, 1.0 + (0.40 - hurst) * 2.5)
             return float(np.tanh(-momentum_score * reverter))
         else:
-            # Random walk zone: very weak signal
             random_walk_suppressor = 1.0 - abs(hurst - 0.50) * 4.0
             return float(np.tanh((trend_score + momentum_score) * 0.5 * random_walk_suppressor))
 
     def _compute_vwap_signal(self, data: pd.DataFrame, current_price: float) -> float:
-        """
-        VWAP deviation signal for institutional flow detection using C++ backend.
-        """
-        if "volume" not in data.columns or "close" not in data.columns:
+        if "volume" not in data.columns or "close" not in data.columns or len(data) < 5:
             return 0.0
-        if len(data) < 5:
-            return 0.0
-
         try:
             close = data["close"].astype(float)
             volume = data["volume"].astype(float)
-
             typical_price = close
             if "high" in data.columns and "low" in data.columns:
-                typical_price = (
-                    data["high"].astype(float) + data["low"].astype(float) + close
-                ) / 3.0
-
+                typical_price = (data["high"].astype(float) + data["low"].astype(float) + close) / 3.0
             vwap_vec = nexus_cpp.signals.compute_vwap(typical_price.tolist(), volume.tolist())
             if not vwap_vec:
                 return 0.0
-                
             vwap_val = vwap_vec[-1]
             deviation = (current_price - vwap_val) / max(vwap_val, 1e-6)
-
-            # Volume trend
             vol_avg = float(volume.tail(20).mean())
             vol_recent = float(volume.tail(5).mean())
             vol_ratio = vol_recent / max(vol_avg, 1.0)
-
-            # Amplify when volume confirms the deviation
             vol_confirmation = min(1.5, vol_ratio)
-            signal = float(np.tanh(deviation * 15.0 * vol_confirmation))
-            return signal
+            return float(np.tanh(deviation * 15.0 * vol_confirmation))
         except Exception:
             return 0.0
 
-    # ------------------------------------------------------------------ #
-    # Monte Carlo (unchanged interface, improved sampling)               #
-    # ------------------------------------------------------------------ #
-
-    def monte_carlo_simulation(
-        self,
-        prices: np.ndarray[Any, Any],
-        num_paths: int = 500,
-        horizon: int = 20,
-    ) -> float:
-        """
-        Antithetic variate Monte Carlo for variance reduction.
-        Approximately doubles statistical efficiency vs. naive sampling.
-        """
+    def monte_carlo_simulation(self, prices: np.ndarray, num_paths: int = 500, horizon: int = 20) -> float:
         prices = prices.flatten()
         if len(prices) < 5:
             return 0.5
-
         returns = np.diff(np.log(prices)).astype(float)
         mu = float(np.mean(returns))
         sigma = float(np.std(returns)) if np.std(returns) > 1e-9 else 0.01
         last_price = float(prices[-1])
         success_count = 0
         half_paths = num_paths // 2
-
         rng = np.random.default_rng()
         for _ in range(half_paths):
-            # Generate path + antithetic path
             sampled = rng.normal(mu, sigma, horizon)
-            antithetic = (2.0 * mu) - sampled  # antithetic variates
-
+            antithetic = (2.0 * mu) - sampled
             for path in [sampled, antithetic]:
                 final_price = last_price * np.exp(float(np.sum(path)))
                 if final_price > last_price:
                     success_count += 1
-
         return float(success_count / num_paths)
 
-    # ------------------------------------------------------------------ #
-    # Batch Signal Generation                                             #
-    # ------------------------------------------------------------------ #
-
-    async def get_batch_signals(
-        self, symbols: List[str], timeframe: str = "15Min"
-    ) -> Dict[str, float]:
-        """
-        Generate Superhuman alpha signals for all symbols.
-        Blends: Kalman+Entropy+Hurst signal (0.65) + Monte Carlo (0.35)
-        Now uses multi-timeframe fetching (1Min, 15Min, 1D) for robust signal.
-        """
+    async def get_batch_signals(self, symbols: List[str], timeframe: str = "15Min") -> Dict[str, float]:
         signals: Dict[str, float] = {}
         semaphore = asyncio.Semaphore(2)
-
         async def symbol_signal(symbol: str) -> Tuple[str, float]:
             async with semaphore:
-                # Fetch multi-timeframe data
                 data_15m = await self.fetch_market_data(symbol, timeframe="15Min")
                 data_1m = await self.fetch_market_data(symbol, timeframe="1Min")
                 data_1d = await self.fetch_market_data(symbol, timeframe="1D", limit=100)
-
                 sentiment = await self.sentiment_engine.get_sentiment(symbol)
-
-                alpha_15m = self.generate_signal(data_15m, sentiment) if not data_15m.empty else 0.0
+                peer_symbols = [s for s in symbols if s != symbol][:5]
+                peer_prices = {}
+                for ps in peer_symbols:
+                    d = await self.fetch_market_data(ps, timeframe="1D", limit=100)
+                    if not d.empty:
+                        peer_prices[ps] = d["close"]
+                alpha_15m = self.generate_signal(data_15m, sentiment, peer_prices, peer_symbols) if not data_15m.empty else 0.0
                 alpha_1m = self.generate_signal(data_1m, sentiment) if not data_1m.empty else 0.0
-                alpha_1d = self.generate_signal(data_1d, sentiment) if not data_1d.empty else 0.0
-
-                # Multi-timeframe blending
-                alpha = (
-                    alpha_1m * Config.SIGNAL_1MIN_WEIGHT
-                    + alpha_15m * Config.SIGNAL_15MIN_WEIGHT
-                    + alpha_1d * Config.SIGNAL_1D_WEIGHT
-                )
-
+                alpha_1d = self.generate_signal(data_1d, sentiment, peer_prices, peer_symbols) if not data_1d.empty else 0.0
+                alpha = alpha_1m * Config.SIGNAL_1MIN_WEIGHT + alpha_15m * Config.SIGNAL_15MIN_WEIGHT + alpha_1d * Config.SIGNAL_1D_WEIGHT
                 if not data_15m.empty:
-                    mc_prob = self.monte_carlo_simulation(
-                        data_15m["close"].astype(float).to_numpy()
-                    )
-                    # IC-optimal blending: signal carries more weight than MC
+                    mc_prob = self.monte_carlo_simulation(data_15m["close"].astype(float).to_numpy())
                     alpha = alpha * 0.65 + (mc_prob - 0.5) * 0.70
                 return symbol, float(np.clip(alpha, -1.0, 1.0))
-
         results = await asyncio.gather(*[symbol_signal(s) for s in symbols], return_exceptions=True)
         for r in results:
             if isinstance(r, tuple):
@@ -497,4 +310,4 @@ class AlphaEngine:
             try:
                 await self.client.close()
             except Exception as exc:
-                logger.warning(f"Failed to close AlphaEngine client: {exc}")
+                logger.warning("Failed to close AlphaEngine client: %s", exc)

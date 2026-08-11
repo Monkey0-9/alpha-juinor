@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 import uuid
 import logging
 from typing import Dict, List, Optional, Any, cast
@@ -42,6 +43,9 @@ class AlpacaClient:
         self.session: Optional[aiohttp.ClientSession] = None
         self.simulator = TradeSimulator()
         self.simulated = False
+        self._bars_cache: Dict[tuple, Dict[str, Any]] = {}
+        self._bars_inflight: Dict[tuple, asyncio.Task] = {}
+        self._bars_cache_ttl = 15.0
 
         if credentials is None:
             api_key = os.getenv("ALPACA_API_KEY", "")
@@ -382,57 +386,84 @@ class AlpacaClient:
         if self.simulated:
             return self._generate_synthetic_bars(symbol, timeframe, limit)
 
+        cache_key = (symbol, timeframe, limit, start or "", feed)
+        now = time.monotonic()
+        cached_entry = self._bars_cache.get(cache_key)
+        if cached_entry and (now - cached_entry["timestamp"]) < self._bars_cache_ttl:
+            return cached_entry["bars"]
+
+        inflight_task = self._bars_inflight.get(cache_key)
+        if inflight_task is not None:
+            return await inflight_task
+
+        async def _fetch_bars() -> List[Dict[str, Any]]:
+            try:
+                session = await self._get_session()
+                for feed_candidate in [feed, "sip"]:
+                    params: Dict[str, Any] = {"timeframe": timeframe, "limit": limit, "feed": feed_candidate}
+                    if start:
+                        params["start"] = start
+                    retries = 0
+                    while retries < 3:
+                        async with session.get(
+                            f"{self.data_url}/v2/stocks/{symbol}/bars",
+                            headers=self.headers,
+                            params=params
+                        ) as response:
+                            if response.status in {200, 201}:
+                                data = await response.json()
+                                bars = data.get("bars") or []
+                                if bars:
+                                    return bars
+                                break
+                            if response.status == 429:
+                                retries += 1
+                                retry_after = 0
+                                try:
+                                    retry_after = int(response.headers.get("Retry-After", "0") or 0)
+                                except Exception:
+                                    retry_after = 0
+                                backoff = retry_after if retry_after > 0 else 1.5 * retries
+                                logger.warning(
+                                    f"Alpaca bars request for {symbol} was rate limited (429). "
+                                    f"Retry {retries}/3 after {backoff}s (Retry-After={retry_after})."
+                                )
+                                await asyncio.sleep(backoff)
+                                continue
+                            if response.status in {403, 422}:
+                                logger.warning(
+                                    f"Alpaca bars request for {symbol} failed with feed={feed_candidate}: {response.status}. Trying alternate feed."
+                                )
+                                break
+                            if response.status == 401:
+                                logger.warning("Alpaca API Keys invalid (401). Falling back to full simulation mode.")
+                                self.simulated = True
+                                return await self.get_bars(symbol, timeframe, limit, start, feed)
+                            logger.warning(
+                                f"Alpaca bars request for {symbol} returned HTTP {response.status}: {await response.text()}"
+                            )
+                            break
+                        if retries == 0 or response.status != 429:
+                            break
+                    # Try the next feed candidate if this feed failed
+                return []
+            except aiohttp.ClientConnectorError as e:
+                logger.error(f"DNS or Connection Error for {symbol}: {e}. Retrying with alternate DNS logic if possible.")
+                return []
+            except Exception as e:
+                logger.warning(f"Failed to fetch bars for {symbol}: {e}")
+                return []
+
+        task = asyncio.create_task(_fetch_bars())
+        self._bars_inflight[cache_key] = task
         try:
-            session = await self._get_session()
-            for feed_candidate in [feed, "sip"]:
-                params: Dict[str, Any] = {"timeframe": timeframe, "limit": limit, "feed": feed_candidate}
-                if start:
-                    params["start"] = start
-                retries = 0
-                while retries < 3:
-                    async with session.get(
-                        f"{self.data_url}/v2/stocks/{symbol}/bars",
-                        headers=self.headers,
-                        params=params
-                    ) as response:
-                        if response.status in {200, 201}:
-                            data = await response.json()
-                            bars = data.get("bars") or []
-                            if bars:
-                                return bars
-                            break
-                        if response.status == 429:
-                            retries += 1
-                            backoff = 1.5 * retries
-                            logger.warning(
-                                f"Alpaca bars request for {symbol} was rate limited (429). Retry {retries}/3 after {backoff}s."
-                            )
-                            await asyncio.sleep(backoff)
-                            continue
-                        if response.status in {403, 422}:
-                            logger.warning(
-                                f"Alpaca bars request for {symbol} failed with feed={feed_candidate}: {response.status}. Trying alternate feed."
-                            )
-                            break
-                        if response.status == 401:
-                            logger.warning("Alpaca API Keys invalid (401). Falling back to full simulation mode.")
-                            self.simulated = True
-                            return await self.get_bars(symbol, timeframe, limit, start, feed)
-                        logger.warning(
-                            f"Alpaca bars request for {symbol} returned HTTP {response.status}: {await response.text()}"
-                        )
-                        break
-                    if retries == 0 or response.status != 429:
-                        break
-                # Try the next feed candidate if this feed failed
-            return []
-        except aiohttp.ClientConnectorError as e:
-            logger.error(f"DNS or Connection Error for {symbol}: {e}. Retrying with alternate DNS logic if possible.")
-            # This is where we'd implement alternate resolver if needed, for now just returning empty to allow engine to use fallback
-            return []
-        except Exception as e:
-            logger.warning(f"Failed to fetch bars for {symbol}: {e}")
-            return []
+            bars = await task
+            if bars:
+                self._bars_cache[cache_key] = {"timestamp": time.monotonic(), "bars": bars}
+            return bars
+        finally:
+            if self._bars_inflight.get(cache_key) is task:
+                self._bars_inflight.pop(cache_key, None)
 
     async def close_position(self, symbol: str) -> Dict[str, Any]:
         symbol = symbol.upper()

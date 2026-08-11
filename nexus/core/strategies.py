@@ -14,6 +14,8 @@ import numpy as np
 import pandas as pd
 from typing import Optional, Dict, List, Tuple
 from collections import deque
+from nexus.data.features import FeatureEngineer
+from nexus.models.zoo.time_series import TimeSeriesModel
 
 logger = logging.getLogger(__name__)
 
@@ -534,6 +536,40 @@ class RegimePersistenceStrategy(BaseStrategy):
 
 
 # ------------------------------------------------------------------ #
+# NEW: AI Engine Strategy                                              #
+# ------------------------------------------------------------------ #
+
+class AIEngineStrategy(BaseStrategy):
+    """
+    Routes data through the Data Engine (FeatureEngineer) 
+    and the AI Brain (TimeSeriesModel) to generate a signal.
+    """
+    name = "AI_Deep_Brain"
+
+    def __init__(self):
+        super().__init__()
+        self.model = TimeSeriesModel()
+
+    def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
+        if history.empty or len(history) < 50:
+            return 0.0
+
+        try:
+            # 1. Feature Engineering
+            features = FeatureEngineer.add_all_features(history)
+            
+            # 2. AI Brain Prediction
+            ai_signal = self.model.predict(features)
+            
+            # 3. Combine with alpha
+            score = (ai_signal * 0.7) + (alpha * 0.3)
+            return float(np.tanh(score * 2))
+        except Exception as e:
+            logger.warning(f"AI Engine Strategy failed for {symbol}: {e}")
+            return 0.0
+
+
+# ------------------------------------------------------------------ #
 # Strategy Registry                                                    #
 # ------------------------------------------------------------------ #
 
@@ -563,6 +599,7 @@ _ALL_STRATEGIES: List[BaseStrategy] = _BASE_STRATEGIES + [
     OrderFlowPressureStrategy(),
     RegimePersistenceStrategy(),
     _ADAPTIVE_ENSEMBLE,
+    AIEngineStrategy(),
 ]
 
 

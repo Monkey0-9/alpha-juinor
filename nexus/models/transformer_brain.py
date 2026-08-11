@@ -1,90 +1,86 @@
 import torch
 import torch.nn as nn
-import torch.utils.checkpoint as checkpoint
 import math
 
-class LearnablePositionalEncoding(nn.Module):
-    """
-    Learnable 1D Positional Embeddings with LayerNorm and Residual Connection.
-    """
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, dropout=0.1, max_len=5000, learnable=False):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
-        self.pos_embedding = nn.Parameter(torch.randn(1, max_len, d_model) * 0.02)
-        self.layer_norm = nn.LayerNorm(d_model)
+        if learnable:
+            self.pe = nn.Parameter(torch.randn(1, max_len, d_model) * 0.1)
+        else:
+            pe = torch.zeros(max_len, d_model)
+            position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+            div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+            pe[:, 0::2] = torch.sin(position * div_term)
+            if d_model % 2 != 0:
+                pe[:, 1::2] = torch.cos(position * div_term[:-1])
+            else:
+                pe[:, 1::2] = torch.cos(position * div_term)
+            pe = pe.unsqueeze(0)
+            self.register_buffer('pe', pe)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        seq_len = x.size(1)
-        pos = self.pos_embedding[:, :seq_len, :]
-        x = self.layer_norm(x + pos)
+    def forward(self, x):
+        x = x + self.pe[:, :x.size(1), :]
         return self.dropout(x)
 
-class TransformerBrain(nn.Module):
-    """
-    Institutional Transformer Encoder for Temporal Signal Processing.
-    Includes Residual Skip Connections, LayerNorm, Learnable Positional Encodings,
-    and Gradient Checkpointing for memory-efficient deep sequence modeling.
-    """
-    def __init__(
-        self,
-        input_dim: int = 5,
-        d_model: int = 64,
-        nhead: int = 4,
-        num_layers: int = 2,
-        dim_feedforward: int = 256,
-        dropout: float = 0.1,
-        output_dim: int = 1,
-        use_checkpointing: bool = False
-    ):
+class TransformerResidualBlock(nn.Module):
+    def __init__(self, d_model, nhead, dim_feedforward, dropout):
         super().__init__()
-        self.d_model = d_model
-        self.use_checkpointing = use_checkpointing
-
-        self.input_layer = nn.Sequential(
-            nn.Linear(input_dim, d_model),
-            nn.LayerNorm(d_model),
-            nn.GELU()
-        )
-        self.pos_encoder = LearnablePositionalEncoding(d_model, dropout=dropout)
-
-        encoder_layers = nn.TransformerEncoderLayer(
-            d_model=d_model,
-            nhead=nhead,
-            dim_feedforward=dim_feedforward,
-            dropout=dropout,
-            batch_first=True,
-            norm_first=True
-        )
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers=num_layers)
-        
-        self.norm = nn.LayerNorm(d_model)
-        self.fc_residual = nn.Linear(d_model, d_model)
-        self.fc_out = nn.Sequential(
-            nn.Linear(d_model, d_model // 2),
+        self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=True)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, dim_feedforward),
             nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(d_model // 2, output_dim),
-            nn.Tanh()
+            nn.Linear(dim_feedforward, d_model),
+            nn.Dropout(dropout),
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x shape: (batch_size, seq_len, input_dim) or (batch_size, input_dim)
+    def forward(self, x):
+        attn_out, _ = self.self_attn(x, x, x)
+        x = self.norm1(x + self.dropout1(attn_out))
+        ffn_out = self.ffn(x)
+        x = self.norm2(x + ffn_out)
+        return x
+
+class TransformerBrain(nn.Module):
+    def __init__(self, input_dim=5, d_model=128, nhead=8, num_layers=4, dim_feedforward=512, dropout=0.1, output_dim=1):
+        super().__init__()
+        self.d_model = d_model
+        self.input_proj = nn.Sequential(
+            nn.Linear(input_dim, d_model),
+            nn.LayerNorm(d_model),
+            nn.GELU(),
+            nn.Dropout(dropout),
+        )
+        self.pos_encoder = PositionalEncoding(d_model, dropout, learnable=True)
+        self.blocks = nn.ModuleList([
+            TransformerResidualBlock(d_model, nhead, dim_feedforward, dropout)
+            for _ in range(num_layers)
+        ])
+        self.output_head = nn.Sequential(
+            nn.LayerNorm(d_model),
+            nn.Linear(d_model, d_model // 2),
+            nn.GELU(),
+            nn.Dropout(dropout * 0.5),
+            nn.Linear(d_model // 2, output_dim),
+            nn.Tanh(),
+        )
+        self.gradient_checkpointing = False
+
+    def forward(self, x):
         if len(x.shape) == 2:
             x = x.unsqueeze(1)
-
-        embedded = self.input_layer(x) * math.sqrt(self.d_model)
-        pos_enc = self.pos_encoder(embedded)
-
-        if self.use_checkpointing and self.training:
-            out = checkpoint.checkpoint(self.transformer_encoder, pos_enc)
-        else:
-            out = self.transformer_encoder(pos_enc)
-
-        # Residual connection from input embedding to transformer output
-        res = self.norm(out + embedded)
-        last_step = res[:, -1, :]
-        
-        # Dense projection with residual connection
-        dense_res = last_step + self.fc_residual(last_step)
-        signal = self.fc_out(dense_res)
-        return signal
+        x = self.input_proj(x) * math.sqrt(self.d_model)
+        x = self.pos_encoder(x)
+        for block in self.blocks:
+            if self.gradient_checkpointing and self.training:
+                x = torch.utils.checkpoint.checkpoint(block, x)
+            else:
+                x = block(x)
+        pooled = x.mean(dim=1)
+        return self.output_head(pooled)
