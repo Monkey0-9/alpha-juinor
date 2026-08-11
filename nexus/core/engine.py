@@ -21,6 +21,7 @@ from nexus.utils.config import Config
 from nexus.utils.platform_logging import setup_logging
 from nexus.utils.polyglot_bridge import PolyglotBridge
 from nexus.core.position_manager import PositionManager
+from nexus.models.trainer import ContinuousLearner, ModelRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,7 @@ class NexusEngine:
         self._equity_history: List[float] = []   # recent equity snapshots
         self._conviction_cache: Dict[str, Any] = {}  # last cycle conviction signals
         self.position_manager = PositionManager()
+        self.learner = ContinuousLearner()
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Returns the shared AsyncClient for connection pooling."""
@@ -300,6 +302,12 @@ class NexusEngine:
         raw_signals = await self.alpha_engine.get_batch_signals(symbols, timeframe="15Min")
         history = await self.fetch_universe_history(symbols, timeframe="1D", limit=100)
         logger.info("History loaded for %s symbols out of %s selected symbols.", len(history), len(symbols))
+
+        # Automated continuous model retraining step
+        for sym, df_history in history.items():
+            if len(df_history) >= 100:
+                self.learner.step_retrain(df_history)
+                break
         if not history:
             logger.warning("No history data could be loaded for the current symbol universe. This will prevent any orders from being submitted.")
         

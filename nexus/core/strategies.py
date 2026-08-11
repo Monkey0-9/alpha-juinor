@@ -15,7 +15,7 @@ import pandas as pd
 from typing import Optional, Dict, List, Tuple
 from collections import deque
 from nexus.data.features import FeatureEngineer
-from nexus.models.zoo.time_series import TimeSeriesModel
+from nexus.models.zoo.time_series import GradientBoostedTimeSeriesModel as TimeSeriesModel
 
 logger = logging.getLogger(__name__)
 
@@ -42,20 +42,42 @@ class BaseStrategy:
 
 
 # ------------------------------------------------------------------ #
-# Core 14 Strategies — upgraded with confidence gating                #
+def _extract_series(df: pd.DataFrame, col: str) -> pd.Series:
+    """Safely extracts a 1D pd.Series from a DataFrame column, handling multi-index or duplicate columns."""
+    if df.empty or col not in df.columns:
+        return pd.Series(dtype=float)
+    s = df[col]
+    if isinstance(s, pd.DataFrame):
+        s = s.iloc[:, 0]
+    return pd.to_numeric(s, errors="coerce").ffill().fillna(0.0)
+
+
+# ------------------------------------------------------------------ #
+# Core 14 Strategies — upgraded with regime-adaptation & safe series #
 # ------------------------------------------------------------------ #
 
 class MomentumStrategy(BaseStrategy):
     name = "Momentum"
 
     def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
-        if history.empty or "close" not in history.columns:
+        prices = _extract_series(history, "close")
+        if prices.empty or len(prices) < 5:
             return 0.0
-        prices = history["close"].astype(float)
-        short = prices.rolling(20, min_periods=1).mean()
-        long  = prices.rolling(50, min_periods=1).mean()
-        momentum   = (short.iloc[-1] - long.iloc[-1]) / max(long.iloc[-1], 1)
-        volatility = prices.pct_change().std() if len(prices) > 1 else 0.0
+
+        # Dynamic Regime-Adaptive Lookbacks
+        if regime == "TURBULENT":
+            short_w, long_w = 10, 20
+        elif regime == "BULL":
+            short_w, long_w = 15, 40
+        elif regime == "BEAR":
+            short_w, long_w = 10, 30
+        else:  # SIDEWAYS
+            short_w, long_w = 20, 50
+
+        short_ma = float(prices.rolling(short_w, min_periods=1).mean().iloc[-1])
+        long_ma = float(prices.rolling(long_w, min_periods=1).mean().iloc[-1])
+        momentum = (short_ma - long_ma) / max(long_ma, 1.0)
+        volatility = float(prices.pct_change().std()) if len(prices) > 1 else 0.0
 
         # Regime boost: momentum strategies shine in BULL
         regime_mult = 1.25 if regime == "BULL" else (0.70 if regime == "BEAR" else 1.0)
@@ -65,17 +87,15 @@ class MomentumStrategy(BaseStrategy):
     def score_with_confidence(
         self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
     ) -> Tuple[float, float]:
-        if len(history) < 50:
+        if len(history) < 30:
             return 0.0, 0.3
         s = self.score(symbol, alpha, history, regime)
-        # Confidence: how clearly separated are short/long EMAs?
-        prices = history["close"].astype(float)
-        sep = abs(
-            float(
-                prices.rolling(20, min_periods=1).mean().iloc[-1]
-                - prices.rolling(50, min_periods=1).mean().iloc[-1]
-            )
-        )
+        prices = _extract_series(history, "close")
+        if prices.empty:
+            return s, 0.5
+        short_val = float(prices.rolling(15, min_periods=1).mean().iloc[-1])
+        long_val = float(prices.rolling(40, min_periods=1).mean().iloc[-1])
+        sep = abs(short_val - long_val)
         conf = float(np.tanh(sep / max(float(prices.iloc[-1]) * 0.005, 1e-6)))
         return s, max(0.3, min(1.0, conf))
 
@@ -84,17 +104,23 @@ class MeanReversionStrategy(BaseStrategy):
     name = "MeanReversion"
 
     def score(self, symbol: str, alpha: float, history: pd.DataFrame, regime: str) -> float:
-        if history.empty or "close" not in history.columns:
+        prices = _extract_series(history, "close")
+        if prices.empty or len(prices) < 5:
             return 0.0
-        prices = history["close"].astype(float)
-        sma = prices.rolling(34, min_periods=1).mean()
-        deviation = (prices.iloc[-1] - sma.iloc[-1]) / max(sma.iloc[-1], 1)
+
+        # Dynamic Regime-Adaptive Window
+        lookback = 14 if regime == "TURBULENT" else (20 if regime == "SIDEWAYS" else 34)
+        sma = float(prices.rolling(lookback, min_periods=1).mean().iloc[-1])
+        current_price = float(prices.iloc[-1])
+        deviation = (current_price - sma) / max(sma, 1.0)
+
         signal = -deviation * 0.7 + alpha * 0.3
         if regime == "SIDEWAYS":
             signal *= 1.35
         elif regime == "BULL":
             signal *= 0.75  # mean reversion weaker in trending markets
         return float(np.tanh(signal * 8))
+
 
     def score_with_confidence(
         self, symbol: str, alpha: float, history: pd.DataFrame, regime: str

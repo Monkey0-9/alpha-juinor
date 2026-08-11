@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from nexus.research.simulator import TradeSimulator
 from nexus.utils.config import Config
+from nexus.data.cache_layer import MarketDataCache
 
 # Load environment variables
 load_dotenv()
@@ -386,6 +387,12 @@ class AlpacaClient:
         if self.simulated:
             return self._generate_synthetic_bars(symbol, timeframe, limit)
 
+        # 1. Check persistent SQLite cache first
+        db_cache = MarketDataCache()
+        cached_bars = db_cache.get_bars(symbol, timeframe, limit, start)
+        if cached_bars and len(cached_bars) >= limit:
+            return cached_bars
+
         cache_key = (symbol, timeframe, limit, start or "", feed)
         now = time.monotonic()
         cached_entry = self._bars_cache.get(cache_key)
@@ -460,6 +467,11 @@ class AlpacaClient:
             bars = await task
             if bars:
                 self._bars_cache[cache_key] = {"timestamp": time.monotonic(), "bars": bars}
+                # Save to persistent SQLite cache
+                db_cache.save_bars(symbol, timeframe, bars)
+            elif cached_bars:
+                # Return partial cache if fetch failed or rate limited
+                return cached_bars
             return bars
         finally:
             if self._bars_inflight.get(cache_key) is task:
