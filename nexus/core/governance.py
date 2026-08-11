@@ -70,7 +70,7 @@ class GovernanceEngine:
                 self.single_position_limit = float(single_position_limit)
             else:
                 self.single_position_limit = 0.05
-        except Exception:
+        except ValueError:
             self.single_position_limit = 0.05
 
         try:
@@ -81,7 +81,7 @@ class GovernanceEngine:
                 self.max_drawdown_limit = float(max_drawdown_limit)
             else:
                 self.max_drawdown_limit = 0.15
-        except Exception:
+        except ValueError:
             self.max_drawdown_limit = 0.15
         self.audit_log: List[Dict[str, Any]] = []
 
@@ -199,7 +199,7 @@ class GovernanceEngine:
                 ),
             )
             self._db.commit()
-        except Exception as exc:
+        except sqlite3.Error as exc:
             logger.warning(f"Audit DB write failed: {exc}")
 
         msg = (
@@ -228,5 +228,5 @@ class GovernanceEngine:
                 ),
             )
             self._db.commit()
-        except Exception as exc:
+        except sqlite3.Error as exc:
             logger.warning(f"Trade history write failed: {exc}")

@@ -9,9 +9,8 @@ from typing import List, Dict, Any, Optional, cast
 from nexus.core.governance import GovernanceEngine
 from nexus.core.alpha import AlphaEngine
 from nexus.core.execution_ai import ExecutionAgent
-from nexus.core.intelligence import MarketBrain
-from nexus.core.superhuman_brain import SuperhumanBrain
 from nexus.core.monitoring import HealthMonitor
+from nexus.models.zoo.ensemble import AIEnsembleBrain
 from nexus.math.risk import RiskEngine
 from nexus.math.indicators import RegimeDetector
 from nexus.math.optimization import PortfolioOptimizer, MultiFactorEngine
@@ -21,7 +20,7 @@ from nexus.utils.config import Config
 from nexus.utils.platform_logging import setup_logging
 from nexus.utils.polyglot_bridge import PolyglotBridge
 from nexus.core.position_manager import PositionManager
-from nexus.models.trainer import ContinuousLearner, ModelRegistry
+from nexus.models.trainer import ContinuousLearner
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +38,7 @@ class NexusEngine:
         )
         self.alpha_engine = AlphaEngine(backend_url=backend_url)
         self.execution_agent = ExecutionAgent()
-        self.market_brain = MarketBrain()
-        self.superhuman_brain = SuperhumanBrain()  # Top-1% intelligence layer
+        self.ensemble_brain = AIEnsembleBrain()
         self.risk_engine = RiskEngine()
         self.health_monitor = HealthMonitor()
 
@@ -315,43 +313,40 @@ class NexusEngine:
         
         benchmark_data = await self.alpha_engine.fetch_market_data("SPY", timeframe="1D", limit=120)
 
-        market_insight = self.market_brain.analyze_market(benchmark_data, current_positions)
-        self.market_regime = market_insight.get("regime", self.market_regime)
-        regime_probs = market_insight.get("regime_probabilities", {
-            "BULL": 0.25, "BEAR": 0.25, "SIDEWAYS": 0.25, "TURBULENT": 0.25
-        })
-        selected_strategy = market_insight.get("selected_strategy", "Mean Reversion")
-        correlation_pulse = market_insight.get("correlation_pulse", {"size_multiplier": 1.0})
+        if not benchmark_data.empty:
+            try:
+                self.market_regime = self.regime_detector.detect(benchmark_data)
+                regime_probs = self.regime_detector.get_regime_probabilities()
+            except Exception as e:
+                logger.warning(f"Regime detection failed: {e}")
+                self.market_regime = "SIDEWAYS"
+                regime_probs = {"BULL": 0.25, "BEAR": 0.25, "SIDEWAYS": 0.25, "TURBULENT": 0.25}
+        else:
+            self.market_regime = "SIDEWAYS"
+            regime_probs = {"BULL": 0.25, "BEAR": 0.25, "SIDEWAYS": 0.25, "TURBULENT": 0.25}
 
-        # ── SuperhumanBrain Conviction Layer ─────────────────────────────────
-        conviction_signals = self.superhuman_brain.evaluate_portfolio(
-            raw_signals, history, regime_probs, self.market_regime
-        )
-        intel_report = self.superhuman_brain.portfolio_intelligence_report(conviction_signals)
-        logger.info(
-            "[SuperhumanBrain] AvgConviction=%.0f%% | GlobalIC=%.3f | A-GradeSignals=%d/%d | GatePassRate=%.0f%%",
-            intel_report.get("avg_conviction", 0) * 100,
-            intel_report.get("global_ic", 0),
-            intel_report.get("a_grade_signals", 0),
-            intel_report.get("total_signals", 0),
-            intel_report.get("gate_pass_rate", 0) * 100,
-        )
-
-        # Blend raw signals with conviction-adjusted signals
+        # ── AI Ensemble Brain Conviction Layer ─────────────────────────────────
         enhanced_signals: Dict[str, float] = {}
-        for sym, conv_sig in conviction_signals.items():
-            if not conv_sig.gate_pass and conv_sig.conviction < 0.35:
-                # Gate CLOSED + low conviction → skip this symbol entirely
-                logger.debug("[SuperhumanBrain] Gated out %s (conviction=%.0f%%)", sym, conv_sig.conviction * 100)
-                continue
-            # Conviction-weighted signal: high conviction → use superhuman signal
-            # low conviction → fall back to raw alpha
+        for sym, df_history in history.items():
             raw = raw_signals.get(sym, 0.0)
-            blended = conv_sig.conviction * conv_sig.score + (1.0 - conv_sig.conviction) * raw
+            
+            # Pass through the ensemble brain
+            ai_signal = self.ensemble_brain.get_signal(
+                features=df_history, 
+                regime=self.market_regime, 
+                regime_probabilities=regime_probs
+            )
+            
+            if ai_signal == 0:
+                logger.debug(f"[AIEnsembleBrain] Gated out {sym} (NO_TRADE confidence)")
+                continue
+                
+            # Blend Raw Alpha with Ensemble AI decision
+            blended = (ai_signal * 0.7) + (raw * 0.3)
             enhanced_signals[sym] = float(np.clip(blended, -1.0, 1.0))
         # ─────────────────────────────────────────────────────────────────────
 
-        portfolio_scores = self.market_brain.build_portfolio_signals(enhanced_signals, history, self.market_regime)
+        portfolio_scores = enhanced_signals
         ranked = self.factor_engine.rank_assets(portfolio_scores, history)
         top_targets = dict(list(ranked.items())[: self.max_positions])
 
@@ -374,10 +369,10 @@ class NexusEngine:
             risk_metrics = self.risk_engine.assess_risk(returns_list)
             risk_metrics["rust_var"] = float(rust_risk.get("var", 0.0))
 
-        multiplier = self.determine_risk_scale(market_insight, risk_metrics)
+        multiplier = self.determine_risk_scale({"regime_probabilities": regime_probs}, risk_metrics)
 
         # Correlation crisis brake: halve sizes if portfolio in crisis mode
-        crisis_mult = float(correlation_pulse.get("size_multiplier", 1.0))
+        crisis_mult = 1.0
         multiplier *= crisis_mult
 
         # Drawdown velocity protection: if equity dropped >3% in last 24h, cut sizes
@@ -385,10 +380,9 @@ class NexusEngine:
         multiplier *= ddv_mult
 
         weights = {s: w * multiplier for s, w in weights.items()}
-        self._conviction_cache = {sym: cv for sym, cv in conviction_signals.items()}
 
         portfolio_state = self.build_portfolio_state(account, current_positions)
-        self.health_monitor.record("market", not benchmark_data.empty, details=selected_strategy)
+        self.health_monitor.record("market", not benchmark_data.empty, details=self.market_regime)
         self.health_monitor.record("risk", risk_metrics["var"] > -0.25, details=str(risk_metrics))
         self.health_monitor.heartbeat()
 
@@ -422,7 +416,7 @@ class NexusEngine:
             current_qty = float(holdings.get(symbol, {}).get("qty", 0.0))
             trade_tasks.append(self._submit_trade(
                 symbol, weight, current_qty, top_targets, history, portfolio_state,
-                raw_signals, market_insight, selected_strategy, is_open=clock_data.get("is_open", False)
+                raw_signals, {}, self.market_regime, is_open=clock_data.get("is_open", False)
             ))
         if trade_tasks:
             await asyncio.gather(*trade_tasks)
@@ -434,13 +428,18 @@ class NexusEngine:
             if sym in history and not history[sym].empty:
                 realized = float(history[sym]["close"].pct_change().dropna().iloc[-1])
                 self.optimizer.ic_tracker.record(sym, score, realized)
-        # Update SuperhumanBrain Bayesian posteriors
-        for sym, conv_sig in self._conviction_cache.items():
-            if sym in history and not history[sym].empty:
-                realized = float(history[sym]["close"].pct_change().dropna().iloc[-1])
-                self.superhuman_brain.update_strategy_outcomes(
-                    sym, conv_sig.strategy_votes, realized
-                )
+            
+            # Record outcome for ensemble learning
+            for pos in current_positions:
+                sym = pos.get('symbol')
+                unrealized_pl_pc = pos.get('unrealized_plpc', 0.0)
+                if sym in raw_signals and len(self.ensemble_brain.models) > 0:
+                    sig = 1 if raw_signals[sym] > 0 else -1
+                    self.ensemble_brain.record_outcome(
+                        model_name=self.ensemble_brain.models[0]['name'],
+                        predicted_signal=sig,
+                        realized_return=float(unrealized_pl_pc)
+                    )
 
     async def _submit_trade(self, symbol: str, weight: float, current_qty: float, top_targets: Dict[str, float],
                             history: Dict[str, pd.DataFrame], portfolio_state: Dict[str, Any],

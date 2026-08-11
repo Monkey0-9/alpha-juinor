@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Optional
+from typing import Dict
 import numpy as np
 import pandas as pd
 from nexus.utils.config import Config

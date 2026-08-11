@@ -15,8 +15,7 @@ import pandas as pd
 import numpy as np
 
 from nexus.core.alpha import AlphaEngine
-from nexus.core.intelligence import MarketBrain
-from nexus.core.superhuman_brain import SuperhumanBrain
+from nexus.models.zoo.ensemble import AIEnsembleBrain
 from nexus.research.backtest import BacktestEngine
 from nexus.execution.alpaca import get_client
 from nexus.math.risk import RiskEngine
@@ -26,8 +25,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/monitor", tags=["monitoring"])
 
 # Module-level singletons — reused across requests for warm IC/Bayesian state
-_market_brain = MarketBrain()
-_superhuman_brain = SuperhumanBrain()
+_ensemble_brain = AIEnsembleBrain()
 _regime_detector = RegimeDetector()
 
 
@@ -72,13 +70,20 @@ async def brain_snapshot(
             detail="Unable to fetch market bars for brain analysis.",
         )
 
-    positions: List[Dict[str, Any]] = []
     try:
-        positions = await get_client().get_positions()
+        await get_client().get_positions()
     except Exception as exc:
         logger.warning(f"Unable to load live positions for brain snapshot: {exc}")
 
-    analysis = _market_brain.analyze_market(bars, positions)
+    analysis: Dict[str, Any] = {}
+    
+    # Add regime detection logic
+    regime_probs = _regime_detector.detect_probabilities(bars)
+    current_regime = max(regime_probs, key=lambda k: regime_probs[k])
+    
+    analysis["regime"] = current_regime
+    analysis["regime_probabilities"] = regime_probs
+    analysis["selected_strategy"] = "Ensemble Voting"
 
     # Risk profile
     returns = bars["close"].pct_change().dropna().to_numpy()
@@ -136,47 +141,42 @@ async def superhuman_snapshot(
     regime_probs = _regime_detector.detect_probabilities(benchmark)
     current_regime = max(regime_probs, key=lambda k: regime_probs[k])
 
-    # Run SuperhumanBrain evaluation
-    conviction_signals = _superhuman_brain.evaluate_portfolio(
-        raw_signals, history, regime_probs, current_regime
-    )
-
-    # Portfolio intelligence report
-    intel_report = _superhuman_brain.portfolio_intelligence_report(conviction_signals)
-
-    # Serialize conviction signals
+    # Run Ensemble Brain evaluation
     signals_out: Dict[str, Any] = {}
-    for sym, cs in conviction_signals.items():
+    
+    for sym, df_history in history.items():
+        if df_history.empty:
+            continue
+            
+        ai_signal = _ensemble_brain.get_signal(
+            features=df_history, 
+            regime=current_regime, 
+            regime_probabilities=regime_probs
+        )
+        
+        raw = raw_signals.get(sym, 0.0)
+        gate_pass = abs(ai_signal) > 0.35
+        score = (ai_signal * 0.7) + (raw * 0.3)
+        
         signals_out[sym] = {
-            "score":          round(cs.score, 4),
-            "conviction":     round(cs.conviction, 4),
-            "conviction_pct": f"{cs.conviction:.0%}",
-            "grade":          cs.conviction_grade(),
-            "gate_pass":      cs.gate_pass,
-            "regime_bias":    cs.regime_bias,
-            "ir_score":       round(cs.ir_score, 4),
-            "reasoning":      cs.reasoning,
-            "strategy_votes": {
-                k: round(v, 3)
-                for k, v in cs.strategy_votes.items()
-            },
+            "score": round(score, 4),
+            "conviction": round(abs(ai_signal), 4),
+            "conviction_pct": f"{abs(ai_signal):.0%}",
+            "grade": "A" if gate_pass else "C",
+            "gate_pass": gate_pass,
+            "regime_bias": ai_signal,
+            "ir_score": round(score, 4),
+            "reasoning": [f"Ensemble Signal: {ai_signal}"],
+            "strategy_votes": {}
         }
 
     return {
-        "status":           "success",
-        "regime":           current_regime,
-        "regime_probs":     {k: round(float(v), 4) for k, v in regime_probs.items()},
-        "signals":          signals_out,
-        "intelligence_report": {
-            "avg_conviction":      round(intel_report.get("avg_conviction", 0), 4),
-            "max_conviction":      round(intel_report.get("max_conviction", 0), 4),
-            "avg_signal_strength": round(intel_report.get("avg_signal_strength", 0), 4),
-            "gate_pass_rate":      round(intel_report.get("gate_pass_rate", 0), 4),
-            "global_ic":           round(intel_report.get("global_ic", 0), 4),
-            "a_grade_signals":     intel_report.get("a_grade_signals", 0),
-            "total_signals":       intel_report.get("total_signals", 0),
-        },
+        "status": "success",
+        "regime": current_regime,
+        "regime_probabilities": regime_probs,
+        "signals": signals_out
     }
+
 
 
 @router.post("/backtest")

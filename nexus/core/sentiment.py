@@ -21,9 +21,9 @@ except ImportError:
     TEXTBLOB_AVAILABLE = False
 
 try:
-    from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
+    from transformers import pipeline
     TRANSFORMERS_AVAILABLE = True
-except Exception:
+except (ImportError, OSError, RuntimeError):
     # transformers may fail to import due to environment or protobuf/tensorflow
     # compatibility issues. Fall back to lighter sentiment options.
     TRANSFORMERS_AVAILABLE = False
@@ -54,7 +54,7 @@ class SentimentEngine:
         if VADER_AVAILABLE:
             try:
                 self._vader = SentimentIntensityAnalyzer()
-            except Exception:
+            except (ValueError, OSError, RuntimeError):
                 pass
 
     def _score_headline_advanced(self, title: str) -> float:
@@ -76,13 +76,13 @@ class SentimentEngine:
             try:
                 vs = self._vader.polarity_scores(title)
                 score = score * 0.6 + vs['compound'] * 0.4
-            except Exception:
+            except (ValueError, TypeError, AttributeError):
                 pass
         if TEXTBLOB_AVAILABLE:
             try:
                 blob = TextBlob(title)
                 score = score * 0.7 + blob.sentiment.polarity * 0.3
-            except Exception:
+            except (ValueError, TypeError, AttributeError):
                 pass
         return float(np.clip(score, -1.0, 1.0))
 
@@ -91,12 +91,12 @@ class SentimentEngine:
         if symbol in self._cache:
             entry = self._cache[symbol]
             if now - entry["timestamp"] < self._CACHE_TTL:
-                return entry["score"]
+                return float(entry["score"])
         try:
             score = await asyncio.to_thread(self._fetch_and_score, symbol)
             self._cache[symbol] = {"timestamp": now, "score": score}
             return score
-        except Exception as e:
+        except (TimeoutError, ConnectionError, OSError, ValueError) as e:
             logger.debug("Sentiment fetch failed for %s: %s", symbol, e)
             return 0.0
 
@@ -104,7 +104,7 @@ class SentimentEngine:
         url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
         try:
             feed = feedparser.parse(url)
-        except Exception:
+        except (TimeoutError, ConnectionError, OSError, ValueError, KeyError):
             return 0.0
         if not feed.entries:
             return 0.0

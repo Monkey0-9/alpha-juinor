@@ -131,7 +131,7 @@ class AlpacaClient:
                     self.simulated = True
                     return await self.get_account()
                 return {"enabled": True, "simulated": False, "status": "ERROR", "error": f"HTTP {response.status}"}
-        except Exception as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.warning(f"Alpaca account request failed: {e}")
             return {"enabled": True, "simulated": False, "error": str(e)}
 
@@ -167,7 +167,7 @@ class AlpacaClient:
                         "side": p.get("side")
                     } for p in positions]
                 return []
-        except Exception as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.warning(f"Failed to fetch Alpaca positions: {e}")
             return []
 
@@ -272,7 +272,7 @@ class AlpacaClient:
                     }
                 logger.error(f"Alpaca order rejected: {response.status} {data}")
                 return {"success": False, "error": data.get("message", data), "asset_class": asset_class, "raw": data}
-        except Exception as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.error(f"Order submit failed: {e}")
             return {"success": False, "error": str(e), "asset_class": asset_class}
 
@@ -287,7 +287,7 @@ class AlpacaClient:
                 if response.status in {200, 201}:
                     return cast(List[Dict[str, Any]], await response.json())
                 return []
-        except Exception as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.warning(f"Failed to fetch Alpaca orders: {e}")
             return []
 
@@ -302,7 +302,7 @@ class AlpacaClient:
                     return {"success": True, "order_id": order_id}
                 data = await response.json()
                 return {"success": False, "error": data.get("message", "Unable to cancel order")}
-        except Exception as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.warning(f"Order cancel failed: {e}")
             return {"success": False, "error": str(e)}
 
@@ -351,7 +351,7 @@ class AlpacaClient:
                         break
 
             return assets
-        except Exception as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.warning(f"Failed to fetch Alpaca assets: {e}")
             return []
 
@@ -371,7 +371,7 @@ class AlpacaClient:
                 if response.status in {200, 201}:
                     return cast(Dict[str, Any], await response.json())
                 return {"is_open": False}
-        except Exception as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.warning(f"Failed to fetch market clock: {e}")
             return {"is_open": False}
 
@@ -428,7 +428,7 @@ class AlpacaClient:
                                 retry_after = 0
                                 try:
                                     retry_after = int(response.headers.get("Retry-After", "0") or 0)
-                                except Exception:
+                                except (ValueError, TypeError):
                                     retry_after = 0
                                 backoff = retry_after if retry_after > 0 else 1.5 * retries
                                 logger.warning(
@@ -457,7 +457,7 @@ class AlpacaClient:
             except aiohttp.ClientConnectorError as e:
                 logger.error(f"DNS or Connection Error for {symbol}: {e}. Retrying with alternate DNS logic if possible.")
                 return []
-            except Exception as e:
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
                 logger.warning(f"Failed to fetch bars for {symbol}: {e}")
                 return []
 
@@ -494,7 +494,7 @@ class AlpacaClient:
                 if response.status in {200, 201}:
                     return {"success": True, "symbol": symbol}
                 return {"success": False, "error": "Failed to close"}
-        except Exception as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.warning(f"Failed to close position for {symbol}: {e}")
             return {"success": False, "error": str(e)}
 
