@@ -6,21 +6,21 @@ import numpy as np
 import pandas as pd
 from typing import List, Dict, Any, Optional, cast
 
-from nexus.core.governance import GovernanceEngine
+from nexus.audit.governance import GovernanceEngine
 from nexus.core.alpha import AlphaEngine
-from nexus.core.execution_ai import ExecutionAgent
-from nexus.core.monitoring import HealthMonitor
+from nexus.execution.execution_ai import ExecutionAgent
+from nexus.monitoring.health import HealthMonitor
 from nexus.models.zoo.ensemble import AIEnsembleBrain
-from nexus.math.risk import RiskEngine
+from nexus.risk.engine import RiskEngine
 from nexus.math.indicators import RegimeDetector
-from nexus.math.optimization import PortfolioOptimizer, MultiFactorEngine
+from nexus.portfolio.optimization import PortfolioOptimizer, MultiFactorEngine
 from nexus.math.models import NeuralODE
-from nexus.math.governance import LatticeVoter, StrategySwitcher
+from nexus.audit.math_governance import LatticeVoter, StrategySwitcher
 from nexus.utils.config import Config
 from nexus.utils.platform_logging import setup_logging
 from nexus.utils.polyglot_bridge import PolyglotBridge
-from nexus.core.position_manager import PositionManager
-from nexus.models.trainer import ContinuousLearner
+from nexus.portfolio.position_manager import PositionManager
+from nexus.learning.trainer import ContinuousLearner
 
 logger = logging.getLogger(__name__)
 
@@ -90,16 +90,12 @@ class NexusEngine:
         logger.info("Nexus engine resources released.")
 
     async def initialize(self) -> bool:
-        logger.info(
-            f"Initializing Nexus engine with backend {self.backend_url}"
-        )
+        logger.info(f"Initializing Nexus engine with backend {self.backend_url}")
 
         client = await self._get_client()
         for attempt in range(1, 6):
             try:
-                response = await client.get(
-                    f"{self.backend_url}/api/alpaca/health"
-                )
+                response = await client.get(f"{self.backend_url}/api/alpaca/health")
                 if response.status_code == 200:
                     logger.info("Execution backend healthy.")
                     break
@@ -156,9 +152,7 @@ class NexusEngine:
                     candidate_assets.append(symbol)
 
                 if Config.TRADE_ALL_ASSETS:
-                    self.symbols = candidate_assets[
-                        : Config.MAX_UNIVERSE_ASSETS
-                    ]
+                    self.symbols = candidate_assets[: Config.MAX_UNIVERSE_ASSETS]
                 else:
                     max_symbols = min(Config.CANDIDATE_POOL_SIZE, 30)
                     if Config.CANDIDATE_POOL_SIZE > 30:
@@ -216,9 +210,7 @@ class NexusEngine:
     async def get_account_state(self) -> Dict[str, Any]:
         client = await self._get_client()
         try:
-            response = await client.get(
-                f"{self.backend_url}/api/alpaca/account"
-            )
+            response = await client.get(f"{self.backend_url}/api/alpaca/account")
             if response.status_code == 200:
                 return cast(Dict[str, Any], response.json())
         except Exception as exc:
@@ -231,13 +223,9 @@ class NexusEngine:
     async def get_positions(self) -> List[Dict[str, Any]]:
         client = await self._get_client()
         try:
-            response = await client.get(
-                f"{self.backend_url}/api/alpaca/positions"
-            )
+            response = await client.get(f"{self.backend_url}/api/alpaca/positions")
             if response.status_code == 200:
-                return cast(
-                    List[Dict[str, Any]], response.json().get("positions", [])
-                )
+                return cast(List[Dict[str, Any]], response.json().get("positions", []))
         except Exception as exc:
             logger.warning(f"Position fetch failure: {exc}")
         return []
@@ -272,9 +260,7 @@ class NexusEngine:
         last_equity = float(account.get("last_equity", total_value))
         if np.isnan(total_value) or total_value <= 0:
             total_value = self.portfolio_value
-        drawdown = max(
-            0.0, (last_equity - total_value) / max(total_value, 1.0)
-        )
+        drawdown = max(0.0, (last_equity - total_value) / max(total_value, 1.0))
         return {
             "total_value": total_value,
             "drawdown": drawdown,
@@ -295,9 +281,7 @@ class NexusEngine:
                 )
                 if response.status_code == 200:
                     order_info = response.json()
-                    status = order_info.get("status") or order_info.get(
-                        "order_status"
-                    )
+                    status = order_info.get("status") or order_info.get("order_status")
                     if status in {"filled", "canceled", "expired", "rejected"}:
                         logger.info(
                             f"Order {order_id} for {symbol} finalized: {status}"
@@ -318,10 +302,7 @@ class NexusEngine:
 
     async def run_cycle(self) -> None:
         logger.info("Starting new trading cycle.")
-        if (
-            time.time() - self.last_universe_refresh
-            > Config.UNIVERSE_RESCAN_INTERVAL
-        ):
+        if time.time() - self.last_universe_refresh > Config.UNIVERSE_RESCAN_INTERVAL:
             await self.refresh_universe()
 
         # Phase 1: Verify fills from previous cycle
@@ -331,9 +312,7 @@ class NexusEngine:
         try:
             response = await client.get(f"{self.backend_url}/api/alpaca/clock")
             clock_data = (
-                response.json()
-                if response.status_code == 200
-                else {"is_open": False}
+                response.json() if response.status_code == 200 else {"is_open": False}
             )
         except Exception:
             clock_data = {"is_open": False}
@@ -360,9 +339,7 @@ class NexusEngine:
         raw_signals = await self.alpha_engine.get_batch_signals(
             symbols, timeframe="15Min"
         )
-        history = await self.fetch_universe_history(
-            symbols, timeframe="1D", limit=100
-        )
+        history = await self.fetch_universe_history(symbols, timeframe="1D", limit=100)
         logger.info(
             "History loaded for %s symbols out of %s selected symbols.",
             len(history),
@@ -387,9 +364,7 @@ class NexusEngine:
 
         if not benchmark_data.empty:
             try:
-                self.market_regime = self.regime_detector.detect(
-                    benchmark_data
-                )
+                self.market_regime = self.regime_detector.detect(benchmark_data)
                 regime_probs = self.regime_detector.get_regime_probabilities()
             except Exception as e:
                 logger.warning(f"Regime detection failed: {e}")
@@ -422,9 +397,7 @@ class NexusEngine:
             )
 
             if ai_signal == 0:
-                logger.debug(
-                    f"[AIEnsembleBrain] Gated out {sym} (NO_TRADE confidence)"
-                )
+                logger.debug(f"[AIEnsembleBrain] Gated out {sym} (NO_TRADE confidence)")
                 continue
 
             # Blend Raw Alpha with Ensemble AI decision
@@ -455,9 +428,7 @@ class NexusEngine:
             "sharpe": 0.0,
         }
         if returns_list.size > 0:
-            rust_risk = PolyglotBridge.calculate_risk_rust(
-                returns_list.tolist()
-            )
+            rust_risk = PolyglotBridge.calculate_risk_rust(returns_list.tolist())
             risk_metrics = self.risk_engine.assess_risk(returns_list)
             risk_metrics["rust_var"] = float(rust_risk.get("var", 0.0))
 
@@ -476,9 +447,7 @@ class NexusEngine:
 
         weights = {s: w * multiplier for s, w in weights.items()}
 
-        portfolio_state = self.build_portfolio_state(
-            account, current_positions
-        )
+        portfolio_state = self.build_portfolio_state(account, current_positions)
         self.health_monitor.record(
             "market", not benchmark_data.empty, details=self.market_regime
         )
@@ -505,9 +474,7 @@ class NexusEngine:
                 )
 
         if close_candidates:
-            await asyncio.gather(
-                *[self._close_position(s) for s in close_candidates]
-            )
+            await asyncio.gather(*[self._close_position(s) for s in close_candidates])
 
         # Trade tasks
         trade_tasks = []
@@ -542,9 +509,7 @@ class NexusEngine:
         # Update IC tracker in optimizer with latest signal → return outcomes
         for sym, score in portfolio_scores.items():
             if sym in history and not history[sym].empty:
-                realized = float(
-                    history[sym]["close"].pct_change().dropna().iloc[-1]
-                )
+                realized = float(history[sym]["close"].pct_change().dropna().iloc[-1])
                 self.optimizer.ic_tracker.record(sym, score, realized)
 
             # Record outcome for ensemble learning
@@ -572,11 +537,7 @@ class NexusEngine:
         selected_strategy: str,
         is_open: bool,
     ) -> None:
-        if (
-            abs(weight) < 0.0001
-            or symbol not in history
-            or history[symbol].empty
-        ):
+        if abs(weight) < 0.0001 or symbol not in history or history[symbol].empty:
             return
         current_price = float(history[symbol]["close"].iloc[-1])
 
@@ -661,9 +622,7 @@ class NexusEngine:
     async def _close_position(self, symbol: str) -> None:
         client = await self._get_client()
         try:
-            await client.delete(
-                f"{self.backend_url}/api/alpaca/positions/{symbol}"
-            )
+            await client.delete(f"{self.backend_url}/api/alpaca/positions/{symbol}")
             self.position_manager.reset_watermark(symbol)
         except Exception as exc:
             logger.error(f"Error closing position for {symbol}: {exc}")

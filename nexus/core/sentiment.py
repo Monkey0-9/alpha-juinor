@@ -130,9 +130,7 @@ class SentimentEngine:
         for w in words:
             if w in self.INTENSIFIERS:
                 score += (
-                    0.15
-                    if not any(n in word_set for n in self.NEGATORS)
-                    else -0.10
+                    0.15 if not any(n in word_set for n in self.NEGATORS) else -0.10
                 )
             if w in self.NEGATORS:
                 score *= -0.5

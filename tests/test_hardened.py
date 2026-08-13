@@ -1,7 +1,7 @@
 import numpy as np
 from nexus.math.models import TrendAccelerationModel, NeuralODE
-from nexus.math.optimization import MonteCarloSimulator
-from nexus.core.governance import GovernanceEngine
+from nexus.portfolio.optimization import MonteCarloSimulator
+from nexus.audit.governance import GovernanceEngine
 
 
 def test_neural_ode_alias():
@@ -19,9 +19,7 @@ def test_monte_carlo_real_simulation():
     returns = np.random.normal(0.001, 0.02, 100)
 
     # Run twice to see variation (or at least check it's not 0.999)
-    prob = mc.run_survival_analysis(
-        100000, returns, days=252, n_simulations=100
-    )
+    prob = mc.run_survival_analysis(100000, returns, days=252, n_simulations=100)
     assert prob != 0.999
     assert 0.0 <= prob <= 1.0
 

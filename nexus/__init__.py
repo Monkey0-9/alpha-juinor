@@ -2,7 +2,9 @@ import os
 import sys
 
 # Ensure our local C++ extensions are loadable
-cpp_ext_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "cpp_extensions"))
+cpp_ext_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "cpp_extensions")
+)
 if cpp_ext_path not in sys.path:
     sys.path.insert(0, cpp_ext_path)
 

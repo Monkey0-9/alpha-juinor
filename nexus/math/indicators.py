@@ -93,11 +93,7 @@ class RegimeDetector:
         Full probabilistic regime detection.
         Returns a dict like: {'BULL': 0.65, 'BEAR': 0.05, 'SIDEWAYS': 0.20, 'TURBULENT': 0.10}
         """
-        if (
-            data.empty
-            or "close" not in data.columns
-            or len(data) < self.window
-        ):
+        if data.empty or "close" not in data.columns or len(data) < self.window:
             return {
                 "BULL": 0.25,
                 "BEAR": 0.25,
@@ -292,16 +288,12 @@ class HawkesProcess:
     Self-exciting Hawkes Process for modeling volatility clustering.
     """
 
-    def __init__(
-        self, mu: float = 0.01, alpha: float = 0.1, beta: float = 0.5
-    ):
+    def __init__(self, mu: float = 0.01, alpha: float = 0.1, beta: float = 0.5):
         self.mu = mu
         self.alpha = alpha
         self.beta = beta
 
-    def calculate_intensity(
-        self, events_or_returns: np.ndarray[Any, Any]
-    ) -> float:
+    def calculate_intensity(self, events_or_returns: np.ndarray[Any, Any]) -> float:
         """Calculates intensity. Now uses C++ backend taking returns directly."""
         if len(events_or_returns) == 0:
             return self.mu

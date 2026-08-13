@@ -19,7 +19,7 @@ from nexus.core.alpha import AlphaEngine
 from nexus.models.zoo.ensemble import AIEnsembleBrain
 from nexus.research.backtest import BacktestEngine
 from nexus.execution.alpaca import get_client
-from nexus.math.risk import RiskEngine
+from nexus.risk.engine import RiskEngine
 from nexus.math.indicators import RegimeDetector
 
 logger = logging.getLogger(__name__)
@@ -74,9 +74,7 @@ async def brain_snapshot(
     try:
         await get_client().get_positions()
     except Exception as exc:
-        logger.warning(
-            f"Unable to load live positions for brain snapshot: {exc}"
-        )
+        logger.warning(f"Unable to load live positions for brain snapshot: {exc}")
 
     analysis: Dict[str, Any] = {}
 
@@ -127,16 +125,12 @@ async def superhuman_snapshot(
     alpha_engine = AlphaEngine()
 
     # Fetch raw signals and history for all symbols
-    raw_signals = await alpha_engine.get_batch_signals(
-        symbol_list, timeframe=timeframe
-    )
+    raw_signals = await alpha_engine.get_batch_signals(symbol_list, timeframe=timeframe)
 
     # Fetch history for fractal gate + strategy scoring
     history: Dict[str, pd.DataFrame] = {}
     for sym in symbol_list:
-        df = await alpha_engine.fetch_market_data(
-            sym, timeframe="1D", limit=80
-        )
+        df = await alpha_engine.fetch_market_data(sym, timeframe="1D", limit=80)
         if not df.empty:
             history[sym] = df
 

@@ -24,9 +24,7 @@ class WalkForwardEvaluator:
         self.test_window = test_window
         self.step_size = step_size
 
-    def generate_splits(
-        self, df: pd.DataFrame
-    ) -> List[Dict[str, pd.DataFrame]]:
+    def generate_splits(self, df: pd.DataFrame) -> List[Dict[str, pd.DataFrame]]:
         """Splits time series into rolling train, validation, and test windows."""
         splits = []
         n_samples = len(df)
@@ -58,9 +56,7 @@ class WalkForwardEvaluator:
 
         return splits
 
-    def evaluate_model(
-        self, model_class: Any, df: pd.DataFrame
-    ) -> Dict[str, Any]:
+    def evaluate_model(self, model_class: Any, df: pd.DataFrame) -> Dict[str, Any]:
         """
         Executes walk-forward backtesting across all rolling windows.
         Returns out-of-sample performance metrics.
@@ -110,11 +106,7 @@ class WalkForwardEvaluator:
         mean_ret = float(np.mean(returns_arr))
         std_ret = float(np.std(returns_arr))
 
-        sharpe = (
-            float((mean_ret / std_ret * np.sqrt(252)))
-            if std_ret > 1e-6
-            else 0.0
-        )
+        sharpe = float((mean_ret / std_ret * np.sqrt(252))) if std_ret > 1e-6 else 0.0
 
         downside = returns_arr[returns_arr < 0]
         downside_std = float(np.std(downside)) if len(downside) > 0 else 1e-6
@@ -131,11 +123,7 @@ class WalkForwardEvaluator:
 
         wins = returns_arr[returns_arr > 0]
         losses = returns_arr[returns_arr < 0]
-        win_rate = (
-            float(len(wins) / len(returns_arr))
-            if len(returns_arr) > 0
-            else 0.0
-        )
+        win_rate = float(len(wins) / len(returns_arr)) if len(returns_arr) > 0 else 0.0
         profit_factor = (
             float(np.sum(wins) / abs(np.sum(losses)))
             if len(losses) > 0 and abs(np.sum(losses)) > 1e-6

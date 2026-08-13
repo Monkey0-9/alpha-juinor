@@ -375,9 +375,9 @@ class MultiFactorEngine:
         smoothing = 0.30  # blend 30% new IC, 70% old weights
         for factor in self._factor_weights:
             new_w = factor_ics[factor] / total_ic
-            self._factor_weights[factor] = (
-                1 - smoothing
-            ) * self._factor_weights[factor] + smoothing * new_w
+            self._factor_weights[factor] = (1 - smoothing) * self._factor_weights[
+                factor
+            ] + smoothing * new_w
 
         # Normalize
         total = sum(self._factor_weights.values()) + 1e-9
@@ -414,9 +414,7 @@ class MonteCarloSimulator:
                 if hasattr(os, "add_dll_directory"):
                     os.add_dll_directory(mingw_bin)
                 else:
-                    os.environ["PATH"] = (
-                        mingw_bin + os.pathsep + os.environ["PATH"]
-                    )
+                    os.environ["PATH"] = mingw_bin + os.pathsep + os.environ["PATH"]
 
             # Ensure the cpp_extensions dir is in path
             cpp_dir = os.path.join(

@@ -4,7 +4,7 @@ import logging
 import time
 import pandas as pd
 from typing import Dict, Any, Optional, Tuple
-from nexus.data.features import FeatureEngineer
+from nexus.features.features import FeatureEngineer
 from nexus.models.zoo.time_series import GradientBoostedTimeSeriesModel
 
 from nexus.research.walk_forward import WalkForwardEvaluator
@@ -108,9 +108,7 @@ class ModelRegistry:
             and candidate_pf > 1.05
             and candidate_dd < 0.25
         ):
-            major, minor, patch = self.active_version.replace("v", "").split(
-                "."
-            )
+            major, minor, patch = self.active_version.replace("v", "").split(".")
             new_version = f"v{major}.{minor}.{int(patch) + 1}"
 
             self.active_version = new_version

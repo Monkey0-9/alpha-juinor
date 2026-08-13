@@ -1,6 +1,6 @@
 import pandas as pd
-from nexus.core.governance import GovernanceEngine
-from nexus.math.optimization import PortfolioOptimizer, MultiFactorEngine
+from nexus.audit.governance import GovernanceEngine
+from nexus.portfolio.optimization import PortfolioOptimizer, MultiFactorEngine
 
 
 def test_governance_concentration():

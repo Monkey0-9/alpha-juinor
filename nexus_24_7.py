@@ -16,11 +16,8 @@ log_file = log_dir / f"nexus_24_7_{datetime.now().strftime('%Y%m%d')}.log"
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler(sys.stdout)
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler(log_file), logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger("Nexus24x7")
 
@@ -36,7 +33,7 @@ class Nexus24x7Manager:
         self.total_runtime = timedelta()
         self.root = os.getcwd()
         self.log_thread = None
-        
+
         # Signal handlers
         signal.signal(signal.SIGINT, self._handle_shutdown)
         signal.signal(signal.SIGTERM, self._handle_shutdown)
@@ -50,7 +47,7 @@ class Nexus24x7Manager:
     def _stream_logs(self, pipe, log_file_handle):
         """Streams logs from the subprocess to terminal and file."""
         try:
-            for line in iter(pipe.readline, ''):
+            for line in iter(pipe.readline, ""):
                 if not line:
                     break
                 # Print to terminal
@@ -82,10 +79,10 @@ class Nexus24x7Manager:
 
         try:
             # Create orchestrator log
-            now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+            now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
             log_path = Path("logs") / f"nexus_orchestrator_{now_str}.log"
             self._orchestrator_log = open(log_path, "w", encoding="utf-8")
-            
+
             # Launch orchestrator with pipe
             self.orchestrator_process = subprocess.Popen(
                 [sys.executable, "nexus_orchestrator.py"],
@@ -93,18 +90,20 @@ class Nexus24x7Manager:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1
+                bufsize=1,
             )
-            
+
             # Start background thread to stream logs to terminal
             self.log_thread = threading.Thread(
-                target=self._stream_logs, 
+                target=self._stream_logs,
                 args=(self.orchestrator_process.stdout, self._orchestrator_log),
-                daemon=True
+                daemon=True,
             )
             self.log_thread.start()
-            
-            logger.info(f"[SYSTEM] Orchestrator online (PID: {self.orchestrator_process.pid})")
+
+            logger.info(
+                f"[SYSTEM] Orchestrator online (PID: {self.orchestrator_process.pid})"
+            )
             logger.info("[MONITOR] Streaming real-time execution to terminal...")
 
         except Exception as exc:
@@ -134,9 +133,9 @@ class Nexus24x7Manager:
         if self.start_time:
             current_runtime = datetime.now() - self.start_time
             return {
-                "uptime": str(current_runtime).split('.')[0],
+                "uptime": str(current_runtime).split(".")[0],
                 "restarts": self.restart_count,
-                "timestamp": datetime.now().strftime("%H:%M:%S")
+                "timestamp": datetime.now().strftime("%H:%M:%S"),
             }
         return {}
 
@@ -174,7 +173,7 @@ class Nexus24x7Manager:
     def run_24_7(self):
         """Main 24/7 operation loop with real-time monitoring."""
         logger.info("[GUARD] Nexus 24/7 Sentinel Started")
-        
+
         first_run = True
         try:
             while True:

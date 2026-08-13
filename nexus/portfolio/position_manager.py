@@ -17,9 +17,7 @@ class VolatilityRegimeAdapter:
             return "NORMAL"
         recent_vol = float(np.std(returns[-self.window :]))
         hist_vol = (
-            float(np.std(returns))
-            if len(returns) > self.window * 3
-            else recent_vol
+            float(np.std(returns)) if len(returns) > self.window * 3 else recent_vol
         )
         ratio = recent_vol / max(hist_vol, 1e-10)
         regime = "HIGH" if ratio > 1.5 else "LOW" if ratio < 0.6 else "NORMAL"
@@ -60,10 +58,7 @@ class PositionManager:
     ) -> bool:
         if current_price <= 0 or avg_entry_price <= 0:
             return False
-        if (
-            symbol not in self._watermarks
-            or current_price > self._watermarks[symbol]
-        ):
+        if symbol not in self._watermarks or current_price > self._watermarks[symbol]:
             self._watermarks[symbol] = current_price
         highest_price = self._watermarks[symbol]
 
@@ -81,9 +76,7 @@ class PositionManager:
 
         vol_regime = "NORMAL"
         if len(self._return_buffer.get(symbol, [])) > 5:
-            vol_regime = self._vol_adapter.update(
-                np.array(self._return_buffer[symbol])
-            )
+            vol_regime = self._vol_adapter.update(np.array(self._return_buffer[symbol]))
 
         if pnl_pct <= Config.STOP_LOSS_THRESHOLD:
             logger.info(
@@ -103,9 +96,7 @@ class PositionManager:
 
         peak_profit_pct = (highest_price - avg_entry_price) / avg_entry_price
         if peak_profit_pct >= Config.TRAILING_PROFIT_LOCK:
-            current_profit_pct = (
-                current_price - avg_entry_price
-            ) / avg_entry_price
+            current_profit_pct = (current_price - avg_entry_price) / avg_entry_price
             trailing_lock = (
                 peak_profit_pct * 0.5
                 if vol_regime != "HIGH"
@@ -123,9 +114,7 @@ class PositionManager:
         atr = self._get_atr(history)
         if atr > 0:
             stop_mult = self._vol_adapter.get_stop_multiplier(vol_regime)
-            stop_level = highest_price - (
-                atr * stop_mult * Config.ATR_STOP_MULTIPLIER
-            )
+            stop_level = highest_price - (atr * stop_mult * Config.ATR_STOP_MULTIPLIER)
             if current_price < stop_level:
                 logger.info(
                     "Closing %s: ATR Trailing Stop (vol_regime=%s, mult=%.1f, curr=%.2f, stop=%.2f)",

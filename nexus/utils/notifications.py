@@ -24,7 +24,9 @@ class NotificationSystem:
         if self.telegram_token and self.telegram_chat_id:
             try:
                 async with httpx.AsyncClient() as client:
-                    url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
+                    url = (
+                        f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
+                    )
                     await client.post(
                         url,
                         json={

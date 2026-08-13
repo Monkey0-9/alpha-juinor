@@ -38,12 +38,8 @@ class BacktestEngine:
             raise ValueError("Universe data cannot be empty.")
 
         # Align all price series to a common timeline
-        prices_df = (
-            pd.DataFrame(universe_prices).fillna(method="ffill").dropna()
-        )
-        signals_df = (
-            pd.DataFrame(universe_signals).reindex(prices_df.index).fillna(0.0)
-        )
+        prices_df = pd.DataFrame(universe_prices).fillna(method="ffill").dropna()
+        signals_df = pd.DataFrame(universe_signals).reindex(prices_df.index).fillna(0.0)
 
         equity = self.initial_capital
         holdings: Dict[str, float] = {s: 0.0 for s in prices_df.columns}

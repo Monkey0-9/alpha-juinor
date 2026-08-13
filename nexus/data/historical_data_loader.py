@@ -23,8 +23,8 @@ class HistoricalDataLoader:
         Loads macro data (S&P 500) as far back as possible (1927+).
         """
         cache_path = os.path.join(
-            self.cache_dir,
-            f"{symbol.replace('^', '')}_macro.csv")
+            self.cache_dir, f"{symbol.replace('^', '')}_macro.csv"
+        )
 
         if os.path.exists(cache_path):
             logger.info(f"Loading cached macro data for {symbol}")
@@ -46,17 +46,19 @@ class HistoricalDataLoader:
             df.columns = [c.lower() for c in df.columns]
 
             # Basic feature engineering for macro regimes
-            df['returns'] = df['close'].pct_change()
-            df['vol_30d'] = df['returns'].rolling(30).std() * (252 ** 0.5)
-            df['vol_252d'] = df['returns'].rolling(252).std() * (252 ** 0.5)
-            df['sma_50'] = df['close'].rolling(50).mean()
-            df['sma_200'] = df['close'].rolling(200).mean()
+            df["returns"] = df["close"].pct_change()
+            df["vol_30d"] = df["returns"].rolling(30).std() * (252**0.5)
+            df["vol_252d"] = df["returns"].rolling(252).std() * (252**0.5)
+            df["sma_50"] = df["close"].rolling(50).mean()
+            df["sma_200"] = df["close"].rolling(200).mean()
 
             # Regime classification (1 = Bull/Low Vol, -1 = Bear/High Vol)
-            df['regime'] = 1  # Default Bull
+            df["regime"] = 1  # Default Bull
             # If price below 200 SMA and Volatility is high -> Bear
-            df.loc[(df['close'] < df['sma_200']) & (
-                df['vol_30d'] > df['vol_252d']), 'regime'] = -1
+            df.loc[
+                (df["close"] < df["sma_200"]) & (df["vol_30d"] > df["vol_252d"]),
+                "regime",
+            ] = -1
 
             df.dropna(inplace=True)
             df.to_csv(cache_path)

@@ -1,7 +1,6 @@
 import asyncio
-import pandas as pd
 from nexus.core.alpha import AlphaEngine
-from nexus.utils.config import Config
+
 
 async def test_data():
     engine = AlphaEngine()
@@ -14,6 +13,7 @@ async def test_data():
         print(f"Signal: {signal}")
     else:
         print("FAILED to fetch data")
+
 
 if __name__ == "__main__":
     asyncio.run(test_data())

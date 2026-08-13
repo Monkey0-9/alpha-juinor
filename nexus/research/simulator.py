@@ -56,9 +56,7 @@ class TradeSimulator:
         if (side == "buy" and limit_price >= current_price) or (
             side == "sell" and limit_price <= current_price
         ):
-            return self.execute_market_order(
-                symbol, qty, limit_price, side, commission
-            )
+            return self.execute_market_order(symbol, qty, limit_price, side, commission)
         return {
             "symbol": symbol,
             "qty": abs(qty),

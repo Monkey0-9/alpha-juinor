@@ -1,11 +1,11 @@
 """
 nexus/math/optimizer.py — Legacy Alias
 
-Consolidated into nexus.math.optimization.
+Consolidated into nexus.portfolio.optimization.
 This module re-exports PortfolioOptimizer for backward compatibility.
 """
 
-from nexus.math.optimization import (
+from nexus.portfolio.optimization import (
     PortfolioOptimizer,
     KellyCriterionSizer,
     InformationCoefficientTracker,

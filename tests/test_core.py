@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from nexus.math.risk import RiskEngine
+from nexus.risk.engine import RiskEngine
 from nexus.math.indicators import RegimeDetector
 
 

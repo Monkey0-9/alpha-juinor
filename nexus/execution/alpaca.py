@@ -53,16 +53,12 @@ class AlpacaClient:
         if credentials is None:
             api_key = os.getenv("ALPACA_API_KEY", "")
             api_secret = os.getenv("ALPACA_API_SECRET", "")
-            paper_trading = (
-                os.getenv("ALPACA_PAPER_TRADING", "true").lower() == "true"
-            )
+            paper_trading = os.getenv("ALPACA_PAPER_TRADING", "true").lower() == "true"
             if api_key and api_secret:
                 # Strip potential whitespace or quotes from copy-paste errors
                 api_key = api_key.strip().strip('"').strip("'")
                 api_secret = api_secret.strip().strip('"').strip("'")
-                self.credentials = AlpacaCredentials(
-                    api_key, api_secret, paper_trading
-                )
+                self.credentials = AlpacaCredentials(api_key, api_secret, paper_trading)
                 self.enabled = True
             else:
                 if Config.ALLOW_SIMULATION_FALLBACK:
@@ -97,9 +93,7 @@ class AlpacaClient:
         elif self.simulated:
             logger.info("Alpaca execution initialized in SIMULATION mode.")
         else:
-            logger.warning(
-                "Alpaca execution disabled due to missing credentials."
-            )
+            logger.warning("Alpaca execution disabled due to missing credentials.")
 
     @property
     def headers(self) -> Dict[str, str]:
@@ -120,11 +114,7 @@ class AlpacaClient:
         if self.simulated:
             account = self.simulator.get_account(self._current_prices())
             # If we fell back due to missing credentials, report it
-            err = (
-                "Invalid API Keys in .env"
-                if self.credentials
-                else "No keys provided"
-            )
+            err = "Invalid API Keys in .env" if self.credentials else "No keys provided"
             return {
                 **account,
                 "enabled": True,
@@ -146,9 +136,7 @@ class AlpacaClient:
                         "account_id": data.get("id"),
                         "buying_power": float(data.get("buying_power", 0)),
                         "cash": float(data.get("cash", 0)),
-                        "portfolio_value": float(
-                            data.get("portfolio_value", 0)
-                        ),
+                        "portfolio_value": float(data.get("portfolio_value", 0)),
                         "equity": float(data.get("equity", 0)),
                         "last_equity": float(data.get("last_equity", 0)),
                         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -177,8 +165,7 @@ class AlpacaClient:
                     "qty": float(pos["qty"]),
                     "avg_price": float(pos["avg_price"]),
                     "market_value": float(
-                        pos["qty"]
-                        * self._current_prices().get(pos["symbol"], 0.0)
+                        pos["qty"] * self._current_prices().get(pos["symbol"], 0.0)
                     ),
                     "unrealized_pl": 0.0,
                     "unrealized_plpc": 0.0,
@@ -204,9 +191,7 @@ class AlpacaClient:
                             "avg_price": float(p.get("avg_entry_price", 0)),
                             "market_value": float(p.get("market_value", 0)),
                             "unrealized_pl": float(p.get("unrealized_pl", 0)),
-                            "unrealized_plpc": float(
-                                p.get("unrealized_plpc", 0)
-                            ),
+                            "unrealized_plpc": float(p.get("unrealized_plpc", 0)),
                             "current_price": float(p.get("current_price", 0)),
                             "side": p.get("side"),
                         }
@@ -304,9 +289,7 @@ class AlpacaClient:
             else:
                 unique_suffix = uuid.uuid4().hex[:8]
                 fallback_prefix = (strategy or "order").replace(" ", "_")
-                base_order_id = (
-                    f"{symbol}-{side}-{fallback_prefix}-{unique_suffix}"
-                )
+                base_order_id = f"{symbol}-{side}-{fallback_prefix}-{unique_suffix}"
                 order_data["client_order_id"] = base_order_id[:32]
 
             async with session.post(
@@ -324,9 +307,7 @@ class AlpacaClient:
                         "asset_class": asset_class,
                         "raw": data,
                     }
-                logger.error(
-                    f"Alpaca order rejected: {response.status} {data}"
-                )
+                logger.error(f"Alpaca order rejected: {response.status} {data}")
                 return {
                     "success": False,
                     "error": data.get("message", data),
@@ -484,10 +465,7 @@ class AlpacaClient:
         cache_key = (symbol, timeframe, limit, start or "", feed)
         now = time.monotonic()
         cached_entry = self._bars_cache.get(cache_key)
-        if (
-            cached_entry
-            and (now - cached_entry["timestamp"]) < self._bars_cache_ttl
-        ):
+        if cached_entry and (now - cached_entry["timestamp"]) < self._bars_cache_ttl:
             return cached_entry["bars"]
 
         inflight_task = self._bars_inflight.get(cache_key)
@@ -523,17 +501,12 @@ class AlpacaClient:
                                 retry_after = 0
                                 try:
                                     retry_after = int(
-                                        response.headers.get(
-                                            "Retry-After", "0"
-                                        )
-                                        or 0
+                                        response.headers.get("Retry-After", "0") or 0
                                     )
                                 except (ValueError, TypeError):
                                     retry_after = 0
                                 backoff = (
-                                    retry_after
-                                    if retry_after > 0
-                                    else 1.5 * retries
+                                    retry_after if retry_after > 0 else 1.5 * retries
                                 )
                                 logger.warning(
                                     f"Alpaca bars request for {symbol} was rate limited (429). "

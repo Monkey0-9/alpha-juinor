@@ -6,8 +6,8 @@ Provides simple commands to start/stop 24/7 trading operation
 
 import subprocess
 import sys
-import os
 from pathlib import Path
+
 
 def print_menu():
     print("\n" + "=" * 70)
@@ -25,6 +25,7 @@ def print_menu():
     print("  9. Exit")
     print("\n" + "=" * 70 + "\n")
 
+
 def start_command_line():
     """Start nexus_24_7.py directly."""
     print("Starting Nexus 24/7 in command line mode...")
@@ -34,66 +35,97 @@ def start_command_line():
     except KeyboardInterrupt:
         print("\nStopped by user")
 
+
 def install_task_scheduler():
     """Install Windows Task Scheduler task."""
     print("Installing Windows Task Scheduler task...")
     print("(Requires Administrator privileges)\n")
     try:
         subprocess.run(
-            ["PowerShell", "-ExecutionPolicy", "Bypass", "-File", 
-             "setup_scheduled_task.ps1", "-Action", "install"],
-            check=True
+            [
+                "PowerShell",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "setup_scheduled_task.ps1",
+                "-Action",
+                "install",
+            ],
+            check=True,
         )
         print("\n[OK] Task installed successfully!")
         print("It will start automatically on system reboot.")
-        print("To start immediately: Start-ScheduledTask -TaskName 'Nexus24x7TradingPlatform'")
+        print(
+            "To start immediately: Start-ScheduledTask -TaskName 'Nexus24x7TradingPlatform'"
+        )
     except subprocess.CalledProcessError as e:
         print(f"\n[FAIL] Failed to install task: {e}")
     except FileNotFoundError:
         print("\n[FAIL] PowerShell not found or not in PATH")
+
 
 def check_task_status():
     """Check scheduled task status."""
     print("Checking task status...\n")
     try:
         subprocess.run(
-            ["PowerShell", "-ExecutionPolicy", "Bypass", "-File", 
-             "setup_scheduled_task.ps1", "-Action", "status"],
-            check=False
+            [
+                "PowerShell",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "setup_scheduled_task.ps1",
+                "-Action",
+                "status",
+            ],
+            check=False,
         )
     except FileNotFoundError:
         print("PowerShell not found or not in PATH")
+
 
 def stop_task_scheduler():
     """Stop the scheduled task."""
     print("Stopping Windows Task Scheduler task...")
     try:
         subprocess.run(
-            ["PowerShell", "-Command", 
-             "Stop-ScheduledTask -TaskName 'Nexus24x7TradingPlatform' -ErrorAction SilentlyContinue"],
-            check=False
+            [
+                "PowerShell",
+                "-Command",
+                "Stop-ScheduledTask -TaskName 'Nexus24x7TradingPlatform' -ErrorAction SilentlyContinue",
+            ],
+            check=False,
         )
         print("[OK] Task stopped successfully!")
     except Exception as e:
         print(f"[FAIL] Error: {e}")
 
+
 def remove_task_scheduler():
     """Remove the scheduled task."""
     response = input("Are you sure you want to remove the scheduled task? (y/n): ")
-    if response.lower() != 'y':
+    if response.lower() != "y":
         return
-    
+
     print("Removing Windows Task Scheduler task...")
     print("(Requires Administrator privileges)\n")
     try:
         subprocess.run(
-            ["PowerShell", "-ExecutionPolicy", "Bypass", "-File", 
-             "setup_scheduled_task.ps1", "-Action", "remove"],
-            check=False
+            [
+                "PowerShell",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "setup_scheduled_task.ps1",
+                "-Action",
+                "remove",
+            ],
+            check=False,
         )
         print("\n[OK] Task removed successfully!")
     except Exception as e:
         print(f"\n[FAIL] Error: {e}")
+
 
 def view_logs():
     """View recent log entries."""
@@ -101,26 +133,27 @@ def view_logs():
     if not log_dir.exists():
         print("No logs directory found yet.")
         return
-    
+
     log_files = sorted(log_dir.glob("nexus_24_7_*.log"), reverse=True)
     if not log_files:
         print("No log files found yet.")
         return
-    
+
     latest_log = log_files[0]
     print(f"Viewing latest log file: {latest_log.name}\n")
     print("=" * 70)
-    
+
     try:
         # Read last 50 lines
-        with open(latest_log, 'r') as f:
+        with open(latest_log, "r") as f:
             lines = f.readlines()
             for line in lines[-50:]:
                 print(line.rstrip())
     except Exception as e:
         print(f"Error reading log file: {e}")
-    
+
     print("=" * 70)
+
 
 def run_verification():
     """Run production readiness verification."""
@@ -130,14 +163,15 @@ def run_verification():
     except FileNotFoundError:
         print("Verification script not found")
 
+
 def view_configuration():
     """Display current configuration."""
     print("Current Configuration:\n")
     print("=" * 70)
-    
+
     try:
         from nexus.utils.config import Config
-        
+
         config_items = {
             "API Host": Config.API_HOST,
             "API Port": Config.API_PORT,
@@ -151,51 +185,53 @@ def view_configuration():
             "Candidate Pool Size": Config.CANDIDATE_POOL_SIZE,
             "Paper Trading": Config.ALPACA_PAPER,
         }
-        
+
         for key, value in config_items.items():
             print(f"  {key:.<30} {value}")
-        
+
         print("=" * 70)
-        
+
         # Check credentials
         valid, missing = Config.validate()
         if valid:
             print("\n[OK] Credentials validated successfully")
         else:
             print(f"\n[FAIL] Missing credentials: {missing}")
-            
+
     except Exception as e:
         print(f"Error loading configuration: {e}")
+
 
 def main():
     """Main menu loop."""
     while True:
         print_menu()
         choice = input("Select option (1-9): ").strip()
-        
-        if choice == '1':
+
+        if choice == "1":
             start_command_line()
-        elif choice == '2':
+        elif choice == "2":
             install_task_scheduler()
-        elif choice == '3':
+        elif choice == "3":
             check_task_status()
-        elif choice == '4':
+        elif choice == "4":
             stop_task_scheduler()
-        elif choice == '5':
+        elif choice == "5":
             remove_task_scheduler()
-        elif choice == '6':
+        elif choice == "6":
             view_logs()
-        elif choice == '7':
+        elif choice == "7":
             run_verification()
-        elif choice == '8':
+        elif choice == "8":
             view_configuration()
-        elif choice == '9':
+        elif choice == "9":
             print("Exiting...")
             break
         else:
             print("Invalid option, please try again")
-        
+
         input("\nPress Enter to continue...")
+
 
 if __name__ == "__main__":
     main()

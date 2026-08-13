@@ -312,9 +312,7 @@ def main() -> None:
             rp_df = pd.DataFrame(
                 [
                     {"Regime": k, "Probability": round(v * 100, 1)}
-                    for k, v in sorted(
-                        regime_probs.items(), key=lambda x: -x[1]
-                    )
+                    for k, v in sorted(regime_probs.items(), key=lambda x: -x[1])
                 ]
             )
             bar_col, hurst_col = st.columns([2, 1])
@@ -407,9 +405,7 @@ def main() -> None:
                         unsafe_allow_html=True,
                     )
     else:
-        st.info(
-            "🧠 SuperhumanBrain data loading... Backend may be starting up."
-        )
+        st.info("🧠 SuperhumanBrain data loading... Backend may be starting up.")
 
     st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 

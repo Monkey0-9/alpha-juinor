@@ -42,15 +42,11 @@ class Config:
 
     # Advanced Trailing Stops
     ATR_STOP_MULTIPLIER = float(os.getenv("NEXUS_ATR_STOP_MULTIPLIER", "2.5"))
-    TRAILING_PROFIT_LOCK = float(
-        os.getenv("NEXUS_TRAILING_PROFIT_LOCK", "0.06")
-    )
+    TRAILING_PROFIT_LOCK = float(os.getenv("NEXUS_TRAILING_PROFIT_LOCK", "0.06"))
     BREAKEVEN_TRIGGER = float(os.getenv("NEXUS_BREAKEVEN_TRIGGER", "0.03"))
 
     # Sentiment & Signals
-    SENTIMENT_ENABLED = (
-        os.getenv("NEXUS_SENTIMENT_ENABLED", "true").lower() == "true"
-    )
+    SENTIMENT_ENABLED = os.getenv("NEXUS_SENTIMENT_ENABLED", "true").lower() == "true"
     SENTIMENT_WEIGHT = float(os.getenv("NEXUS_SENTIMENT_WEIGHT", "0.15"))
     SIGNAL_1MIN_WEIGHT = float(os.getenv("NEXUS_SIGNAL_1MIN_WEIGHT", "0.25"))
     SIGNAL_15MIN_WEIGHT = float(os.getenv("NEXUS_SIGNAL_15MIN_WEIGHT", "0.45"))

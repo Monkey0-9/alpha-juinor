@@ -29,9 +29,7 @@ class ValidationFramework:
             end_idx = min((i + 1) * split_size, n_samples)
 
             # Simple expanding window train, fixed window test
-            train_end = start_idx + int(
-                (end_idx - start_idx) * self.train_size
-            )
+            train_end = start_idx + int((end_idx - start_idx) * self.train_size)
 
             train = data.iloc[:train_end]
             test = data.iloc[train_end:end_idx]
@@ -48,9 +46,7 @@ class ValidationFramework:
 
         for i, (train, test) in enumerate(splits):
             # Generate signals on test data
-            signals = test.apply(
-                lambda row: model.predict(pd.DataFrame([row])), axis=1
-            )
+            signals = test.apply(lambda row: model.predict(pd.DataFrame([row])), axis=1)
 
             # Run backtest
             result = self.backtester.run(test["close"], signals)

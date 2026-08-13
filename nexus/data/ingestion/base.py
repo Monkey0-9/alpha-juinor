@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List
 import pandas as pd
 from datetime import datetime
 
@@ -19,7 +19,7 @@ class DataSource(ABC):
     ) -> pd.DataFrame:
         """
         Fetch historical OHLCV data for given symbols.
-        
+
         Args:
             symbols: List of ticker symbols.
             start_date: Start datetime.

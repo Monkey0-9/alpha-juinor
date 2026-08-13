@@ -7,9 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class RiskEngine:
-    def __init__(
-        self, confidence_level: float = 0.95, ewma_lambda: float = 0.94
-    ):
+    def __init__(self, confidence_level: float = 0.95, ewma_lambda: float = 0.94):
         self.confidence_level = confidence_level
         self.ewma_lambda = ewma_lambda
 
@@ -33,9 +31,7 @@ class RiskEngine:
             return 0.0
         return float(np.percentile(returns, (1 - self.confidence_level) * 100))
 
-    def calculate_var(
-        self, returns: np.ndarray, method: str = "historical"
-    ) -> float:
+    def calculate_var(self, returns: np.ndarray, method: str = "historical") -> float:
         if method == "cornish_fisher":
             return self.calculate_cornish_fisher_var(returns)
         elif method == "parametric":
@@ -89,9 +85,7 @@ class RiskEngine:
                 if hasattr(os, "add_dll_directory"):
                     os.add_dll_directory(mingw_bin)
                 else:
-                    os.environ["PATH"] = (
-                        mingw_bin + os.pathsep + os.environ["PATH"]
-                    )
+                    os.environ["PATH"] = mingw_bin + os.pathsep + os.environ["PATH"]
             cpp_dir = os.path.join(
                 os.path.dirname(os.path.dirname(__file__)), "cpp_extensions"
             )
@@ -108,11 +102,7 @@ class RiskEngine:
         except ImportError:
             simulated_end = np.array(
                 [
-                    np.sum(
-                        np.random.choice(
-                            daily_returns, size=horizon, replace=True
-                        )
-                    )
+                    np.sum(np.random.choice(daily_returns, size=horizon, replace=True))
                     for _ in range(num_paths)
                 ]
             )
@@ -120,9 +110,7 @@ class RiskEngine:
                 np.percentile(simulated_end, (1 - self.confidence_level) * 100)
             )
 
-    def calculate_cvar(
-        self, returns: np.ndarray, method: str = "historical"
-    ) -> float:
+    def calculate_cvar(self, returns: np.ndarray, method: str = "historical") -> float:
         if len(returns) == 0:
             return 0.0
         if method == "cornish_fisher":
@@ -144,9 +132,7 @@ class RiskEngine:
         tail = returns[returns <= var]
         return float(np.mean(tail)) if len(tail) > 0 else var
 
-    def calculate_tail_risk(
-        self, returns: np.ndarray, tail_pct: float = 0.01
-    ) -> float:
+    def calculate_tail_risk(self, returns: np.ndarray, tail_pct: float = 0.01) -> float:
         if len(returns) == 0:
             return 0.0
         return float(np.percentile(returns, tail_pct * 100))
@@ -203,14 +189,10 @@ class RiskEngine:
             }
         volatility = float(np.std(returns, ddof=1))
         downside = returns[returns < 0]
-        downside_std = (
-            float(np.std(downside, ddof=1)) if len(downside) > 0 else 0.0
-        )
+        downside_std = float(np.std(downside, ddof=1)) if len(downside) > 0 else 0.0
         mean_ret = float(np.mean(returns))
         skewness = float(skew(returns)) if len(returns) > 2 else 0.0
-        kurt = (
-            float(kurtosis(returns, fisher=True)) if len(returns) > 3 else 0.0
-        )
+        kurt = float(kurtosis(returns, fisher=True)) if len(returns) > 3 else 0.0
         return {
             "var": self.calculate_historical_var(returns),
             "parametric_var": self.calculate_parametric_var(returns),
@@ -222,9 +204,7 @@ class RiskEngine:
             "volatility": volatility,
             "annualized_vol": volatility * np.sqrt(252),
             "sharpe": (
-                float(mean_ret / volatility * np.sqrt(252))
-                if volatility > 0
-                else 0.0
+                float(mean_ret / volatility * np.sqrt(252)) if volatility > 0 else 0.0
             ),
             "sortino": (
                 float(mean_ret / downside_std * np.sqrt(252))
@@ -272,13 +252,9 @@ class RiskEngine:
             else np.std(returns_matrix) * np.sqrt(252)
         )
         weighted_vol = (
-            float(np.sum(w * asset_vols))
-            if returns_matrix.ndim > 1
-            else port_vol
+            float(np.sum(w * asset_vols)) if returns_matrix.ndim > 1 else port_vol
         )
-        div_ratio = (
-            float(weighted_vol / max(port_vol, 1e-6)) if port_vol > 0 else 1.0
-        )
+        div_ratio = float(weighted_vol / max(port_vol, 1e-6)) if port_vol > 0 else 1.0
 
         return {
             "portfolio_var": round(port_var, 6),

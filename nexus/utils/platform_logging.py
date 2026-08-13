@@ -26,9 +26,7 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(log_entry)
 
 
-def setup_logging(
-    level: int = logging.INFO, log_file: str = DEFAULT_LOG_FILE
-) -> None:
+def setup_logging(level: int = logging.INFO, log_file: str = DEFAULT_LOG_FILE) -> None:
     root = logging.getLogger()
     root.handlers.clear()
 

@@ -72,12 +72,8 @@ class CrossAssetAlphaModel:
             aligned = pd.concat([my_price, peer_p], axis=1).dropna()
             if len(aligned) < self.lookback:
                 continue
-            my_ret = (
-                aligned.iloc[:, 0].pct_change().dropna().tail(self.lookback)
-            )
-            peer_ret = (
-                aligned.iloc[:, 1].pct_change().dropna().tail(self.lookback)
-            )
+            my_ret = aligned.iloc[:, 0].pct_change().dropna().tail(self.lookback)
+            peer_ret = aligned.iloc[:, 1].pct_change().dropna().tail(self.lookback)
             if len(my_ret) < 10 or len(peer_ret) < 10:
                 continue
             corr = my_ret.corr(peer_ret)
@@ -142,8 +138,7 @@ class AlphaEngine:
             try:
                 days_to_lookback = (limit // 390) + 3
                 start_date = (
-                    datetime.now(timezone.utc)
-                    - timedelta(days=days_to_lookback)
+                    datetime.now(timezone.utc) - timedelta(days=days_to_lookback)
                 ).strftime("%Y-%m-%dT%H:%M:%SZ")
                 bars = await self.client.get_bars(
                     symbol, timeframe=timeframe, limit=limit, start=start_date
@@ -184,9 +179,7 @@ class AlphaEngine:
                     if timeframe == "1D"
                     else "15m" if timeframe == "15Min" else "1m"
                 )
-                df = yf.download(
-                    symbol, period="7d", interval=interval, progress=False
-                )
+                df = yf.download(symbol, period="7d", interval=interval, progress=False)
                 if getattr(df, "empty", True) and timeframe == "1Min":
                     df = yf.download(
                         symbol, period="7d", interval="15m", progress=False
@@ -232,13 +225,9 @@ class AlphaEngine:
             return 0.0
         prices = data["close"].astype(float).to_numpy().flatten()
         if len(prices) > 5:
-            rolling_vol = float(
-                np.std(np.diff(prices[-20:]) / (prices[-20:-1] + 1e-9))
-            )
+            rolling_vol = float(np.std(np.diff(prices[-20:]) / (prices[-20:-1] + 1e-9)))
             self.kf.adapt_to_volatility(rolling_vol)
-        prices_denoised = (
-            self.wavelet.denoise(prices) if len(prices) > 32 else prices
-        )
+        prices_denoised = self.wavelet.denoise(prices) if len(prices) > 32 else prices
         denoised_prices = self.kf.batch_filter(prices_denoised)
         if len(denoised_prices) < 5:
             return 0.0
@@ -295,9 +284,7 @@ class AlphaEngine:
         if len(returns) < 5:
             return 0.6
         try:
-            entropy = nexus_cpp.stats.compute_shannon_entropy(
-                returns.tolist(), 10
-            )
+            entropy = nexus_cpp.stats.compute_shannon_entropy(returns.tolist(), 10)
             clip_val = float(np.clip((entropy - 1.5) / 2.0, 0.0, 0.70))
             return 1.0 - clip_val
         except Exception:
@@ -309,9 +296,7 @@ class AlphaEngine:
         if hurst > 0.60:
             amplifier = min(1.5, 1.0 + (hurst - 0.60) * 3.0)
             return float(
-                np.tanh(
-                    (trend_score * 0.55 + momentum_score * 0.45) * amplifier
-                )
+                np.tanh((trend_score * 0.55 + momentum_score * 0.45) * amplifier)
             )
         elif hurst < 0.40:
             reverter = min(1.3, 1.0 + (0.40 - hurst) * 2.5)
@@ -319,21 +304,11 @@ class AlphaEngine:
         else:
             random_walk_suppressor = 1.0 - abs(hurst - 0.50) * 4.0
             return float(
-                np.tanh(
-                    (trend_score + momentum_score)
-                    * 0.5
-                    * random_walk_suppressor
-                )
+                np.tanh((trend_score + momentum_score) * 0.5 * random_walk_suppressor)
             )
 
-    def _compute_vwap_signal(
-        self, data: pd.DataFrame, current_price: float
-    ) -> float:
-        if (
-            "volume" not in data.columns
-            or "close" not in data.columns
-            or len(data) < 5
-        ):
+    def _compute_vwap_signal(self, data: pd.DataFrame, current_price: float) -> float:
+        if "volume" not in data.columns or "close" not in data.columns or len(data) < 5:
             return 0.0
         try:
             close = data["close"].astype(float)
@@ -341,9 +316,7 @@ class AlphaEngine:
             typical_price = close
             if "high" in data.columns and "low" in data.columns:
                 typical_price = (
-                    data["high"].astype(float)
-                    + data["low"].astype(float)
-                    + close
+                    data["high"].astype(float) + data["low"].astype(float) + close
                 ) / 3.0
             vwap_vec = nexus_cpp.signals.compute_vwap(
                 typical_price.tolist(), volume.tolist()
@@ -390,12 +363,8 @@ class AlphaEngine:
 
         async def symbol_signal(symbol: str) -> Tuple[str, float]:
             async with semaphore:
-                data_15m = await self.fetch_market_data(
-                    symbol, timeframe="15Min"
-                )
-                data_1m = await self.fetch_market_data(
-                    symbol, timeframe="1Min"
-                )
+                data_15m = await self.fetch_market_data(symbol, timeframe="15Min")
+                data_1m = await self.fetch_market_data(symbol, timeframe="1Min")
                 data_1d = await self.fetch_market_data(
                     symbol, timeframe="1D", limit=100
                 )
@@ -403,15 +372,11 @@ class AlphaEngine:
                 peer_symbols = [s for s in symbols if s != symbol][:5]
                 peer_prices = {}
                 for ps in peer_symbols:
-                    d = await self.fetch_market_data(
-                        ps, timeframe="1D", limit=100
-                    )
+                    d = await self.fetch_market_data(ps, timeframe="1D", limit=100)
                     if not d.empty:
                         peer_prices[ps] = d["close"]
                 alpha_15m = (
-                    self.generate_signal(
-                        data_15m, sentiment, peer_prices, peer_symbols
-                    )
+                    self.generate_signal(data_15m, sentiment, peer_prices, peer_symbols)
                     if not data_15m.empty
                     else 0.0
                 )
@@ -421,9 +386,7 @@ class AlphaEngine:
                     else 0.0
                 )
                 alpha_1d = (
-                    self.generate_signal(
-                        data_1d, sentiment, peer_prices, peer_symbols
-                    )
+                    self.generate_signal(data_1d, sentiment, peer_prices, peer_symbols)
                     if not data_1d.empty
                     else 0.0
                 )

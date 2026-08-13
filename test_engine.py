@@ -5,7 +5,8 @@ import sys
 # Ensure nexus is in path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from nexus.core.engine import NexusEngine
+from nexus.core.engine import NexusEngine  # noqa: E402
+
 
 async def main():
     print("Initializing NexusEngine...")
@@ -14,7 +15,7 @@ async def main():
     if not success:
         print("Failed to initialize engine. Alpaca backend may be unreachable.")
         # But we can still test the evaluation pipeline without connecting
-    
+
     print("Loading test symbols and running cycle...")
     engine.symbols = ["AAPL", "MSFT", "NVDA"]
     try:
@@ -24,6 +25,7 @@ async def main():
         print(f"Engine cycle failed: {e}")
     finally:
         await engine.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

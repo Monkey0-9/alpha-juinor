@@ -23,11 +23,7 @@ class NexusOrchestrator:
         self.restart_attempts: Dict[str, int] = {}
         self.root = os.getcwd()
 
-    def find_free_port(
-        self,
-        preferred_port: int,
-        host: str = "127.0.0.1"
-    ) -> int:
+    def find_free_port(self, preferred_port: int, host: str = "127.0.0.1") -> int:
         port = preferred_port
         while port <= 65535:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -61,9 +57,7 @@ class NexusOrchestrator:
             try:
                 p.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                logger.warning(
-                    "%s did not terminate, killing it.", process["name"]
-                )
+                logger.warning("%s did not terminate, killing it.", process["name"])
                 p.kill()
 
     def restart_process(self, process: Dict[str, Any]) -> None:
@@ -150,9 +144,7 @@ class NexusOrchestrator:
             common_env,
         )
         logger.info(
-
-            "Nexus Platform is now online. API on %s, UI on "
-            "http://localhost:%s",
+            "Nexus Platform is now online. API on %s, UI on " "http://localhost:%s",
             backend_url,
             streamlit_port,
         )
@@ -183,6 +175,3 @@ if __name__ == "__main__":
     os.environ["PYTHONPATH"] = os.getcwd()
     orchestrator = NexusOrchestrator()
     orchestrator.run()
-
-
-

@@ -94,9 +94,7 @@ async def test_alpaca_order_rejection():
 
     mock_response_403 = AsyncMock()
     mock_response_403.status = 403
-    mock_response_403.json.return_value = {
-        "message": "Insufficient buying power"
-    }
+    mock_response_403.json.return_value = {"message": "Insufficient buying power"}
 
     mock_session = MagicMock()
     mock_session.post.return_value = MockAsyncContext(mock_response_403)

@@ -14,6 +14,7 @@ class MarketDataCache:
     Persistent SQLite-backed local cache layer for market bar data.
     Prevents duplicate REST calls to Alpaca and eliminates 429 Rate Limits.
     """
+
     _instance = None
 
     def __new__(cls, db_path: str = DB_PATH):
@@ -58,8 +59,9 @@ class MarketDataCache:
             """)
             conn.commit()
 
-    def get_bars(self, symbol: str, timeframe: str, limit: int = 100,
-                 start: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
+    def get_bars(
+        self, symbol: str, timeframe: str, limit: int = 100, start: Optional[str] = None
+    ) -> Optional[List[Dict[str, Any]]]:
         symbol = symbol.upper()
         cache_key = f"{symbol}_{timeframe}_{limit}_{start or ''}"
         now = time.monotonic()
@@ -80,8 +82,7 @@ class MarketDataCache:
                     ORDER BY timestamp ASC
                     LIMIT ?
                 """
-                rows = conn.execute(
-                    query, (symbol, timeframe, start, limit)).fetchall()
+                rows = conn.execute(query, (symbol, timeframe, start, limit)).fetchall()
             else:
                 query = """
                     SELECT timestamp as t, open as o, high as h, low as l, close as c, volume as v
@@ -93,20 +94,18 @@ class MarketDataCache:
                         LIMIT ?
                     ) ORDER BY timestamp ASC
                 """
-                rows = conn.execute(
-                    query, (symbol, timeframe, limit)).fetchall()
+                rows = conn.execute(query, (symbol, timeframe, limit)).fetchall()
 
-        if len(rows) >= limit or (
-            limit > 50 and len(rows) >= int(
-                limit * 0.8)):
+        if len(rows) >= limit or (limit > 50 and len(rows) >= int(limit * 0.8)):
             bars = [dict(r) for r in rows]
             self._memory_cache[cache_key] = {"ts": now, "data": bars}
             return bars
 
         return None
 
-    def save_bars(self, symbol: str, timeframe: str,
-                  bars: List[Dict[str, Any]]) -> None:
+    def save_bars(
+        self, symbol: str, timeframe: str, bars: List[Dict[str, Any]]
+    ) -> None:
         if not bars:
             return
         symbol = symbol.upper()
@@ -126,15 +125,19 @@ class MarketDataCache:
             return
 
         with self._get_connection() as conn:
-            conn.executemany("""
+            conn.executemany(
+                """
                 INSERT OR REPLACE INTO bars (symbol, timeframe, timestamp, open, high, low, close, volume)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, records)
+            """,
+                records,
+            )
             conn.commit()
 
         # Invalidate memory cache for this symbol
         keys_to_del = [
-            k for k in self._memory_cache if k.startswith(f"{symbol}_{timeframe}")]
+            k for k in self._memory_cache if k.startswith(f"{symbol}_{timeframe}")
+        ]
         for k in keys_to_del:
             self._memory_cache.pop(k, None)
 

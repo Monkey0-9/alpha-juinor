@@ -46,9 +46,7 @@ class GradientBoostedTimeSeriesModel:
         self.scaler = StandardScaler()
         self.is_trained = False
 
-    def _prepare_features(
-        self, df: pd.DataFrame
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def _prepare_features(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """Extract feature matrix and target vector from DataFrame."""
         df_copy = df.copy()
 
@@ -64,9 +62,7 @@ class GradientBoostedTimeSeriesModel:
         available_cols = [c for c in self.FEATURE_COLS if c in df_copy.columns]
         if not available_cols:
             # Fallback to numeric columns
-            numeric_cols = df_copy.select_dtypes(
-                include=[np.number]
-            ).columns.tolist()
+            numeric_cols = df_copy.select_dtypes(include=[np.number]).columns.tolist()
             available_cols = [c for c in numeric_cols if c != "target"]
 
         df_clean = df_copy.dropna(subset=available_cols)
@@ -81,9 +77,7 @@ class GradientBoostedTimeSeriesModel:
         """Trains the model on historical bar data."""
         X, y = self._prepare_features(df)
         if len(X) < 30:
-            logger.warning(
-                "Insufficient data samples to train TimeSeriesModel."
-            )
+            logger.warning("Insufficient data samples to train TimeSeriesModel.")
             return False
 
         try:
@@ -195,9 +189,7 @@ class PyTorchLSTMModel:
         self.model = None
         self.is_trained = False
 
-    def _build_sequences(
-        self, df: pd.DataFrame
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def _build_sequences(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         available_cols = [c for c in self.FEATURE_COLS if c in df.columns]
         if not available_cols or len(df) < self.sequence_length + 5:
             return np.array([]), np.array([])
@@ -219,9 +211,7 @@ class PyTorchLSTMModel:
             X_seq.append(X_raw[i : i + self.sequence_length])
             y_seq.append(y_raw[i + self.sequence_length - 1])
 
-        return np.array(X_seq, dtype=np.float32), np.array(
-            y_seq, dtype=np.int64
-        )
+        return np.array(X_seq, dtype=np.float32), np.array(y_seq, dtype=np.int64)
 
     def fit(self, df: pd.DataFrame) -> bool:
         if not TORCH_AVAILABLE:
@@ -271,9 +261,7 @@ class PyTorchLSTMModel:
             )
             return True
         except Exception as exc:
-            logger.warning(
-                "PyTorch LSTM training failed: %s. Using fallback.", exc
-            )
+            logger.warning("PyTorch LSTM training failed: %s. Using fallback.", exc)
             return self.tree_fallback.fit(df)
 
     def predict_proba(self, df: pd.DataFrame) -> Dict[int, float]:
@@ -285,9 +273,7 @@ class PyTorchLSTMModel:
             return self.tree_fallback.predict_proba(df)
 
         try:
-            recent_cols = (
-                df[available_cols].iloc[-self.sequence_length :].dropna()
-            )
+            recent_cols = df[available_cols].iloc[-self.sequence_length :].dropna()
             if len(recent_cols) < self.sequence_length:
                 return self.tree_fallback.predict_proba(df)
 
@@ -323,9 +309,7 @@ class TemporalTransformerModel:
 
     FEATURE_COLS = GradientBoostedTimeSeriesModel.FEATURE_COLS
 
-    def __init__(
-        self, sequence_length: int = 10, d_model: int = 32, epochs: int = 10
-    ):
+    def __init__(self, sequence_length: int = 10, d_model: int = 32, epochs: int = 10):
         self.sequence_length = sequence_length
         self.d_model = d_model
         self.epochs = epochs
@@ -352,9 +336,7 @@ class TemporalTransformerModel:
             if len(df_clean) < self.sequence_length + 5:
                 return self.tree_fallback.fit(df)
 
-            X_raw = self.scaler.fit_transform(
-                df_clean[available_cols].to_numpy()
-            )
+            X_raw = self.scaler.fit_transform(df_clean[available_cols].to_numpy())
             y_raw = df_clean["target"].to_numpy()
 
             X_seq, y_seq = [], []
@@ -420,9 +402,7 @@ class TemporalTransformerModel:
             return self.tree_fallback.predict_proba(df)
 
         try:
-            recent_cols = (
-                df[available_cols].iloc[-self.sequence_length :].dropna()
-            )
+            recent_cols = df[available_cols].iloc[-self.sequence_length :].dropna()
             if len(recent_cols) < self.sequence_length:
                 return self.tree_fallback.predict_proba(df)
 

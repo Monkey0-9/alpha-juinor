@@ -1,4 +1,5 @@
 """Diagnostic 2: list nexus-related processes via tasklist and PowerShell string format."""
+
 import subprocess
 import os
 
@@ -16,7 +17,9 @@ except Exception as e:
 print()
 print("RESOLVING python in PATH:")
 try:
-    out = subprocess.run(["where", "python"], capture_output=True, text=True, timeout=30)
+    out = subprocess.run(
+        ["where", "python"], capture_output=True, text=True, timeout=30
+    )
     print(out.stdout)
 except Exception as e:
     print(e)
@@ -27,4 +30,3 @@ logfile = os.path.join(root, "logs", "nexus_24_7_last.log")
 print("(checked via listing)")
 
 print("DONE")
-

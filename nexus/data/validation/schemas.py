@@ -2,11 +2,13 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
 
+
 class OHLCVRecord(BaseModel):
     """
     Pydantic schema for a single market data record.
     Useful for API endpoints, real-time ingestion, or strict row-by-row validation.
     """
+
     timestamp: datetime
     symbol: str
     open: float = Field(..., ge=0)

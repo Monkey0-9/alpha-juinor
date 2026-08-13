@@ -70,12 +70,8 @@ def test_ensemble_record_outcome():
     mock_model = MagicMock()
     brain.add_model(mock_model, name="m1")
 
-    brain.record_outcome(
-        "m1", predicted_signal=1, realized_return=0.05
-    )  # correct
-    brain.record_outcome(
-        "m1", predicted_signal=1, realized_return=-0.05
-    )  # incorrect
+    brain.record_outcome("m1", predicted_signal=1, realized_return=0.05)  # correct
+    brain.record_outcome("m1", predicted_signal=1, realized_return=-0.05)  # incorrect
 
     assert brain.performance_history["m1"] == [1, 0]
 
@@ -184,7 +180,7 @@ def test_ensemble_predict_proba_summary():
 
 
 def test_portfolio_risk_calculation():
-    from nexus.math.risk import RiskEngine
+    from nexus.risk.engine import RiskEngine
 
     risk = RiskEngine()
     weights = np.array([0.5, 0.5])

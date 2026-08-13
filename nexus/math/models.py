@@ -54,13 +54,9 @@ class KalmanFilter:
     def update(self, measurement: float) -> float:
         """Perform the Predict and Update steps."""
         pri_estimate = self.post_estimate
-        pri_error_covariance = (
-            self.post_error_covariance + self.process_variance
-        )
+        pri_error_covariance = self.post_error_covariance + self.process_variance
 
-        gain = pri_error_covariance / (
-            pri_error_covariance + self.measurement_variance
-        )
+        gain = pri_error_covariance / (pri_error_covariance + self.measurement_variance)
         self.post_estimate = pri_estimate + gain * (measurement - pri_estimate)
         self.post_error_covariance = (1 - gain) * pri_error_covariance
 
@@ -130,9 +126,7 @@ class VolatilityTopologyHeuristic:
             return "FLAT"
 
         variance = np.var(data_points)
-        entropy = -np.sum(
-            np.abs(data_points) * np.log(np.abs(data_points) + 1e-9)
-        )
+        entropy = -np.sum(np.abs(data_points) * np.log(np.abs(data_points) + 1e-9))
 
         if entropy > 1000:
             return "CHAOTIC"

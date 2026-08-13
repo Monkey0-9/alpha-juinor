@@ -40,9 +40,7 @@ class PortfolioBacktester:
         """Execute a vectorized portfolio backtest."""
         # Align all data to a common index
         all_prices = pd.DataFrame(price_data).dropna()
-        all_signals = (
-            pd.DataFrame(signal_data).reindex(all_prices.index).fillna(0)
-        )
+        all_signals = pd.DataFrame(signal_data).reindex(all_prices.index).fillna(0)
 
         # 1. Strategy Logic: Rank signals and select top N
         ranked_signals = all_signals.rank(axis=1, ascending=False)
@@ -132,12 +130,8 @@ class PortfolioBacktester:
 
         all_equity = pd.concat([fold.equity_curve for fold in fold_results])
         total_return = (all_equity.iloc[-1] / self.initial_capital) - 1
-        avg_sharpe = float(
-            np.mean([fold.sharpe_ratio for fold in fold_results])
-        )
-        avg_max_dd = float(
-            np.mean([fold.max_drawdown for fold in fold_results])
-        )
+        avg_sharpe = float(np.mean([fold.sharpe_ratio for fold in fold_results]))
+        avg_max_dd = float(np.mean([fold.max_drawdown for fold in fold_results]))
 
         return {
             "num_folds": len(fold_results),

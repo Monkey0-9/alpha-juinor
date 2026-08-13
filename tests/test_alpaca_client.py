@@ -58,9 +58,7 @@ def test_get_bars_deduplicates_concurrent_requests():
         client = AlpacaClient(credentials=AlpacaCredentials("key", "secret"))
         client._get_session = AsyncMock(return_value=session)
 
-        results = await asyncio.gather(
-            client.get_bars("AAPL"), client.get_bars("AAPL")
-        )
+        results = await asyncio.gather(client.get_bars("AAPL"), client.get_bars("AAPL"))
 
         assert len(results[0]) == 1
         assert results[0] == results[1]

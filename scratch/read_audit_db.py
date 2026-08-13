@@ -11,7 +11,7 @@ if os.path.exists(db_path):
         print(f"Audit Logs (Last 10): {len(rows)}")
         for row in rows:
             print(row)
-            
+
         cursor.execute("SELECT * FROM trade_history LIMIT 10")
         rows = cursor.fetchall()
         print(f"Trade History (Last 10): {len(rows)}")

@@ -21,9 +21,7 @@ class VWAPExecutionModel:
         self.target_participation = target_participation
         self.min_bins = min_bins
 
-    def schedule(
-        self, total_qty: int, volume_profile: List[float]
-    ) -> List[int]:
+    def schedule(self, total_qty: int, volume_profile: List[float]) -> List[int]:
         profile = (
             np.array(volume_profile[-self.min_bins :])
             if len(volume_profile) >= self.min_bins
@@ -143,9 +141,7 @@ class ExecutionAgent:
         self.cumulative_reward += reward
         self.decision_count += 1
         avg = (
-            self.cumulative_reward / self.decision_count
-            if self.decision_count
-            else 0.0
+            self.cumulative_reward / self.decision_count if self.decision_count else 0.0
         )
         logger.debug(
             "Execution feedback — Reward: %.4f, Cumulative avg: %.4f, Decisions: %d",

@@ -19,9 +19,7 @@ class HealthMonitor:
         }
         self.last_heartbeat = 0.0
 
-    def record(
-        self, component: str, healthy: bool, details: Any = "N/A"
-    ) -> None:
+    def record(self, component: str, healthy: bool, details: Any = "N/A") -> None:
         status = "healthy" if healthy else "failed"
         self.stats[component] = {"status": status, "details": details}
 
@@ -32,15 +30,13 @@ class HealthMonitor:
             # Broadcast to Telegram/Discord
             asyncio.create_task(
                 notifier.notify(
-                    f"CRITICAL HEALTH ALERT: {component} failure. "
-                    f"{details}",
+                    f"CRITICAL HEALTH ALERT: {component} failure. " f"{details}",
                     level="CRITICAL",
                 )
             )
         else:
             logger.info(
-                f"HealthMonitor [{component}] status={status} "
-                f"details={details}"
+                f"HealthMonitor [{component}] status={status} " f"details={details}"
             )
 
     def heartbeat(self) -> None:

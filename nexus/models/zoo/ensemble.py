@@ -19,9 +19,7 @@ class AIEnsembleBrain:
         self.confidence_gate = confidence_gate
         self.performance_history: Dict[str, List[int]] = {}
 
-    def add_model(
-        self, model: Any, name: str = "Model", weight: float = 1.0
-    ) -> None:
+    def add_model(self, model: Any, name: str = "Model", weight: float = 1.0) -> None:
         self.models.append(
             {
                 "name": name,
@@ -90,9 +88,7 @@ class AIEnsembleBrain:
                 total_signal += sig * effective_weight
                 total_weight += effective_weight
             except Exception as e:
-                logger.debug(
-                    "Ensemble model %s evaluation failed: %s", name, e
-                )
+                logger.debug("Ensemble model %s evaluation failed: %s", name, e)
 
         if total_weight <= 1e-6:
             return 0

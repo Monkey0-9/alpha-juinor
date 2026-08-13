@@ -6,9 +6,7 @@ import numpy as np
 # Setup path
 sys.path.append(
     os.path.abspath(
-        os.path.join(
-            os.path.dirname(__file__), "..", "nexus", "cpp_extensions"
-        )
+        os.path.join(os.path.dirname(__file__), "..", "nexus", "cpp_extensions")
     )
 )
 
@@ -69,9 +67,7 @@ def run_benchmark():
     print("\n--- Performance ---")
     print(f"C++ Execution Time: {end_cpp - start_cpp:.4f} seconds")
     print(f"Python Execution Time: {end_py - start_py:.4f} seconds")
-    print(
-        f"Speedup: {(end_py - start_py) / (end_cpp - start_cpp):.2f}x faster"
-    )
+    print(f"Speedup: {(end_py - start_py) / (end_cpp - start_cpp):.2f}x faster")
 
 
 if __name__ == "__main__":

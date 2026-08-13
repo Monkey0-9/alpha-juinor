@@ -10,9 +10,7 @@ async def test_engine_no_trade_state():
     engine = NexusEngine()
 
     # Mock alpha engine to return some signals
-    engine.alpha_engine.get_batch_signals = AsyncMock(
-        return_value={"AAPL": 0.8}
-    )
+    engine.alpha_engine.get_batch_signals = AsyncMock(return_value={"AAPL": 0.8})
     engine.alpha_engine.fetch_market_data = AsyncMock(
         return_value=pd.DataFrame({"close": [150, 151, 152]})
     )
@@ -20,9 +18,7 @@ async def test_engine_no_trade_state():
     # Mock Ensemble Brain to output 0 (NO_TRADE)
     with patch.object(engine.ensemble_brain, "get_signal", return_value=0.0):
         # Prevent actual alpaca calls by mocking engine methods
-        with patch.object(
-            engine, "get_positions", new_callable=AsyncMock
-        ) as mock_pos:
+        with patch.object(engine, "get_positions", new_callable=AsyncMock) as mock_pos:
             mock_pos.return_value = []
 
             with patch.object(
@@ -53,15 +49,11 @@ async def test_engine_crisis_correlation():
     engine.alpha_engine.fetch_market_data = AsyncMock(
         return_value=pd.DataFrame({"close": volatile_close})
     )
-    engine.alpha_engine.get_batch_signals = AsyncMock(
-        return_value={"AAPL": 0.9}
-    )
+    engine.alpha_engine.get_batch_signals = AsyncMock(return_value={"AAPL": 0.9})
     engine.symbols = ["AAPL"]
 
     with patch.object(engine.ensemble_brain, "get_signal", return_value=0.9):
-        with patch.object(
-            engine, "get_positions", new_callable=AsyncMock
-        ) as mock_pos:
+        with patch.object(engine, "get_positions", new_callable=AsyncMock) as mock_pos:
             mock_pos.return_value = []
 
             with patch.object(

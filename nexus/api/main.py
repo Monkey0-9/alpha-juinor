@@ -22,8 +22,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     valid, missing = Config.validate()
     if not valid:
         logger.warning(
-            "Alpaca credentials missing. "
-            "Execution routes disabled until configured."
+            "Alpaca credentials missing. " "Execution routes disabled until configured."
         )
 
     client = get_client()
@@ -38,8 +37,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.warning(f"Alpaca status: {status} | Error: {error_msg}")
                 if status == "UNAUTHORIZED":
                     logger.error(
-                        "CRITICAL: Alpaca API Keys invalid. "
-                        "Check .env file."
+                        "CRITICAL: Alpaca API Keys invalid. " "Check .env file."
                     )
         except Exception as exc:
             logger.warning(f"Unable to verify Alpaca account: {exc}")

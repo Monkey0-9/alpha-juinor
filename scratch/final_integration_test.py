@@ -1,19 +1,19 @@
 import httpx
 import os
-import time
-import json
 
 # Load env for API Key
 from dotenv import load_dotenv
+
 load_dotenv()
 
 BACKEND_URL = os.getenv("NEXUS_BACKEND_URL", "http://localhost:8001")
 API_KEY = os.getenv("NEXUS_API_KEY", "")
 
+
 def test_backend():
     print(f"Testing Backend at {BACKEND_URL}...")
     headers = {"X-API-Key": API_KEY} if API_KEY else {}
-    
+
     try:
         with httpx.Client(timeout=30) as client:
             # 1. Test Health
@@ -21,7 +21,7 @@ def test_backend():
             resp = client.get(f"{BACKEND_URL}/api/alpaca/health")
             print(f"Status: {resp.status_code}")
             print(f"Body: {resp.text[:100]}")
-            
+
             # 2. Test Brain Snapshot (The core of the UI dashboard)
             print("\n[2/4] Fetching Market Intelligence (Brain)...")
             resp = client.get(f"{BACKEND_URL}/api/monitor/brain", headers=headers)
@@ -51,12 +51,15 @@ def test_backend():
                 if resp.status_code == 401:
                     print("SUCCESS: Endpoint is secured (401 Unauthorized)")
                 else:
-                    print(f"WARNING: Endpoint returned {resp.status_code} instead of 401")
+                    print(
+                        f"WARNING: Endpoint returned {resp.status_code} instead of 401"
+                    )
             else:
                 print("\n[4/4] Skipping security test (No API Key configured)")
 
     except Exception as e:
         print(f"FATAL ERROR during test: {e}")
+
 
 if __name__ == "__main__":
     test_backend()

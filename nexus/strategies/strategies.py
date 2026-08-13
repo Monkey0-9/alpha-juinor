@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 from typing import Optional, Dict, List, Tuple
 from collections import deque
-from nexus.data.features import FeatureEngineer
+from nexus.features.features import FeatureEngineer
 from nexus.models.zoo.time_series import (
     GradientBoostedTimeSeriesModel as TimeSeriesModel,
 )
@@ -84,22 +84,14 @@ class MomentumStrategy(BaseStrategy):
         else:  # SIDEWAYS
             short_w, long_w = 20, 50
 
-        short_ma = float(
-            prices.rolling(short_w, min_periods=1).mean().iloc[-1]
-        )
+        short_ma = float(prices.rolling(short_w, min_periods=1).mean().iloc[-1])
         long_ma = float(prices.rolling(long_w, min_periods=1).mean().iloc[-1])
         momentum = (short_ma - long_ma) / max(long_ma, 1.0)
-        volatility = (
-            float(prices.pct_change().std()) if len(prices) > 1 else 0.0
-        )
+        volatility = float(prices.pct_change().std()) if len(prices) > 1 else 0.0
 
         # Regime boost: momentum strategies shine in BULL
-        regime_mult = (
-            1.25 if regime == "BULL" else (0.70 if regime == "BEAR" else 1.0)
-        )
-        score = (
-            alpha * 0.55 + momentum * 0.35 - volatility * 0.10
-        ) * regime_mult
+        regime_mult = 1.25 if regime == "BULL" else (0.70 if regime == "BEAR" else 1.0)
+        score = (alpha * 0.55 + momentum * 0.35 - volatility * 0.10) * regime_mult
         return float(np.tanh(score * 10))
 
     def score_with_confidence(
@@ -129,11 +121,7 @@ class MeanReversionStrategy(BaseStrategy):
             return 0.0
 
         # Dynamic Regime-Adaptive Window
-        lookback = (
-            14
-            if regime == "TURBULENT"
-            else (20 if regime == "SIDEWAYS" else 34)
-        )
+        lookback = 14 if regime == "TURBULENT" else (20 if regime == "SIDEWAYS" else 34)
         sma = float(prices.rolling(lookback, min_periods=1).mean().iloc[-1])
         current_price = float(prices.iloc[-1])
         deviation = (current_price - sma) / max(sma, 1.0)
@@ -195,11 +183,7 @@ class RSISetupStrategy(BaseStrategy):
     def score(
         self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
     ) -> float:
-        if (
-            history.empty
-            or "close" not in history.columns
-            or len(history) < 14
-        ):
+        if history.empty or "close" not in history.columns or len(history) < 14:
             return 0.0
         delta = history["close"].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
@@ -211,12 +195,8 @@ class RSISetupStrategy(BaseStrategy):
         # Dynamic levels: use rolling 5th/95th percentile instead of fixed
         # 30/70
         rsi_roll = rsi.dropna()
-        os_level = (
-            float(rsi_roll.quantile(0.12)) if len(rsi_roll) >= 14 else 30.0
-        )
-        ob_level = (
-            float(rsi_roll.quantile(0.88)) if len(rsi_roll) >= 14 else 70.0
-        )
+        os_level = float(rsi_roll.quantile(0.12)) if len(rsi_roll) >= 14 else 30.0
+        ob_level = float(rsi_roll.quantile(0.88)) if len(rsi_roll) >= 14 else 70.0
 
         if last_rsi < os_level:
             conf_boost = (os_level - last_rsi) / max(os_level, 1.0)
@@ -242,11 +222,7 @@ class BreakoutStrategy(BaseStrategy):
     def score(
         self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
     ) -> float:
-        if (
-            history.empty
-            or "close" not in history.columns
-            or len(history) < 20
-        ):
+        if history.empty or "close" not in history.columns or len(history) < 20:
             return 0.0
         high_20 = history["high"].rolling(20).max().iloc[-2]
         low_20 = history["low"].rolling(20).min().iloc[-2]
@@ -258,9 +234,7 @@ class BreakoutStrategy(BaseStrategy):
                 avg_vol = float(history["volume"].tail(20).mean())
                 last_vol = float(history["volume"].iloc[-1])
                 if avg_vol > 0:
-                    vol_conf = min(
-                        1.35, 1.0 + (last_vol / avg_vol - 1.0) * 0.5
-                    )
+                    vol_conf = min(1.35, 1.0 + (last_vol / avg_vol - 1.0) * 0.5)
             return float(min(0.95, 0.85 * vol_conf))
         if current < low_20:
             return -0.90
@@ -313,15 +287,9 @@ class MACDStrategy(BaseStrategy):
         # Use histogram slope for conviction
         hist_slope = float(hist.diff().iloc[-1]) if len(hist) >= 2 else 0.0
 
-        if (
-            macd.iloc[-1] > signal.iloc[-1]
-            and macd.iloc[-2] <= signal.iloc[-2]
-        ):
+        if macd.iloc[-1] > signal.iloc[-1] and macd.iloc[-2] <= signal.iloc[-2]:
             return float(min(0.90, 0.70 + abs(hist_slope) * 50))
-        if (
-            macd.iloc[-1] < signal.iloc[-1]
-            and macd.iloc[-2] >= signal.iloc[-2]
-        ):
+        if macd.iloc[-1] < signal.iloc[-1] and macd.iloc[-2] >= signal.iloc[-2]:
             return float(max(-0.90, -0.70 - abs(hist_slope) * 50))
         return float(alpha * 0.4)
 
@@ -468,9 +436,7 @@ class HurstExponentStrategy(BaseStrategy):
             )
             for lag in lags
         ]
-        valid = [
-            (np.log(lag), np.log(t)) for lag, t in zip(lags, tau) if t > 0
-        ]
+        valid = [(np.log(lag), np.log(t)) for lag, t in zip(lags, tau) if t > 0]
         if len(valid) < 2:
             return float(alpha)
         log_lags, log_tau = zip(*valid)
@@ -517,18 +483,14 @@ class AdaptiveEnsembleStrategy(BaseStrategy):
         if regime not in self._regime_history:
             self._regime_history[regime] = {}
         if strategy_name not in self._regime_history[regime]:
-            self._regime_history[regime][strategy_name] = deque(
-                maxlen=self.window
-            )
+            self._regime_history[regime][strategy_name] = deque(maxlen=self.window)
         self._regime_history[regime][strategy_name].append(
             1 if predicted_sign == realized_sign else 0
         )
 
     def get_strategy_weight(self, regime: str, strategy_name: str) -> float:
         """Returns hit-rate-based weight for a strategy in the given regime."""
-        history = self._regime_history.get(regime, {}).get(
-            strategy_name, deque()
-        )
+        history = self._regime_history.get(regime, {}).get(strategy_name, deque())
         if len(history) < 3:
             return 1.0  # neutral prior
         hit_rate = sum(history) / len(history)
@@ -574,11 +536,7 @@ class OrderFlowPressureStrategy(BaseStrategy):
     def score(
         self, symbol: str, alpha: float, history: pd.DataFrame, regime: str
     ) -> float:
-        if (
-            history.empty
-            or "volume" not in history.columns
-            or len(history) < 10
-        ):
+        if history.empty or "volume" not in history.columns or len(history) < 10:
             return 0.0
 
         close = history["close"].astype(float)

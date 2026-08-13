@@ -12,12 +12,11 @@ Usage:
 """
 
 import sys
-import os
 import subprocess
 import logging
 from pathlib import Path
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -51,23 +50,18 @@ class WindowsServiceManager:
         logger.info(f"Installing {self.SERVICE_DISPLAY_NAME}...")
 
         # Check if service already exists
-        status = self._run_command(
-            ["sc", "query", self.SERVICE_NAME],
-            check=False
-        )
+        status = self._run_command(["sc", "query", self.SERVICE_NAME], check=False)
 
         if status:
             logger.warning(f"Service {self.SERVICE_NAME} already exists.")
             response = input("Remove existing service first? (y/n): ")
-            if response.lower() == 'y':
+            if response.lower() == "y":
                 self.remove()
             else:
                 return False
 
         # Create service
-        service_cmd = (
-            f'"{self.python_exe}" "{self.script_path}"'
-        )
+        service_cmd = f'"{self.python_exe}" "{self.script_path}"'
 
         cmd = [
             "sc",
@@ -76,7 +70,7 @@ class WindowsServiceManager:
             f"binPath={service_cmd}",
             f"DisplayName={self.SERVICE_DISPLAY_NAME}",
             "start=auto",
-            "type=own"
+            "type=own",
         ]
 
         if self._run_command(cmd):
@@ -87,7 +81,7 @@ class WindowsServiceManager:
                 "sc",
                 "description",
                 self.SERVICE_NAME,
-                self.SERVICE_DESCRIPTION
+                self.SERVICE_DESCRIPTION,
             ]
             self._run_command(desc_cmd)
 
@@ -156,13 +150,16 @@ def main():
     # Check for admin privileges
     try:
         import ctypes
+
         is_admin = ctypes.windll.shell.IsUserAnAdmin()
     except Exception:
         is_admin = False
 
     if not is_admin:
         print("ERROR: This script requires administrator privileges!")
-        print("Please run as Administrator (right-click cmd.exe and select 'Run as administrator')")
+        print(
+            "Please run as Administrator (right-click cmd.exe and select 'Run as administrator')"
+        )
         sys.exit(1)
 
     manager = WindowsServiceManager()

@@ -1,7 +1,7 @@
 import asyncio
 import numpy as np
 from nexus.core.engine import NexusEngine
-from nexus.math.risk import RiskEngine
+from nexus.risk.engine import RiskEngine
 
 
 def test_risk_engine_assess_risk():

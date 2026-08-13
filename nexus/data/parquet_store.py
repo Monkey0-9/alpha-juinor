@@ -22,11 +22,7 @@ class ParquetDataStore:
         clean_tf = timeframe.upper()
         return os.path.join(self.store_dir, f"{clean_sym}_{clean_tf}.parquet")
 
-    def save_bars(
-            self,
-            symbol: str,
-            df: pd.DataFrame,
-            timeframe: str = "1D") -> bool:
+    def save_bars(self, symbol: str, df: pd.DataFrame, timeframe: str = "1D") -> bool:
         """Saves or appends historical bar data to a Parquet file."""
         if df.empty:
             return False
@@ -35,27 +31,26 @@ class ParquetDataStore:
         try:
             df_save = df.copy()
             if not isinstance(df_save.index, pd.DatetimeIndex):
-                if 'timestamp' in df_save.columns:
-                    df_save['timestamp'] = pd.to_datetime(df_save['timestamp'])
-                    df_save.set_index('timestamp', inplace=True)
-                elif 'date' in df_save.columns:
-                    df_save['date'] = pd.to_datetime(df_save['date'])
-                    df_save.set_index('date', inplace=True)
+                if "timestamp" in df_save.columns:
+                    df_save["timestamp"] = pd.to_datetime(df_save["timestamp"])
+                    df_save.set_index("timestamp", inplace=True)
+                elif "date" in df_save.columns:
+                    df_save["date"] = pd.to_datetime(df_save["date"])
+                    df_save.set_index("date", inplace=True)
 
             if os.path.exists(path):
                 existing = pd.read_parquet(path)
                 combined = pd.concat([existing, df_save])
-                combined = combined[~combined.index.duplicated(
-                    keep='last')].sort_index()
-                combined.to_parquet(path, compression='snappy')
+                combined = combined[
+                    ~combined.index.duplicated(keep="last")
+                ].sort_index()
+                combined.to_parquet(path, compression="snappy")
             else:
-                df_save.sort_index().to_parquet(path, compression='snappy')
+                df_save.sort_index().to_parquet(path, compression="snappy")
 
             logger.info(
-                "Saved %d bars for %s (%s) to Parquet.",
-                len(df_save),
-                symbol,
-                timeframe)
+                "Saved %d bars for %s (%s) to Parquet.", len(df_save), symbol, timeframe
+            )
             return True
         except Exception as exc:
             logger.error("Failed to save Parquet data for %s: %s", symbol, exc)
@@ -67,7 +62,7 @@ class ParquetDataStore:
         timeframe: str = "1D",
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
     ) -> pd.DataFrame:
         """Loads historical bars from Parquet storage with optional date filtering."""
         path = self._get_path(symbol, timeframe)
@@ -100,6 +95,5 @@ class ParquetDataStore:
                 tf = parts[1] if len(parts) > 1 else "1D"
                 full_path = os.path.join(self.store_dir, fname)
                 size_kb = round(os.path.getsize(full_path) / 1024.0, 2)
-                symbols.append(
-                    {"symbol": sym, "timeframe": tf, "size_kb": size_kb})
+                symbols.append({"symbol": sym, "timeframe": tf, "size_kb": size_kb})
         return symbols
